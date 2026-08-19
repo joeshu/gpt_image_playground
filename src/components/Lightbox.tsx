@@ -684,13 +684,13 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
   const zoomPercent = Math.round(s * 100)
 
   const navBtnClass =
-    'absolute top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/80 text-gray-800 hover:bg-white dark:bg-black/40 dark:text-white dark:hover:bg-black/60 transition-all z-10 backdrop-blur-sm shadow-md border border-gray-200/50 dark:border-transparent'
+    'absolute top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white/80 text-gray-800 hover:bg-white dark:bg-black/40 dark:text-white dark:hover:bg-black/60 transition-all z-10 backdrop-blur-sm shadow-md border border-gray-200/50 dark:border-transparent'
 
   return (
     <div
       ref={containerRef}
       data-lightbox-root
-      className="fixed inset-0 z-[60] flex items-center justify-center select-none"
+      className="fixed inset-0 z-[60] flex items-center justify-center select-none touch-none"
       style={{ cursor: isZoomed ? (isDragging ? 'grabbing' : 'grab') : 'pointer' }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -727,6 +727,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
         <>
           <button
             className={`${navBtnClass} left-3 sm:left-5`}
+            aria-label="上一张图片"
             onClick={(e) => { e.stopPropagation(); goPrev() }}
           >
             <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -735,6 +736,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
           </button>
           <button
             className={`${navBtnClass} right-3 sm:right-5`}
+            aria-label="下一张图片"
             onClick={(e) => { e.stopPropagation(); goNext() }}
           >
             <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -746,10 +748,11 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
 
       {/* 参考图操作 */}
       {showInputActions && !isZoomed && (
-        <div className="absolute bottom-8 left-1/2 z-10 flex w-max -translate-x-1/2 items-center gap-2 rounded-2xl bg-white/90 dark:bg-black/60 p-2 backdrop-blur-xl border border-gray-200/80 dark:border-white/15 shadow-2xl transition-colors" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute bottom-[var(--bottom-safe-space)] left-1/2 z-10 flex w-max -translate-x-1/2 items-center gap-2 rounded-2xl bg-white/90 dark:bg-black/60 p-2 backdrop-blur-xl border border-gray-200/80 dark:border-white/15 shadow-2xl transition-colors ios-safe-bottom" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-white/90 dark:hover:bg-white/15 transition active:scale-95"
+            aria-label="替换图片"
             onClick={onReplace}
           >
             <RefreshIcon className="w-4 h-4" />
@@ -767,6 +770,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
             <button
               type="button"
               disabled={editDisabled}
+              aria-label="编辑图片"
               className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium shadow-md transition active:scale-95 ${editDisabled ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-white/10 dark:text-white/40 shadow-none' : 'bg-blue-500 text-white hover:bg-blue-600 hover:shadow-blue-500/25'}`}
               onClick={onEdit}
             >

@@ -345,6 +345,7 @@ export default function InputBar() {
   const isUserInputRef = useRef(false)
   const imageHintLockedRef = useRef(false)
   const imageHintReleaseRef = useRef<(() => void) | null>(null)
+  const isComposingRef = useRef(false)
   const [cursorPos, setCursorPos] = useState(0)
   const [menuLeft, setMenuLeft] = useState(0)
   const showPromptExpand = promptExpanded || promptCanExpand
@@ -1113,8 +1114,16 @@ export default function InputBar() {
       if (rangeRect.width === 0 && rangeRect.height === 0) return
       setMenuLeft(rangeRect.left - elRect.left)
     }
-    document.addEventListener('selectionchange', handleSelectionChange)
-    return () => document.removeEventListener('selectionchange', handleSelectionChange)
+    let frame = 0
+    const scheduleSelectionChange = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(handleSelectionChange)
+    }
+    document.addEventListener('selectionchange', scheduleSelectionChange)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      document.removeEventListener('selectionchange', scheduleSelectionChange)
+    }
   }, [])
 
   // 点击外部时使 input 栏失焦
@@ -1156,7 +1165,9 @@ export default function InputBar() {
       dragTouchRef.current = { startY: e.touches[0].clientY, moved: false }
     }
     const onTouchMove = (e: TouchEvent) => {
-      const dy = e.touches[0].clientY - dragTouchRef.current.startY
+      const touch = e.touches[0]
+      if (!touch) return
+      const dy = touch.clientY - dragTouchRef.current.startY
       if (Math.abs(dy) > 10) dragTouchRef.current.moved = true
       if (dy > 30) setMobileCollapsed(true)
       if (dy < -30) setMobileCollapsed(false)
@@ -1165,14 +1176,18 @@ export default function InputBar() {
       if (dragTouchRef.current.moved) {
         suppressHandleClickUntilRef.current = Date.now() + 500
       }
+      dragTouchRef.current = { startY: 0, moved: false }
     }
+    const onTouchCancel = onTouchEnd
     el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
     el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('touchcancel', onTouchCancel)
     return () => {
       el.removeEventListener('touchstart', onTouchStart)
       el.removeEventListener('touchmove', onTouchMove)
       el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchCancel)
     }
   }, [])
 
@@ -1571,7 +1586,7 @@ export default function InputBar() {
 
       <div
         data-input-bar
-        className={`fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-3 sm:px-4 transition-all duration-300${promptExpanded ? ' flex flex-col' : ''}`}
+        className={`fixed bottom-[var(--bottom-safe-space)] left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-3 sm:px-4 transition-all duration-300${promptExpanded ? ' flex flex-col' : ''}`}
         style={promptExpanded ? { top: `${promptExpandedTop}px`, transitionProperty: 'none' } : undefined}
       >
         <InputBatchBars
@@ -1660,8 +1675,9 @@ export default function InputBar() {
               ref={textareaRef}
               contentEditable
               suppressContentEditableWarning
-              onInput={(e) => {
-                isUserInputRef.current = true
+               onInput={(e) => {
+                 if (isComposingRef.current) return
+                 isUserInputRef.current = true
                 const el = e.currentTarget
                 const range = getContentEditableSelection(el)
                 setCursorPos(range.start)
@@ -1679,7 +1695,18 @@ export default function InputBar() {
                 setAtImageMenuIndex(0)
                 setAtImageMenuDismissed(false)
               }}
-              onKeyDown={handleKeyDown}
+               onKeyDown={handleKeyDown}
+               onCompositionStart={() => {
+                 isComposingRef.current = true
+               }}
+               onCompositionEnd={(e) => {
+                 isComposingRef.current = false
+                 isUserInputRef.current = true
+                 const el = e.currentTarget
+                 const range = getContentEditableSelection(el)
+                 setCursorPos(range.start)
+                 setPrompt(getContentEditablePlainText(el))
+               }}
               onPaste={handlePromptPaste}
               onCopy={handlePromptCopy}
               onClick={(e) => {
