@@ -36,7 +36,15 @@ jobs:
 
       - name: Install CocoaPods dependencies
         working-directory: ios/App
-        run: pod install --repo-update
+        run: pod install
+
+      - name: Verify Apple build tools
+        run: |
+          set -euo pipefail
+          xcode-select -p
+          xcodebuild -version
+          pod --version
+          test -f ios/App/App.xcworkspace/contents.xcworkspacedata
 
       - name: Build unsigned iOS app
         run: |
@@ -44,7 +52,7 @@ jobs:
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
-            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -derivedDataPath build/ios-derived-data \
             CONFIGURATION_BUILD_DIR="$PWD/build/ios-app" \
