@@ -34,11 +34,15 @@ jobs:
       - name: Build web app and sync iOS project
         run: npm run ios:sync
 
+      - name: Install CocoaPods dependencies
+        working-directory: ios/App
+        run: pod install --repo-update
+
       - name: Build unsigned iOS app
         run: |
           set -euo pipefail
           xcodebuild \
-            -project ios/App/App.xcodeproj \
+            -workspace ios/App/App.xcworkspace \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
