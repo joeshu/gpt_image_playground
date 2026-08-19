@@ -29,6 +29,7 @@ export default defineConfig(({ command }) => {
     },
     server: {
       host: true,
+      allowedHosts: ['.monkeycode-ai.online'],
       proxy:
         devProxyConfig?.enabled
           ? {
@@ -44,6 +45,18 @@ export default defineConfig(({ command }) => {
               },
             }
           : undefined,
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom'],
+            markdown: ['react-markdown', 'remark-gfm', 'streamdown', '@streamdown/math', 'katex'],
+            imageProviders: ['@fal-ai/client'],
+            compression: ['fflate'],
+          },
+        },
+      },
     },
   }
 })

@@ -1,0 +1,64 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-unsigned-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Add Capacitor iOS platform
+        run: npx cap add ios
+
+      - name: Build web app and sync iOS project
+        run: npm run ios:sync
+
+      - name: Build unsigned iOS app
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build/ios-derived-data \
+            CONFIGURATION_BUILD_DIR="$PWD/build/ios-app" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          test -d build/ios-app/App.app
+          mkdir -p build/Payload
+          cp -R build/ios-app/App.app build/Payload/App.app
+          ditto -c -k --sequesterRsrc --keepParent build/Payload build/GPT-Image-Playground-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpt-image-playground-ios-unsigned
+          path: build/GPT-Image-Playground-unsigned.ipa
+          if-no-files-found: error
