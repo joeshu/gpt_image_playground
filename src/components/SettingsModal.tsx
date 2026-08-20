@@ -60,6 +60,7 @@ import CustomProviderModal from './settings/CustomProviderModal'
 import ProfileImportUrlModal, { type CopyImportUrlOptions } from './settings/ProfileImportUrlModal'
 import ZipDownloadRouteModal, { ZIP_DOWNLOAD_ROUTE_OPTIONS } from './settings/ZipDownloadRouteModal'
 import MarkdownRenderer from './MarkdownRenderer'
+import { clearExportHistory, getExportHistory, type ExportHistoryEntry } from '../lib/exportHistory'
 
 function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -189,6 +190,7 @@ export default function SettingsModal() {
   const [profileImportUrlTooltipVisible, setProfileImportUrlTooltipVisible] = useState(false)
   const [duplicateProfileTooltipVisible, setDuplicateProfileTooltipVisible] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('api')
+  const [exportHistory, setExportHistory] = useState<ExportHistoryEntry[]>([])
   const [exportConfig, setExportConfig] = useState(true)
   const [exportTasks, setExportTasks] = useState(true)
   const [importConfig, setImportConfig] = useState(true)
@@ -331,6 +333,7 @@ export default function SettingsModal() {
     setDraft(nextDraft)
     setTimeoutInput(String(getActiveApiProfile(nextDraft).timeout))
     setAgentMaxToolRoundsInput(String(nextDraft.agentMaxToolRounds))
+    setExportHistory(getExportHistory())
   }, [apiProxyAvailable, apiProxyLocked, showSettings, settings, reusedTaskApiProfileId])
 
   useEffect(() => {
@@ -340,6 +343,11 @@ export default function SettingsModal() {
   useEffect(() => {
     if (showSettings && settingsTabRequest) setActiveTab(settingsTabRequest)
   }, [settingsTabRequest, showSettings])
+
+  const handleClearExportHistory = () => {
+    clearExportHistory()
+    setExportHistory([])
+  }
 
   const updateProfileMenuMaxHeight = useCallback(() => {
     if (!profileMenuTriggerRef.current) return
@@ -1773,6 +1781,32 @@ export default function SettingsModal() {
                       '导出所选数据'
                     )}
                   </button>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-800 dark:text-gray-100">最近导出</h4>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">记录最近生成的文件名，方便在“文件”App 中查找。</p>
+                    </div>
+                    {exportHistory.length > 0 && (
+                      <button type="button" onClick={handleClearExportHistory} className="shrink-0 rounded-lg px-2 py-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-white/[0.06]">清空记录</button>
+                    )}
+                  </div>
+                  {exportHistory.length === 0 ? (
+                    <p className="rounded-xl bg-gray-50/80 px-3 py-3 text-xs text-gray-400 dark:bg-white/[0.03]">暂无导出记录</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {exportHistory.slice(0, 8).map((entry) => (
+                        <div key={entry.id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-gray-50/80 px-3 py-2 dark:bg-white/[0.03]">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-gray-700 dark:text-gray-200">{entry.fileName}</div>
+                            <div className="mt-0.5 text-[11px] text-gray-400">{entry.kind === 'zip' ? `ZIP · ${entry.count} 张图片` : '图片'} · {new Date(entry.createdAt).toLocaleString()}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] space-y-4 shadow-sm">

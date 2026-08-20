@@ -2,6 +2,7 @@ import { zipSync } from 'fflate'
 import type { TaskRecord } from '../types'
 import { getNumberedFileNameBase, sanitizeFileNamePart } from './exportFileName'
 import { ensureImageCached } from './imageCache'
+import { addExportHistory } from './exportHistory'
 
 const MIME_EXTENSIONS: Record<string, string> = {
   'image/png': 'png',
@@ -54,6 +55,7 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
       const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer
       const fileName = `${sanitizeFileNamePart(fileNameBase) || 'images'}.zip`
       const shareResult = await shareDownload(new Blob([buffer], { type: 'application/zip' }), fileName)
+      if (!shareResult.cancelled) addExportHistory(fileName, blobs.length)
       return { successCount: shareResult.cancelled ? 0 : blobs.length, failCount: shareResult.cancelled ? 0 : failCount, fileName, locationHint: shareResult.cancelled ? '已取消保存' : `已准备 ${fileName}，请在系统分享面板中选择“存储到文件”`, cancelled: shareResult.cancelled }
     }
     return { successCount: 0, failCount }
@@ -72,6 +74,7 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
       if (shareResult?.cancelled) return { successCount: 0, failCount: 0, fileName, locationHint: '已取消保存', cancelled: true }
       if (!isNativeApp()) triggerDownload(blob, fileName)
       successCount++
+      if (isNativeApp() || !multiple) addExportHistory(fileName, 1)
       if (multiple) await delay(100)
     } catch (err) {
       console.error(err)
@@ -120,6 +123,7 @@ export async function downloadImageEntriesAsZip(entries: DownloadImageZipEntry[]
     const shareResult = isNativeApp() ? await shareDownload(zipBlob, fileName) : null
     if (shareResult?.cancelled) return { successCount: 0, failCount: 0, fileName, locationHint: '已取消保存', cancelled: true }
     if (!isNativeApp()) triggerDownload(zipBlob, fileName)
+    addExportHistory(fileName, successCount)
   }
 
   return { successCount, failCount, fileName: successCount > 0 ? `${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip` : undefined, locationHint: isNativeApp() && successCount > 0 ? `已准备 ${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip，请在系统分享面板中选择“存储到文件”` : undefined }
