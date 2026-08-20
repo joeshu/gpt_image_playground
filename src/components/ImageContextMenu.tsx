@@ -121,7 +121,9 @@ export default function ImageContextMenu() {
       }
 
       const result = await downloadImageIds([imageId || src], fileNameBase)
-      if (result.successCount === 0) {
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
       showToast(result.locationHint ?? '下载成功', 'success')
@@ -156,7 +158,9 @@ export default function ImageContextMenu() {
       const result = settings.zipDownloadRoutes.includes('image-context-menu-all')
         ? await downloadImageEntriesAsZip(getImageZipEntries(outputImageIds, fileNameBase), fileNameBase)
         : await downloadImageIds(outputImageIds, fileNameBase)
-      if (result.successCount === 0) {
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else if (result.failCount > 0) {
         showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')

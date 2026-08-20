@@ -14,6 +14,8 @@ export interface DownloadImagesResult {
   successCount: number
   failCount: number
   locationHint?: string
+  fileName?: string
+  cancelled?: boolean
 }
 
 export interface DownloadImageZipEntry {
@@ -50,12 +52,14 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
       ] as const))
       const zipped = zipSync(Object.fromEntries(entries), { level: 6 })
       const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer
-      await shareDownload(new Blob([buffer], { type: 'application/zip' }), `${sanitizeFileNamePart(fileNameBase) || 'images'}.zip`)
-      return { successCount: blobs.length, failCount, locationHint: '请在系统分享面板中选择“存储到文件”' }
+      const fileName = `${sanitizeFileNamePart(fileNameBase) || 'images'}.zip`
+      const shareResult = await shareDownload(new Blob([buffer], { type: 'application/zip' }), fileName)
+      return { successCount: shareResult.cancelled ? 0 : blobs.length, failCount: shareResult.cancelled ? 0 : failCount, fileName, locationHint: shareResult.cancelled ? '已取消保存' : `已准备 ${fileName}，请在系统分享面板中选择“存储到文件”`, cancelled: shareResult.cancelled }
     }
     return { successCount: 0, failCount }
   }
 
+  let lastFileName: string | undefined
   for (let index = 0; index < imageIds.length; index++) {
     try {
       const blob = await getImageBlob(imageIds[index])
@@ -63,8 +67,10 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
       const fileName = multiple
         ? `${fileNameBase}-${order}.${getBlobExtension(blob)}`
         : `${fileNameBase}.${getBlobExtension(blob)}`
-      if (isNativeApp()) await shareDownload(blob, fileName)
-      else triggerDownload(blob, fileName)
+      lastFileName = fileName
+      const shareResult = isNativeApp() ? await shareDownload(blob, fileName) : null
+      if (shareResult?.cancelled) return { successCount: 0, failCount: 0, fileName, locationHint: '已取消保存', cancelled: true }
+      if (!isNativeApp()) triggerDownload(blob, fileName)
       successCount++
       if (multiple) await delay(100)
     } catch (err) {
@@ -73,7 +79,7 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
     }
   }
 
-  return { successCount, failCount, locationHint: isNativeApp() && successCount > 0 ? '请在系统分享面板中选择“存储到文件”' : undefined }
+  return { successCount, failCount, fileName: successCount > 0 ? lastFileName : undefined, locationHint: isNativeApp() && successCount > 0 ? `已准备 ${lastFileName}，请在系统分享面板中选择“存储到文件”` : undefined }
 }
 
 export async function downloadImageEntriesAsZip(entries: DownloadImageZipEntry[], zipFileNameBase = 'images'): Promise<DownloadImagesResult> {
@@ -111,11 +117,12 @@ export async function downloadImageEntriesAsZip(entries: DownloadImageZipEntry[]
     const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer
     const zipBlob = new Blob([buffer], { type: 'application/zip' })
     const fileName = `${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip`
-    if (isNativeApp()) await shareDownload(zipBlob, fileName)
-    else triggerDownload(zipBlob, fileName)
+    const shareResult = isNativeApp() ? await shareDownload(zipBlob, fileName) : null
+    if (shareResult?.cancelled) return { successCount: 0, failCount: 0, fileName, locationHint: '已取消保存', cancelled: true }
+    if (!isNativeApp()) triggerDownload(zipBlob, fileName)
   }
 
-  return { successCount, failCount, locationHint: isNativeApp() && successCount > 0 ? '请在系统分享面板中选择“存储到文件”' : undefined }
+  return { successCount, failCount, fileName: successCount > 0 ? `${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip` : undefined, locationHint: isNativeApp() && successCount > 0 ? `已准备 ${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip，请在系统分享面板中选择“存储到文件”` : undefined }
 }
 
 export function getTaskOutputImageZipEntries(tasks: TaskOutputZipTask[]): DownloadImageZipEntry[] {
@@ -153,7 +160,7 @@ function triggerDownload(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-async function shareDownload(blob: Blob, fileName: string) {
+async function shareDownload(blob: Blob, fileName: string): Promise<{ cancelled: boolean }> {
   if (typeof navigator.share !== 'function') {
     throw new Error('当前 iOS 环境不支持系统文件分享')
   }
@@ -162,7 +169,13 @@ async function shareDownload(blob: Blob, fileName: string) {
   if (navigator.canShare && !navigator.canShare({ files: [file] })) {
     throw new Error('当前 iOS 环境不支持分享此文件')
   }
-  await navigator.share({ files: [file], title: fileName })
+  try {
+    await navigator.share({ files: [file], title: fileName })
+    return { cancelled: false }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return { cancelled: true }
+    throw err
+  }
 }
 
 function isNativeApp() {

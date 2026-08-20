@@ -971,7 +971,9 @@ export default function AgentWorkspace() {
                                      ? await downloadImageEntriesAsZip(getImageZipEntries(imageIds, fileNameBase), fileNameBase)
                                      : await downloadImageIds(imageIds, fileNameBase);
                                    const { successCount, failCount } = result
-                                 if (successCount === 0) {
+                                  if (result.cancelled) {
+                                    useStore.getState().showToast(result.locationHint ?? '已取消保存', 'info');
+                                  } else if (successCount === 0) {
                                    useStore.getState().showToast('下载失败', 'error');
                                  } else if (failCount > 0) {
                                    useStore.getState().showToast('部分下载失败：成功 ' + successCount + '，失败 ' + failCount, 'error');

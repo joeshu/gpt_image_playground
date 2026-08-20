@@ -215,7 +215,9 @@ export default function InputBar() {
         : await downloadImageIds(imageIds, fileNameBase)
       const { successCount, failCount } = result
 
-      if (successCount === 0) {
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (successCount === 0) {
         showToast('下载失败', 'error')
       } else if (failCount > 0) {
         showToast(`部分下载失败：成功 ${successCount}，失败 ${failCount}`, 'error')
@@ -237,6 +239,8 @@ export default function InputBar() {
     let successCount = 0
     let failCount = 0
     let downloadedCollectionCount = 0
+    let cancelled = false
+    let cancellationHint = '已取消保存'
     const useZipDownload = settings.zipDownloadRoutes.includes('favorite-collection-selection')
     const timeStr = formatExportFileTime(new Date())
 
@@ -252,11 +256,18 @@ export default function InputBar() {
           : await downloadImageIds(entries.map((entry) => entry.imageId), zipName)
         successCount += result.successCount
         failCount += result.failCount
+        if (result.cancelled) {
+          cancelled = true
+          cancellationHint = result.locationHint ?? cancellationHint
+          break
+        }
         if (result.successCount > 0) downloadedCollectionCount++
         if (selectedCollections.length > 1) await delay(100)
       }
 
-      if (successCount === 0) {
+      if (cancelled) {
+        showToast(cancellationHint, 'info')
+      } else if (successCount === 0) {
         showToast('选中的收藏夹没有图片', 'info')
       } else if (failCount > 0) {
         showToast(`部分下载失败：成功 ${successCount}，失败 ${failCount}`, 'error')

@@ -361,7 +361,9 @@ export default function DetailModal() {
 
     try {
       const result = await downloadImageIds([currentOutputImageId], `task-${task.id}`)
-      if (result.successCount === 0) {
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
         showToast(result.locationHint ?? '下载成功', 'success')
@@ -378,7 +380,9 @@ export default function DetailModal() {
 
     try {
       const result = await downloadImageIds([currentOriginalOutputImageId], `task-${task.id}-orig`)
-      if (result.successCount === 0) {
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
         showToast(result.locationHint ?? '原图下载成功', 'success')
@@ -398,7 +402,9 @@ export default function DetailModal() {
       const result = settings.zipDownloadRoutes.includes('task-detail-all')
         ? await downloadImageEntriesAsZip(getImageZipEntries(task.outputImages, fileNameBase), fileNameBase)
         : await downloadImageIds(task.outputImages, fileNameBase)
-      if (result.successCount === 0) {
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else if (result.failCount > 0) {
         showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')
@@ -419,7 +425,9 @@ export default function DetailModal() {
       const result = settings.zipDownloadRoutes.includes('task-detail-partial')
         ? await downloadImageEntriesAsZip(getImageZipEntries(streamPartialImageIds, fileNameBase), fileNameBase)
         : await downloadImageIds(streamPartialImageIds, fileNameBase)
-      if (result.successCount === 0) {
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else if (result.failCount > 0) {
         showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')
