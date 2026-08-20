@@ -919,7 +919,7 @@ export default function AgentWorkspace() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 ml-auto text-gray-400">
+                       <div className="flex items-center gap-1.5 ml-auto text-gray-400">
                         {!isAssistant && round && hasBranches && siblingIndex >= 0 && (
                           <div className="inline-flex items-center text-sm font-bold text-gray-400 dark:text-gray-500 mr-1">
                             <AgentActionButton tooltip="上一分支" className="p-1 rounded-md hover:bg-gray-200/50 dark:hover:bg-white/10 hover:text-gray-800 dark:hover:text-gray-200 transition-colors" onClick={() => handleSwitchBranch(round, -1)}>
@@ -933,23 +933,23 @@ export default function AgentWorkspace() {
                         )}
                         {isAssistant ? (
                           <>
-                            <AgentActionButton tooltip="复制输出文本" className={`p-1.5 rounded-md transition-colors ${message.content.trim() ? 'text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-white/[0.06]' : 'text-gray-300 dark:text-gray-600 opacity-50 cursor-not-allowed'}`} disabled={!message.content.trim()} onClick={() => {
+                             <AgentActionButton tooltip="复制输出文本" className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${message.content.trim() ? 'text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-white/[0.06]' : 'text-gray-300 dark:text-gray-600 opacity-50 cursor-not-allowed'}`} disabled={!message.content.trim()} onClick={() => {
                               void handleCopyMessage(getAgentAssistantCopyContent(message.content, assistantBlocks), '输出文本已复制', '复制输出文本失败');
                             }}>
                               <CopyIcon className="w-4 h-4" />
                             </AgentActionButton>
-                            <AgentActionButton tooltip="重新生成" className="p-1.5 rounded-md text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" onClick={() => {
+                             <AgentActionButton tooltip="重新生成" className="flex h-10 w-10 items-center justify-center rounded-md text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" onClick={() => {
                               if (conversation && round) void regenerateAgentAssistantMessage(conversation.id, round.id);
                             }}>
                               <RefreshIcon className="w-4 h-4" />
                             </AgentActionButton>
-                            <AgentActionButton tooltip={allRoundTasksFavorited ? '编辑收藏夹' : '收藏所有图片'} className={`p-1.5 rounded-md transition-colors ${hasRoundFavoriteTasks ? (allRoundTasksFavorited ? 'text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10' : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10') : 'text-gray-300 dark:text-gray-600 opacity-50 cursor-not-allowed'}`} disabled={!hasRoundFavoriteTasks} onClick={() => {
+                             <AgentActionButton tooltip={allRoundTasksFavorited ? '编辑收藏夹' : '收藏所有图片'} className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${hasRoundFavoriteTasks ? (allRoundTasksFavorited ? 'text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10' : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10') : 'text-gray-300 dark:text-gray-600 opacity-50 cursor-not-allowed'}`} disabled={!hasRoundFavoriteTasks} onClick={() => {
                               if (!hasRoundFavoriteTasks) return;
                               openFavoritePicker(favoriteTasksForRound.map((task) => task.id));
                             }}>
                               <FavoriteIcon className="w-4 h-4" filled={allRoundTasksFavorited} />
                             </AgentActionButton>
-                            <AgentActionButton tooltip="下载所有图片" className={`p-1.5 rounded-md transition-colors ${hasRoundTasks ? 'text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-500/10' : 'text-gray-300 dark:text-gray-600 opacity-50 cursor-not-allowed'}`} disabled={!hasRoundTasks} onClick={async () => {
+                             <AgentActionButton tooltip="下载所有图片" className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${hasRoundTasks ? 'text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-500/10' : 'text-gray-300 dark:text-gray-600 opacity-50 cursor-not-allowed'}`} disabled={!hasRoundTasks} onClick={async () => {
                                const imageIds = tasksForRound.flatMap(t => t.outputImages || []);
                                if (imageIds.length === 0) return;
                                try {
@@ -973,7 +973,7 @@ export default function AgentWorkspace() {
                              }}>
                                <DownloadIcon className="w-4 h-4" />
                              </AgentActionButton>
-                            <AgentActionButton tooltip="删除消息" className="p-1.5 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-colors" onClick={() => {
+                             <AgentActionButton tooltip="删除消息" className="flex h-10 w-10 items-center justify-center hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-colors" onClick={() => {
                               if (round) handleDeleteMessage(message, round);
                             }}>
                               <TrashIcon className="w-4 h-4" />
@@ -981,17 +981,17 @@ export default function AgentWorkspace() {
                           </>
                         ) : (
                           <>
-                            <AgentActionButton tooltip="复制提示词" className="p-1.5 rounded-md hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-white/[0.04] transition-colors" onClick={() => {
+                             <AgentActionButton tooltip="复制提示词" className="flex h-10 w-10 items-center justify-center rounded-md hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-white/[0.04] transition-colors" onClick={() => {
                               void handleCopyMessage(message.content);
                             }}>
                               <CopyIcon className="w-4 h-4" />
                             </AgentActionButton>
-                            <AgentActionButton tooltip="编辑" className="p-1.5 rounded-md hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-white/[0.04] transition-colors" onClick={() => {
+                             <AgentActionButton tooltip="编辑" className="flex h-10 w-10 items-center justify-center rounded-md hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-white/[0.04] transition-colors" onClick={() => {
                                if (round) void handleEditRoundMessage(round, message.content);
                             }}>
                               <EditIcon className="w-4 h-4" />
                             </AgentActionButton>
-                            <AgentActionButton tooltip="删除" className="p-1.5 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors" onClick={() => {
+                             <AgentActionButton tooltip="删除" className="flex h-10 w-10 items-center justify-center hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors" onClick={() => {
                               if (round) handleDeleteMessage(message, round);
                             }}>
                               <TrashIcon className="w-4 h-4" />

@@ -295,6 +295,15 @@ function applyUrlCitations(text: string, annotations: ResponseTextAnnotation[] |
   return output
 }
 
+function removeInternalSearchMarkers(text: string) {
+  return text
+    .replace(/\b(?:turn\d+search\d+|search\d+|cite)\b/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function getStreamEventErrorMessage(event: Record<string, unknown>): string | null {
   const error = event.error
   if (isRecordValue(error)) {
@@ -343,7 +352,7 @@ function extractText(payload: ResponsesApiResponse) {
     if (item.type !== 'message') continue
     for (const part of item.content ?? []) {
       if ((part.type === 'output_text' || part.type === 'text') && typeof part.text === 'string') {
-        chunks.push(applyUrlCitations(part.text, part.annotations))
+        chunks.push(removeInternalSearchMarkers(applyUrlCitations(part.text, part.annotations)))
       } else if (part.type === 'refusal' && typeof part.refusal === 'string') {
         chunks.push(part.refusal)
       }
@@ -577,7 +586,7 @@ async function parseAgentStreamResponse(
   const payload: ResponsesApiResponse | null = completedPayload ?? (outputItems.length ? { output: outputItems } : null)
   if (!payload) throw new Error('Agent 流式接口未返回最终响应数据')
 
-  const text = extractText(payload) || streamedText.trim()
+  const text = extractText(payload) || removeInternalSearchMarkers(streamedText)
   return {
     responseId: payload.id,
     text,
