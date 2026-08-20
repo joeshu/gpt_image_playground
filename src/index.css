@@ -198,9 +198,17 @@ input[type="number"] {
 
 .markdown-renderer {
   color: inherit;
+  font-size: inherit;
   line-height: inherit;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.markdown-renderer :where(pre, [data-streamdown="code-block"]) {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .markdown-renderer :where(p, ul, ol, blockquote, table, pre, [data-streamdown="code-block"]) {

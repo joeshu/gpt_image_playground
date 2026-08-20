@@ -7,6 +7,7 @@ import { getPromptMentionParts } from '../lib/promptImageMentions'
 import { copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import type { AgentWebSearchStatus } from '../lib/agentWebSearch'
 import { getAgentAssistantBlocks, getAgentAssistantCopyContent, getRoundTaskSlots } from '../lib/agentAssistantBlocks'
+import { sanitizeAgentText } from '../lib/agentApi'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
 import TaskCard from './TaskCard'
@@ -793,7 +794,7 @@ export default function AgentWorkspace() {
                       className={`group flex max-w-[95%] flex-col md:max-w-[85%] lg:max-w-[75%] ${isAssistant ? 'items-start' : 'items-end'}`}
                     >
                       <article 
-                        className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${
+                        className={`relative flex min-w-0 max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${
                         isAssistant 
                           ? 'bg-white/70 dark:bg-white/[0.03] border border-gray-200 dark:border-white/[0.08] rounded-tl-sm hover:bg-white dark:hover:bg-white/[0.04]' 
                           : `bg-gray-100 dark:bg-[#2A2D31] rounded-tr-sm ${isEditing ? 'ring-2 ring-blue-500/50 dark:ring-blue-400/50' : ''}`
@@ -849,12 +850,12 @@ export default function AgentWorkspace() {
                         })()}
                       </div>
                     ) : (
-                      <div data-selectable-text className={`text-[15px] leading-relaxed text-gray-800 dark:text-gray-100 ${!isAssistant ? 'select-text' : ''}`}>
+                      <div data-selectable-text className={`min-w-0 max-w-full overflow-hidden text-[15px] leading-relaxed text-gray-800 dark:text-gray-100 ${!isAssistant ? 'select-text' : ''}`}>
                         {isAssistant ? (
                           <>
                             {assistantBlocks.length > 0 ? assistantBlocks.map((block, index) => {
                               if (block.type === 'web-search') return <AgentWebSearchStatusLines key={block.key} statuses={[block.status]} />
-                              if (block.type === 'text') return <div key={block.key} className={index > 0 ? 'mt-3' : undefined}><MarkdownRenderer content={block.content ?? message.content} streaming={isStreamingAssistant} /></div>
+                              if (block.type === 'text') return <div key={block.key} className={index > 0 ? 'mt-3' : undefined}><MarkdownRenderer content={sanitizeAgentText(block.content ?? message.content)} streaming={isStreamingAssistant} /></div>
                               if (block.type === 'batch-params') {
                                 return (
                                   <div key={block.key} className={index > 0 ? 'mt-3' : undefined}>
@@ -864,7 +865,7 @@ export default function AgentWorkspace() {
                               }
                               if (block.type === 'deleted-image-task') {
                                 return (
-                                  <div key={block.key} className="mt-4 w-full min-w-[16rem] max-w-sm rounded-xl bg-gray-50/50 dark:bg-white/[0.02] border border-dashed border-gray-200 dark:border-white/[0.08] p-4 flex min-h-[120px] flex-col items-center justify-center text-gray-400 dark:text-gray-500" onClick={e => e.stopPropagation()}>
+                                  <div key={block.key} className="mt-4 w-full min-w-0 max-w-sm rounded-xl bg-gray-50/50 dark:bg-white/[0.02] border border-dashed border-gray-200 dark:border-white/[0.08] p-4 flex min-h-[120px] flex-col items-center justify-center text-gray-400 dark:text-gray-500" onClick={e => e.stopPropagation()}>
                                     <TrashIcon className="w-6 h-6 mb-2 opacity-50" />
                                     <span className="text-xs">[Image Removed]</span>
                                   </div>
@@ -891,7 +892,7 @@ export default function AgentWorkspace() {
                             )}
                           </div>
                         ) : (
-                          <MarkdownRenderer content={parts[0]?.text ?? ''} />
+                          <MarkdownRenderer content={sanitizeAgentText(parts[0]?.text ?? '')} />
                         )}
                       </div>
                     )}
