@@ -154,6 +154,7 @@ export default function AgentWorkspace() {
   const [conversationSearchQuery, setConversationSearchQuery] = useState('')
   const [conversationActionsId, setConversationActionsId] = useState<string | null>(null)
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
+  const [isScrolledFromTop, setIsScrolledFromTop] = useState(false)
   const touchStartY = useRef(-1)
   const conversationLongPressTimer = useRef<number | null>(null)
   const autoScrollStateRef = useRef<{ conversationId: string | null; lastUserMessageSignature: string | null }>({ conversationId: null, lastUserMessageSignature: null })
@@ -174,6 +175,11 @@ export default function AgentWorkspace() {
     const scrollingElement = document.scrollingElement ?? document.documentElement
     window.scrollTo({ top: scrollingElement.scrollHeight, behavior: 'smooth' })
   }, [])
+
+  const scrollToAgentTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setAgentMobileHeaderVisible(true)
+  }, [setAgentMobileHeaderVisible])
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const touchY = e.touches[0]?.clientY ?? -1
@@ -275,6 +281,7 @@ export default function AgentWorkspace() {
           setMobileTopBarVisible(true)
         }
 
+        setIsScrolledFromTop(currentScrollY > Math.max(window.innerHeight * 0.8, 480))
         updateIsScrolledToBottom()
 
         lastScrollY = currentScrollY
@@ -283,7 +290,10 @@ export default function AgentWorkspace() {
       ticking = true
     }
 
-    const initialFrame = window.requestAnimationFrame(updateIsScrolledToBottom)
+    const initialFrame = window.requestAnimationFrame(() => {
+      setIsScrolledFromTop(window.scrollY > Math.max(window.innerHeight * 0.8, 480))
+      updateIsScrolledToBottom()
+    })
     const visualViewport = window.visualViewport
     window.addEventListener('scroll', handleScroll, { passive: true })
     window.addEventListener('resize', updateIsScrolledToBottom)
@@ -1049,6 +1059,15 @@ export default function AgentWorkspace() {
           aria-label="滚动到底部"
         >
           <ArrowDownIcon className="h-5 w-5" />
+        </button>
+        <button
+          onClick={scrollToAgentTop}
+          className={`fixed right-4 top-20 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-gray-200/50 bg-white/90 text-gray-500 shadow-[0_2px_12px_rgba(0,0,0,0.1)] backdrop-blur transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
+            isScrolledFromTop && activeMessages.length > 0 ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+          }`}
+          aria-label="回到顶部"
+        >
+          <ArrowDownIcon className="h-5 w-5 rotate-180" />
         </button>
       </section>
     </main>
