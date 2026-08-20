@@ -49,7 +49,7 @@ import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSin
 import { buildAgentApiInput, buildAgentContinuationInput } from './lib/agentInputBuilder'
 import { collectAgentRoundOutputImageSlots, extractAgentReferenceIds, getAgentCurrentReferenceId, getAgentGeneratedImageReferenceId } from './lib/agentImageReferences'
 import { showBrowserNotification } from './lib/browserNotification'
-import { IMAGE_FETCH_CORS_HINT } from './lib/imageApiShared'
+import { getNetworkErrorKind, IMAGE_FETCH_CORS_HINT } from './lib/imageApiShared'
 import { getFalErrorMessage, getFalQueuedImageResult } from './lib/falAiImageApi'
 import { getCustomQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { validateMaskMatchesImage } from './lib/canvasImage'
@@ -1238,11 +1238,7 @@ function isNetworkRecoverableError(err: unknown) {
 }
 
 function isApiRequestNetworkError(err: unknown): boolean {
-  if (err instanceof TypeError) {
-    const message = err.message.toLowerCase()
-    return /failed to fetch|fetch failed|load failed|networkerror|network request failed/i.test(message)
-  }
-  return false
+  return getNetworkErrorKind(err) !== null
 }
 
 function getApiModeApiName(apiMode: ApiMode) {
@@ -1258,6 +1254,14 @@ function getApiRequestNetworkErrorHint(
   if (!isApiRequestNetworkError(err)) return null
 
   const elapsedSeconds = Math.max(0, (Date.now() - createdAt) / 1000)
+
+  if (getNetworkErrorKind(err) === 'aborted' && elapsedSeconds < 15) {
+    return '提示：请求已中断。若不是主动停止，请检查网络连接后重试。'
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return '提示：设备当前处于离线状态，请恢复网络后重试。'
+  }
 
   if (elapsedSeconds <= 15) {
     if (usesApiProxy) {
@@ -4570,4 +4574,3 @@ export async function addImageFromUrl(src: string): Promise<void> {
   cacheImage(id, dataUrl)
   useStore.getState().addInputImage({ id, dataUrl })
 }
-
