@@ -16,8 +16,9 @@ export function createCustomProfileImportUrl(
   const url = new URL(baseUrl)
   url.search = ''
   url.hash = ''
-  const importProfile: ApiProfile = {
+  const importProfile: Partial<ApiProfile> = {
     ...profile,
+    id: undefined,
     isDefault: undefined,
     apiKey: options.includeApiKey ? profile.apiKey : '',
   }
@@ -26,7 +27,6 @@ export function createCustomProfileImportUrl(
     if (options.useNewApiKey) importProfile.apiKey = '{key}'
     if (options.useNewApiModel) importProfile.model = '{model}'
   }
-  url.searchParams.set('profileId', profile.id)
   url.searchParams.set('settings', JSON.stringify({
     customProviders: provider ? [provider] : [],
     profiles: [importProfile],

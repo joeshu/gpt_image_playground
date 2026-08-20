@@ -4,7 +4,7 @@ import { createCustomProfileImportUrl } from './profileImportUrl'
 import { buildSettingsFromUrlParams } from './urlSettings'
 
 describe('createCustomProfileImportUrl', () => {
-  it('includes the target profile ID in both the query and settings payload', () => {
+  it('does not include the source profile ID in the shared URL', () => {
     const provider = { id: 'custom-provider', name: 'Custom Provider', submit: { path: 'generate' } }
     const profile = createDefaultOpenAIProfile({
       id: 'custom-profile',
@@ -24,14 +24,14 @@ describe('createCustomProfileImportUrl', () => {
 
     expect(url.origin + url.pathname).toBe('https://playground.example.com/app')
     expect(url.hash).toBe('')
-    expect(url.searchParams.get('profileId')).toBe(profile.id)
+    expect(url.searchParams.has('profileId')).toBe(false)
     expect(settings.customProviders).toEqual([provider])
     expect(settings.profiles).toEqual([expect.objectContaining({
-      id: profile.id,
       provider: provider.id,
       apiKey: '{key}',
       model: 'custom-model',
     })])
+    expect(settings.profiles[0]).not.toHaveProperty('id')
   })
 
   it('imports the shared custom profile without converting it to OpenAI', () => {
@@ -53,13 +53,12 @@ describe('createCustomProfileImportUrl', () => {
       ...buildSettingsFromUrlParams(DEFAULT_SETTINGS, url.searchParams),
     })
 
-    expect(next.activeProfileId).toBe(profile.id)
+    expect(next.activeProfileId).not.toBe(profile.id)
     expect(next.customProviders).toEqual([expect.objectContaining({
       id: provider.id,
       submit: expect.objectContaining({ path: 'generate' }),
     })])
     expect(next.profiles[0]).toMatchObject({
-      id: profile.id,
       provider: provider.id,
       apiKey: 'secret-key',
       model: 'custom-model',
