@@ -957,15 +957,16 @@ export default function AgentWorkspace() {
                                   const roundIndex = round?.index ?? 0;
                                   const fileNameBase = 'agent-round-' + roundIndex;
                                   const settings = useStore.getState().settings;
-                                  const { successCount, failCount } = settings.zipDownloadRoutes.includes('agent-round-all')
-                                    ? await downloadImageEntriesAsZip(getImageZipEntries(imageIds, fileNameBase), fileNameBase)
-                                    : await downloadImageIds(imageIds, fileNameBase);
+                                   const result = settings.zipDownloadRoutes.includes('agent-round-all')
+                                     ? await downloadImageEntriesAsZip(getImageZipEntries(imageIds, fileNameBase), fileNameBase)
+                                     : await downloadImageIds(imageIds, fileNameBase);
+                                   const { successCount, failCount } = result
                                  if (successCount === 0) {
                                    useStore.getState().showToast('下载失败', 'error');
                                  } else if (failCount > 0) {
                                    useStore.getState().showToast('部分下载失败：成功 ' + successCount + '，失败 ' + failCount, 'error');
                                  } else {
-                                   useStore.getState().showToast(successCount > 1 ? '下载成功：' + successCount + ' 张图片' : '下载成功', 'success');
+                                    useStore.getState().showToast(result.locationHint ?? (successCount > 1 ? '下载成功：' + successCount + ' 张图片' : '下载成功'), 'success');
                                  }
                                } catch (err) {
                                  console.error(err);

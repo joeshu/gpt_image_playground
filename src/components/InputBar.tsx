@@ -210,16 +210,17 @@ export default function InputBar() {
     try {
       const timeStr = formatExportFileTime(new Date())
       const fileNameBase = `batch-${timeStr}`
-      const { successCount, failCount } = settings.zipDownloadRoutes.includes('task-selection')
+      const result = settings.zipDownloadRoutes.includes('task-selection')
         ? await downloadImageEntriesAsZip(getTaskOutputImageZipEntries(selectedTasks), fileNameBase)
         : await downloadImageIds(imageIds, fileNameBase)
+      const { successCount, failCount } = result
 
       if (successCount === 0) {
         showToast('下载失败', 'error')
       } else if (failCount > 0) {
         showToast(`部分下载失败：成功 ${successCount}，失败 ${failCount}`, 'error')
       } else {
-        showToast(successCount > 1 ? `下载成功：${successCount} 张图片` : '下载成功', 'success')
+        showToast(result.locationHint ?? (successCount > 1 ? `下载成功：${successCount} 张图片` : '下载成功'), 'success')
       }
     } catch (err) {
       console.error(err)

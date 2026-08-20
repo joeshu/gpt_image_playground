@@ -364,7 +364,7 @@ export default function DetailModal() {
       if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
-        showToast('下载成功', 'success')
+        showToast(result.locationHint ?? '下载成功', 'success')
       }
     } catch (err) {
       console.error(err)
@@ -381,7 +381,7 @@ export default function DetailModal() {
       if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
-        showToast('原图下载成功', 'success')
+        showToast(result.locationHint ?? '原图下载成功', 'success')
       }
     } catch (err) {
       console.error(err)
@@ -403,7 +403,7 @@ export default function DetailModal() {
       } else if (result.failCount > 0) {
         showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')
       } else {
-        showToast(result.successCount > 1 ? `下载成功：${result.successCount} 张图片` : '下载成功', 'success')
+        showToast(result.locationHint ?? (result.successCount > 1 ? `下载成功：${result.successCount} 张图片` : '下载成功'), 'success')
       }
     } catch (err) {
       console.error(err)
@@ -424,7 +424,7 @@ export default function DetailModal() {
       } else if (result.failCount > 0) {
         showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')
       } else {
-        showToast(`下载成功：${result.successCount} 张中间步骤图`, 'success')
+        showToast(result.locationHint ?? `下载成功：${result.successCount} 张中间步骤图`, 'success')
       }
     } catch (err) {
       console.error(err)
