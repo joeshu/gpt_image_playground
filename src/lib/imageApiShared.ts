@@ -108,9 +108,10 @@ export const IMAGE_FETCH_CORS_HINT = ' 可点链接按钮复制结果链接，�
 export const STREAMING_UNSUPPORTED_HINT = '提示：当前使用的 API 可能不支持流式传输，请尝试关闭「流式传输」功能。'
 export const STREAMING_FORMAT_HINT = '提示：API 返回了无法解析的流式数据格式，请尝试关闭「流式传输」功能。'
 
-export type NetworkErrorKind = 'aborted' | 'network'
+export type NetworkErrorKind = 'aborted' | 'timeout' | 'network'
 
 export function getNetworkErrorKind(err: unknown): NetworkErrorKind | null {
+  if (err instanceof Error && err.name === 'TimeoutError') return 'timeout'
   if (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError') return 'aborted'
   if (err instanceof TypeError) {
     const message = err.message.toLowerCase()

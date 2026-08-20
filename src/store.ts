@@ -1255,7 +1255,11 @@ function getApiRequestNetworkErrorHint(
 
   const elapsedSeconds = Math.max(0, (Date.now() - createdAt) / 1000)
 
-  if (getNetworkErrorKind(err) === 'aborted' && elapsedSeconds < 15) {
+  const networkErrorKind = getNetworkErrorKind(err)
+  if (networkErrorKind === 'timeout') {
+    return '提示：请求超时，请降低图片尺寸或延长 API 请求超时时间后重试。'
+  }
+  if (networkErrorKind === 'aborted' && elapsedSeconds < 15) {
     return '提示：请求已中断。若不是主动停止，请检查网络连接后重试。'
   }
 
@@ -1817,7 +1821,11 @@ function appendAgentStoppedMessage(content: string) {
 }
 
 function removeAgentStoppedMessage(content: string) {
-  return content.replace(new RegExp(`\\n\\n${AGENT_STOPPED_MESSAGE.replace('.', '\\.')}$`), '').trimEnd()
+  return content.replace(/\s*已停止生成。\s*$/, '').trimEnd()
+}
+
+export function isAgentRoundStopped(round: Pick<AgentRound, 'status' | 'error'>) {
+  return round.status === 'error' && round.error === AGENT_STOPPED_MESSAGE
 }
 
 function markAgentRoundTasksStopped(conversationId: string, roundId: string, now = Date.now()) {
@@ -1990,7 +1998,7 @@ export function continueAgentResponse(conversationId: string, roundId: string) {
   const state = useStore.getState()
   const conversation = state.agentConversations.find((item) => item.id === conversationId)
   const round = conversation?.rounds.find((item) => item.id === roundId)
-  if (!conversation || !round || round.status !== 'error' || round.error !== AGENT_STOPPED_MESSAGE) return
+  if (!conversation || !round || !isAgentRoundStopped(round)) return
   if (conversation.rounds.some((item) => item.status === 'running')) {
     state.showToast('请等待其他 Agent 轮次完成', 'info')
     return
@@ -2016,6 +2024,7 @@ export function continueAgentResponse(conversationId: string, roundId: string) {
 
   updateAgentConversation(conversationId, (current) => ({
     ...current,
+    activeRoundId: roundId,
     updatedAt: Date.now(),
     rounds: current.rounds.map((item) => item.id === roundId ? { ...item, status: 'running', error: null, finishedAt: null } : item),
     messages: messageId
@@ -2029,7 +2038,7 @@ export function continueAgentResponse(conversationId: string, roundId: string) {
     createSettingsForApiProfile(normalizedSettings, activeProfile),
     activeProfile,
     imageProfile,
-    { responseOutput, recoveredTaskIds: round.outputTaskIds, toolCallsUsed },
+    { responseOutput, recoveredTaskIds: [], toolCallsUsed },
   )
 }
 

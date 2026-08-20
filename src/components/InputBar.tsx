@@ -245,6 +245,22 @@ export default function InputBar() {
     const timeStr = formatExportFileTime(new Date())
 
     try {
+      const isNative = window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:'
+      if (isNative) {
+        const entries = selectedCollections.flatMap((collection) => getTaskOutputImageZipEntries(collection.tasks))
+        const result = await downloadImageEntriesAsZip(entries, `favorites-${timeStr}`)
+        if (result.cancelled) {
+          showToast(result.locationHint ?? '已取消分享', 'info')
+        } else if (result.successCount === 0) {
+          showToast('选中的收藏夹没有图片', 'info')
+        } else if (result.failCount > 0) {
+          showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')
+        } else {
+          showToast(`下载成功：${result.successCount} 张图片`, 'success')
+        }
+        clearFavoriteCollectionSelection()
+        return
+      }
       for (const collection of selectedCollections) {
         const entries = getTaskOutputImageZipEntries(collection.tasks)
         if (entries.length === 0) continue
