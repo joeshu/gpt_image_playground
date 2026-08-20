@@ -190,8 +190,9 @@ export default function Header() {
                 ref={historyButtonRef}
                 type="button"
                 onClick={() => setShowHistoryModal((visible) => !visible)}
-                className="p-1.5 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-white/[0.04] dark:hover:text-gray-200 transition-colors"
                 title="历史任务"
+                aria-label="历史任务"
               >
                 <HistoryIcon className="w-5 h-5" />
               </button>
@@ -201,8 +202,9 @@ export default function Header() {
                   setAppMode('agent')
                   createConversation()
                 }}
-                className="p-1.5 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-white/[0.04] dark:hover:text-gray-200 transition-colors"
                 title="新对话"
+                aria-label="新对话"
               >
                 <EditIcon className="w-5 h-5" />
               </button>

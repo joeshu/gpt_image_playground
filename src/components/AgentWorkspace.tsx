@@ -623,13 +623,13 @@ export default function AgentWorkspace() {
       
       {/* Left Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-[320px] flex-col border-r border-gray-200 bg-white/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-white/[0.08] dark:bg-gray-950/95 lg:hidden ${!sidebarCollapsed ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="pl-[max(1rem,env(safe-area-inset-left))] flex h-full min-h-0 w-full flex-col">
+        <div className="pl-[max(1rem,env(safe-area-inset-left))] flex h-full min-h-0 w-full flex-col pb-[env(safe-area-inset-bottom)]">
           <div className="safe-area-top shrink-0">
             <div className="flex h-14 items-center justify-between gap-2 px-4">
-              <button type="button" onClick={() => setSidebarCollapsed(true)} className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors" title="折叠左侧边栏">
+              <button type="button" onClick={() => setSidebarCollapsed(true)} className="lg:hidden flex h-11 w-11 -ml-2 items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors" title="折叠左侧边栏" aria-label="折叠对话列表">
                 <SidebarLeftIcon className="w-5 h-5" />
               </button>
-              <button type="button" onClick={createConversation} className="p-2 -mr-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 lg:hover:bg-gray-100 lg:dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话">
+              <button type="button" onClick={createConversation} className="flex h-11 w-11 -mr-2 items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 lg:hover:bg-gray-100 lg:dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话" aria-label="新对话">
                 <EditIcon className="w-5 h-5" />
               </button>
             </div>
@@ -716,12 +716,12 @@ export default function AgentWorkspace() {
         {/* Mobile Header Toggles */}
         <div className={`sticky top-0 z-20 lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${mobileTopBarVisible ? 'max-h-16 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0 pointer-events-none'}`}>
           <div
-            className="flex h-14 items-center justify-between border-b border-gray-200 bg-white/80 px-2 backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/80"
+            className="safe-area-x flex h-14 items-center justify-between border-b border-gray-200 bg-white/80 px-2 backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/80"
             onTouchStart={handleHeaderTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <button type="button" onClick={() => setSidebarCollapsed(false)} className="p-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="展开对话列表">
+            <button type="button" onClick={() => setSidebarCollapsed(false)} className="flex h-11 w-11 items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="展开对话列表" aria-label="展开对话列表">
               <SidebarLeftIcon className="w-5 h-5" />
             </button>
             <button
@@ -732,11 +732,12 @@ export default function AgentWorkspace() {
                   useStore.getState().setAgentEditingConversationId(conversation.id)
                 }
               }}
-              className="text-sm font-semibold text-gray-700 dark:text-gray-300 truncate flex-1 text-center px-2 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded transition-colors"
+              className="min-w-0 text-sm font-semibold text-gray-700 dark:text-gray-300 truncate flex-1 text-center px-2 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded transition-colors"
+              aria-label="编辑当前对话标题"
             >
               {conversation?.title || 'Agent'}
             </button>
-            <button type="button" onClick={createConversation} className="p-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话">
+            <button type="button" onClick={createConversation} className="flex h-11 w-11 items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="新对话" aria-label="新对话">
               <EditIcon className="w-5 h-5" />
             </button>
           </div>
@@ -750,7 +751,7 @@ export default function AgentWorkspace() {
           onTouchEnd={handleTouchEnd}
         >
           {!conversation ? (
-            <div className="py-20 text-center text-gray-400">
+            <div className="flex min-h-[min(32rem,55dvh)] flex-col items-center justify-center px-6 text-center text-gray-400">
               <p className="mb-3">还没有 Agent 对话</p>
               <button type="button" onClick={createConversation} className="rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 transition-colors">创建对话</button>
             </div>
@@ -758,7 +759,7 @@ export default function AgentWorkspace() {
             (() => {
               if (activeMessages.length === 0) {
                 return (
-                  <div className="py-20 text-center text-gray-400">
+                  <div className="flex min-h-[min(32rem,55dvh)] flex-col items-center justify-center px-6 text-center text-gray-400">
                     <p className="mb-2">开始新的 Agent 对话</p>
                     <p className="text-xs">在底部输入框发送消息即可创建第一轮对话。</p>
                   </div>
