@@ -690,7 +690,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
     <div
       ref={containerRef}
       data-lightbox-root
-      className="fixed inset-0 z-[60] flex items-center justify-center select-none touch-none"
+       className="fixed inset-0 z-[60] flex items-center justify-center select-none touch-none pb-[var(--safe-area-bottom)]"
       style={{ cursor: isZoomed ? (isDragging ? 'grabbing' : 'grab') : 'pointer' }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -709,7 +709,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
             src={src}
             data-image-id={imageId}
             decoding="async"
-            className="saveable-image max-w-[90vw] max-h-[70vh] sm:max-w-[85vw] sm:max-h-[75vh] object-contain rounded-lg shadow-2xl"
+             className="saveable-image max-w-[90vw] max-h-[70dvh] sm:max-w-[85vw] sm:max-h-[75vh] object-contain rounded-lg shadow-2xl"
             onDragStart={(e) => e.preventDefault()}
             alt=""
           />
@@ -785,7 +785,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
 
       {/* 指示器 */}
       {showZoomBadge && isZoomed && zoomPercent !== 100 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none">
+         <div className="absolute bottom-[calc(1.5rem+var(--safe-area-bottom))] left-1/2 -translate-x-1/2 pointer-events-none">
           <span className="px-3 py-1.5 bg-white/90 dark:bg-black/50 text-gray-800 dark:text-white/80 text-xs rounded-full backdrop-blur-sm transition-opacity duration-500 border border-gray-200/80 dark:border-transparent">
             {zoomPercent}%
           </span>

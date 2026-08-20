@@ -835,11 +835,11 @@ export default function MaskEditorModal() {
 
   return (
     <>
-      <div data-no-drag-select className="fixed inset-0 z-[80] flex flex-col bg-gray-50 dark:bg-gray-900 animate-modal-in">
+       <div data-no-drag-select className="fixed inset-0 z-[80] flex flex-col bg-gray-50 dark:bg-gray-900 animate-modal-in pb-[var(--safe-area-bottom)]">
       {/* Header */}
-      <div className="flex-none flex items-center justify-between px-4 py-3 sm:px-6 sm:py-3.5 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950 z-20">
+       <div className="safe-area-top flex-none flex items-center justify-between px-4 py-3 sm:px-6 sm:py-3.5 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950 z-20">
         <div className="flex items-center gap-3">
-          <button onClick={close} disabled={isSaving} className="p-2 sm:p-2.5 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg sm:rounded-xl dark:text-gray-400 dark:hover:bg-gray-800 transition" title="取消">
+           <button onClick={close} disabled={isSaving} className="flex h-11 w-11 items-center justify-center -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg sm:rounded-xl dark:text-gray-400 dark:hover:bg-gray-800 transition" title="取消" aria-label="取消">
             <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
           <div className="relative flex items-center gap-1.5 sm:gap-2">
@@ -870,11 +870,11 @@ export default function MaskEditorModal() {
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           {maskDraft?.targetImageId === imageId && (
-            <button onClick={handleRemoveMask} className="flex h-8 sm:h-[38px] items-center gap-1.5 px-3.5 sm:px-4 text-xs sm:text-sm font-medium rounded-xl bg-gray-100 dark:bg-white/[0.08] text-gray-700 dark:text-gray-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/20 dark:hover:text-red-400 transition">
+             <button onClick={handleRemoveMask} className="flex min-h-11 sm:h-[38px] items-center gap-1.5 px-3.5 sm:px-4 text-xs sm:text-sm font-medium rounded-xl bg-gray-100 dark:bg-white/[0.08] text-gray-700 dark:text-gray-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/20 dark:hover:text-red-400 transition">
               移除遮罩
             </button>
           )}
-          <button onClick={handleSave} disabled={!isReady || isSaving} className="flex h-8 sm:h-[38px] items-center gap-1.5 px-4 sm:px-5 text-xs sm:text-sm font-medium rounded-xl text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 shadow-sm transition disabled:opacity-50">
+           <button onClick={handleSave} disabled={!isReady || isSaving} className="flex min-h-11 sm:h-[38px] items-center gap-1.5 px-4 sm:px-5 text-xs sm:text-sm font-medium rounded-xl text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 shadow-sm transition disabled:opacity-50">
             {isSaving ? '保存中...' : '保存'}
           </button>
         </div>

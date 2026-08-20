@@ -43,7 +43,7 @@ export default function ZipDownloadRouteModal({
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
               aria-label="关闭"
             >
               <CloseIcon className="h-5 w-5" />

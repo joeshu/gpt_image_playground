@@ -215,7 +215,7 @@ export default function HistoryModal({ onClose, ignoreOutsideClickRef }: History
   return (
     <div 
       ref={modalRef}
-      className="absolute top-12 left-0 w-80 sm:w-96 max-w-[calc(100vw-2rem)] max-h-[70vh] bg-white dark:bg-[#1c1c1e] rounded-xl shadow-2xl overflow-hidden flex flex-col border border-gray-200 dark:border-white/10 z-50 text-gray-900 dark:text-gray-200 animate-dropdown-down"
+       className="absolute top-12 left-0 w-80 sm:w-96 max-w-[calc(100vw-2rem)] max-h-[70vh] max-h-[70dvh] bg-white dark:bg-[#1c1c1e] rounded-xl shadow-2xl overflow-hidden flex flex-col border border-gray-200 dark:border-white/10 z-50 text-gray-900 dark:text-gray-200 animate-dropdown-down"
     >
       <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-white/10 shrink-0">
         <input 
@@ -225,7 +225,7 @@ export default function HistoryModal({ onClose, ignoreOutsideClickRef }: History
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1 bg-transparent border-none outline-none text-sm px-2 text-gray-900 dark:text-white placeholder-gray-400"
         />
-        <HistoryActionButton tooltip="关闭" onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500 dark:text-gray-400 transition-colors">
+         <HistoryActionButton tooltip="关闭" onClick={onClose} className="flex h-11 w-11 items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500 dark:text-gray-400 transition-colors">
           <CloseIcon className="w-4 h-4" />
         </HistoryActionButton>
       </div>
@@ -286,7 +286,7 @@ export default function HistoryModal({ onClose, ignoreOutsideClickRef }: History
                       <HistoryActionButton
                         tooltip="重命名"
                         onClick={(e) => startRename(e, c.id, c.title)}
-                        className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-white disabled:text-gray-300 disabled:hover:text-gray-300 dark:disabled:text-gray-600 dark:disabled:hover:text-gray-600 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+                         className="flex h-10 w-10 items-center justify-center hover:bg-gray-200 dark:hover:bg-white/10 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-white disabled:text-gray-300 disabled:hover:text-gray-300 dark:disabled:text-gray-600 dark:disabled:hover:text-gray-600 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
                         disabled={Boolean(agentGeneratingTitleIds[c.id])}
                       >
                         <EditIcon className="w-3.5 h-3.5" />
@@ -294,7 +294,7 @@ export default function HistoryModal({ onClose, ignoreOutsideClickRef }: History
                       <HistoryActionButton
                         tooltip="删除"
                         onClick={(e) => handleDelete(e, c.id)}
-                        className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-md text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                         className="flex h-10 w-10 items-center justify-center hover:bg-gray-200 dark:hover:bg-white/10 rounded-md text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                       >
                         <TrashIcon className="w-3.5 h-3.5" />
                       </HistoryActionButton>

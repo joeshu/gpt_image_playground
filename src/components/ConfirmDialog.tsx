@@ -136,7 +136,7 @@ export default function ConfirmDialog() {
                   setConfirmDialog(null)
                 }}
                 disabled={!canConfirm}
-                className={`flex-1 py-2 rounded-xl text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${getActionButtonClass(button.tone)}`}
+                 className={`flex min-h-11 flex-1 rounded-xl py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${getActionButtonClass(button.tone)}`}
               >
                 {button.label}
               </button>
@@ -148,7 +148,7 @@ export default function ConfirmDialog() {
               <button
                 onClick={handleCancel}
                 disabled={isSubmitting}
-                className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-white/[0.08] text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition disabled:cursor-not-allowed disabled:opacity-60"
+                 className="min-h-11 flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 dark:border-white/[0.08] dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {cancelText}
               </button>
@@ -172,7 +172,7 @@ export default function ConfirmDialog() {
                 })()
               }}
               disabled={!canConfirm || isSubmitting}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${confirmClassName}`}
+               className={`min-h-11 flex-1 rounded-xl py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${confirmClassName}`}
             >
               {confirmText}
             </button>
