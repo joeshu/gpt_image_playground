@@ -1816,6 +1816,10 @@ function appendAgentStoppedMessage(content: string) {
   return `${trimmed}\n\n${AGENT_STOPPED_MESSAGE}`
 }
 
+function removeAgentStoppedMessage(content: string) {
+  return content.replace(new RegExp(`\\n\\n${AGENT_STOPPED_MESSAGE.replace('.', '\\.')}$`), '').trimEnd()
+}
+
 function markAgentRoundTasksStopped(conversationId: string, roundId: string, now = Date.now()) {
   const runningTasks = useStore.getState().tasks.filter((task) =>
     (task.status === 'running' || task.falRecoverable || task.customRecoverable) &&
@@ -1980,6 +1984,53 @@ export function stopAgentResponse(conversationId = useStore.getState().activeAge
 
   markAgentRoundStopped(conversationId, runningRound.id)
   useStore.getState().showToast('已停止生成', 'info')
+}
+
+export function continueAgentResponse(conversationId: string, roundId: string) {
+  const state = useStore.getState()
+  const conversation = state.agentConversations.find((item) => item.id === conversationId)
+  const round = conversation?.rounds.find((item) => item.id === roundId)
+  if (!conversation || !round || round.status !== 'error' || round.error !== AGENT_STOPPED_MESSAGE) return
+  if (conversation.rounds.some((item) => item.status === 'running')) {
+    state.showToast('请等待其他 Agent 轮次完成', 'info')
+    return
+  }
+
+  const normalizedSettings = normalizeSettings(state.settings)
+  const validationError = getAgentProfileValidationError(normalizedSettings)
+  if (validationError) {
+    state.showToast(`请先完善 Agent API 配置：${validationError.message}`, 'error')
+    state.setShowSettings(true, normalizedSettings.agentApiConfigMode === 'off' ? 'api' : 'agent')
+    return
+  }
+
+  const activeProfile = getAgentTextApiProfile(normalizedSettings)
+  const imageProfile = getAgentImageApiProfile(normalizedSettings)
+  if (!activeProfile || !imageProfile) return
+  const roundTasks = state.tasks.filter((task) => task.agentRoundId === roundId)
+  const resumeParams = roundTasks.find((task) => task.params)?.params
+    ?? normalizeParamsForSettings(state.params, createSettingsForApiProfile(normalizedSettings, imageProfile), { hasInputImages: round.inputImageIds.length > 0 })
+  const messageId = round.assistantMessageId ?? conversation.messages.find((message) => message.roundId === roundId && message.role === 'assistant')?.id
+  const responseOutput = round.responseOutput ?? []
+  const toolCallsUsed = getAgentRecoveredToolCallCount(responseOutput, roundTasks)
+
+  updateAgentConversation(conversationId, (current) => ({
+    ...current,
+    updatedAt: Date.now(),
+    rounds: current.rounds.map((item) => item.id === roundId ? { ...item, status: 'running', error: null, finishedAt: null } : item),
+    messages: messageId
+      ? current.messages.map((message) => message.id === messageId ? { ...message, content: removeAgentStoppedMessage(message.content) } : message)
+      : current.messages,
+  }))
+  void executeAgentRound(
+    conversationId,
+    roundId,
+    resumeParams,
+    createSettingsForApiProfile(normalizedSettings, activeProfile),
+    activeProfile,
+    imageProfile,
+    { responseOutput, recoveredTaskIds: round.outputTaskIds, toolCallsUsed },
+  )
 }
 
 function addAgentReferencedImageIds(target: Set<string>, conversations = useStore.getState().agentConversations, inputDrafts = useStore.getState().agentInputDrafts) {
