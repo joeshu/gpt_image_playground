@@ -1875,7 +1875,7 @@ export default function InputBar() {
                         setShowMobileUploadMenu(!showMobileUploadMenu)
                       }
                     }}
-                    className={`p-2.5 rounded-xl transition-all shadow-sm flex-shrink-0 ${
+                     className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition-all shadow-sm ${
                       atImageLimit
                         ? 'bg-gray-200 dark:bg-white/[0.04] text-gray-300 dark:text-gray-500 cursor-not-allowed'
                         : 'bg-gray-200 dark:bg-white/[0.06] hover:bg-gray-300 dark:hover:bg-white/[0.1] text-gray-500 dark:text-gray-300'
@@ -1939,7 +1939,7 @@ export default function InputBar() {
                     onClick={() => activeAgentIsRunning ? stopActiveAgentResponse() : hasSubmitApiConfig ? submitCurrentMode() : setShowSettings(true)}
                     disabled={activeAgentIsRunning ? false : hasSubmitApiConfig ? !canSubmit : false}
                     aria-label={submitButtonAriaLabel}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm ${
+                     className={`min-h-11 w-full flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all shadow-sm ${
                       activeAgentIsRunning
                         ? 'bg-red-500 text-white hover:bg-red-600'
                         : !hasSubmitApiConfig

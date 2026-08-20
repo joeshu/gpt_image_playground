@@ -899,7 +899,7 @@ export default function AgentWorkspace() {
 
                       </article>
 
-                    {!isStreamingAssistant && <div className={`mt-2 flex w-full min-w-fit items-center justify-between gap-3 px-1 transition-opacity duration-200 ${isEditing || hasBranches ? 'opacity-100' : 'opacity-100 lg:opacity-0 lg:group-hover:opacity-100'}`} onClick={e => e.stopPropagation()}>
+                    {!isStreamingAssistant && <div className={`mt-2 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 px-1 transition-opacity duration-200 ${isEditing || hasBranches ? 'opacity-100' : 'opacity-100 lg:opacity-0 lg:group-hover:opacity-100'}`} onClick={e => e.stopPropagation()}>
                       <div className="flex min-w-0 items-center gap-2">
                         {isEditing && (
                           <div className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
@@ -920,7 +920,7 @@ export default function AgentWorkspace() {
                           </div>
                         )}
                       </div>
-                       <div className="flex items-center gap-1.5 ml-auto text-gray-400">
+                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 ml-auto text-gray-400">
                         {!isAssistant && round && hasBranches && siblingIndex >= 0 && (
                           <div className="inline-flex items-center text-sm font-bold text-gray-400 dark:text-gray-500 mr-1">
                             <AgentActionButton tooltip="上一分支" className="p-1 rounded-md hover:bg-gray-200/50 dark:hover:bg-white/10 hover:text-gray-800 dark:hover:text-gray-200 transition-colors" onClick={() => handleSwitchBranch(round, -1)}>
@@ -1016,7 +1016,7 @@ export default function AgentWorkspace() {
                   {renderedMessages}
                   {runningRounds.map((round) => (
                     <div key={`running-${round.id}`} className="flex w-full justify-start mb-6">
-                      <article className="flex min-w-[16rem] max-w-[95%] flex-col rounded-2xl rounded-tl-sm border border-gray-200 bg-white/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03] md:max-w-[85%] lg:max-w-[75%]">
+                      <article className="flex min-w-0 max-w-[95%] flex-col rounded-2xl rounded-tl-sm border border-gray-200 bg-white/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03] md:max-w-[85%] lg:max-w-[75%]">
                         <div className="mb-2 text-sm text-gray-500 dark:text-gray-400">
                           <span className="text-blue-600 dark:text-blue-400 font-semibold">Agent</span> <span className="ml-1 font-normal opacity-60">· 第 {round.index} 轮</span>
                         </div>
