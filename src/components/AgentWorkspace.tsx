@@ -54,7 +54,7 @@ function ChatImageThumb({ imageId, imageIndex, maskImageId }: { imageId: string;
       }`}
       onClick={() => setLightboxImageId(imageId, [imageId])}
     >
-      {src ? <img src={src} className="h-full w-full object-cover" alt="" /> : <div className="h-full w-full bg-gray-100 dark:bg-white/[0.04]" />}
+      {src ? <img src={src} loading="lazy" decoding="async" className="h-full w-full object-cover" alt="" /> : <div className="h-full w-full bg-gray-100 dark:bg-white/[0.04]" />}
       {maskImageId && (
         <span className="absolute left-1 top-1 z-10 rounded bg-blue-500/90 px-1.5 py-0.5 text-[8px] font-bold leading-none tracking-wider text-white backdrop-blur-sm pointer-events-none">
           MASK

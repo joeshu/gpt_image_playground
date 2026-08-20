@@ -633,7 +633,10 @@ export async function callAgentResponsesApi(opts: {
     })
 
     if (!response.ok) {
-      const errorMessage = await getApiErrorMessage(response)
+      const errorMessage = await getApiErrorMessage(response, {
+        endpoint: buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy),
+        mode: 'Agent Responses API',
+      })
       throw new Error(maybeAppendStreamingHint(errorMessage, response.status, profile.streamImages))
     }
 

@@ -174,7 +174,7 @@ export async function fetchImageUrlAsDataUrl(url: string, fallbackMime: string, 
   return blobToDataUrl(blob, fallbackMime)
 }
 
-export async function getApiErrorMessage(response: Response): Promise<string> {
+export async function getApiErrorMessage(response: Response, context?: { endpoint?: string; mode?: string }): Promise<string> {
   let errorMsg = `HTTP ${response.status}`
   const textResponse = response.clone()
   try {
@@ -191,7 +191,10 @@ export async function getApiErrorMessage(response: Response): Promise<string> {
       /* ignore */
     }
   }
-  return errorMsg
+  const details = context
+    ? [context.mode, context.endpoint, `HTTP ${response.status}`].filter(Boolean).join(' · ')
+    : ''
+  return details ? `${errorMsg} (${details})` : errorMsg
 }
 
 export function pickActualParams(source: unknown): Partial<TaskParams> {

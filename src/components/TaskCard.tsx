@@ -405,6 +405,8 @@ export default function TaskCard({
           {task.status === 'running' && streamPreviewSrc && (
             <>
               <img
+                loading="lazy"
+                decoding="async"
                 src={streamPreviewSrc}
                 className={`h-full w-full object-cover ${streamPreviewLoaded ? '' : 'hidden'}`}
                 alt=""
@@ -485,11 +487,12 @@ export default function TaskCard({
           {task.status === 'done' && thumbSrc && (
             <>
               <img
+                loading="lazy"
+                decoding="async"
                 src={thumbSrc}
                 data-image-id={task.outputImages[0]}
                 data-output-image-ids={task.outputImages.join(',')}
                 className="saveable-image w-full h-full object-cover"
-                loading="lazy"
                 alt=""
               />
               {(hasPartialOutputFailure || task.outputImages.length > 1) && (

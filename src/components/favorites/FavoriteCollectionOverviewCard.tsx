@@ -33,7 +33,7 @@ function CoverThumbnail({ task }: { task?: TaskRecord }) {
     }
   }, [imageId])
 
-  if (src) return <img src={src} alt="" className="h-full w-full object-cover" />
+  if (src) return <img src={src} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
   return (
     <div className="flex h-full w-full items-center justify-center bg-yellow-50 text-yellow-500 dark:bg-[#2a2211] dark:text-yellow-500">
       <FavoriteIcon filled className="h-8 w-8 opacity-80" />
