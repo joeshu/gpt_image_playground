@@ -42,7 +42,7 @@ export default function CustomProviderModal({
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-overlay-in" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/50 bg-white/95 p-5 shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10 flex flex-col h-[85vh] sm:h-[680px] ios-modal-height-tall overflow-hidden ios-safe-bottom">
+       <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/50 bg-white/95 p-5 shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10 flex flex-col h-[85dvh] sm:h-[680px] ios-modal-height-tall overflow-hidden ios-safe-bottom">
         <div className="mb-5 flex items-center justify-between gap-4 shrink-0">
           <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">
             {editing ? '编辑自定义服务商' : '创建自定义服务商'}
@@ -51,7 +51,7 @@ export default function CustomProviderModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+               className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
               aria-label="关闭"
             >
               <CloseIcon className="h-5 w-5" />

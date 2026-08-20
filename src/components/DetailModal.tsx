@@ -452,7 +452,7 @@ export default function DetailModal() {
         <div className="flex h-14 items-center justify-end px-4 md:hidden">
           <button
             onClick={() => setDetailTaskId(null)}
-            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/[0.06] transition text-gray-400"
+             className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-white/[0.06] transition text-gray-400"
             aria-label="关闭"
           >
             <CloseIcon className="w-6 h-6" />
