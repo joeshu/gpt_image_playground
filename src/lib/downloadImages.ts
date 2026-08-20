@@ -19,6 +19,8 @@ export interface DownloadImagesResult {
   cancelled?: boolean
 }
 
+type DownloadMethod = 'share' | 'download'
+
 export interface DownloadImageZipEntry {
   imageId: string
   fileNameBase?: string
@@ -56,12 +58,21 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
       const fileName = `${sanitizeFileNamePart(fileNameBase) || 'images'}.zip`
       const shareResult = await shareDownload(new Blob([buffer], { type: 'application/zip' }), fileName)
       if (!shareResult.cancelled) addExportHistory(fileName, blobs.length)
-      return { successCount: shareResult.cancelled ? 0 : blobs.length, failCount: shareResult.cancelled ? 0 : failCount, fileName, locationHint: shareResult.cancelled ? '已取消分享' : `已分享 ${fileName}，请在系统分享面板中选择“存储到文件”`, cancelled: shareResult.cancelled }
+      return {
+        successCount: shareResult.cancelled ? 0 : blobs.length,
+        failCount: shareResult.cancelled ? 0 : failCount,
+        fileName,
+        locationHint: shareResult.cancelled
+          ? '已取消分享'
+          : getDownloadHint(shareResult.method, fileName),
+        cancelled: shareResult.cancelled,
+      }
     }
     return { successCount: 0, failCount }
   }
 
   let lastFileName: string | undefined
+  let lastDownloadMethod: DownloadMethod | undefined
   for (let index = 0; index < imageIds.length; index++) {
     try {
       const blob = await getImageBlob(imageIds[index])
@@ -73,6 +84,7 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
       const shareResult = isNativeApp() ? await shareDownload(blob, fileName) : null
       if (shareResult?.cancelled) return { successCount, failCount, fileName, locationHint: '已取消分享', cancelled: true }
       if (!isNativeApp()) triggerDownload(blob, fileName)
+      lastDownloadMethod = shareResult?.method ?? 'download'
       successCount++
       if (!multiple) addExportHistory(fileName, 1)
       if (multiple) await delay(100)
@@ -83,7 +95,14 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
   }
 
   if (multiple && successCount > 0 && !isNativeApp()) addExportHistory(`${sanitizeFileNamePart(fileNameBase) || 'images'} (${successCount} files)`, successCount)
-  return { successCount, failCount, fileName: successCount > 0 ? lastFileName : undefined, locationHint: isNativeApp() && successCount > 0 ? `已分享 ${lastFileName}，请在系统分享面板中选择“存储到文件”` : undefined }
+  return {
+    successCount,
+    failCount,
+    fileName: successCount > 0 ? lastFileName : undefined,
+    locationHint: isNativeApp() && successCount > 0 && lastFileName && lastDownloadMethod
+      ? getDownloadHint(lastDownloadMethod, lastFileName)
+      : undefined,
+  }
 }
 
 export async function downloadImageEntriesAsZip(entries: DownloadImageZipEntry[], zipFileNameBase = 'images'): Promise<DownloadImagesResult> {
@@ -125,9 +144,16 @@ export async function downloadImageEntriesAsZip(entries: DownloadImageZipEntry[]
     if (shareResult?.cancelled) return { successCount: 0, failCount, fileName, locationHint: '已取消分享', cancelled: true }
     if (!isNativeApp()) triggerDownload(zipBlob, fileName)
     addExportHistory(fileName, successCount)
+    const method = shareResult?.method ?? 'download'
+    return {
+      successCount,
+      failCount,
+      fileName,
+      locationHint: isNativeApp() ? getDownloadHint(method, fileName) : undefined,
+    }
   }
 
-  return { successCount, failCount, fileName: successCount > 0 ? `${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip` : undefined, locationHint: isNativeApp() && successCount > 0 ? `已分享 ${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip，请在系统分享面板中选择“存储到文件”` : undefined }
+  return { successCount, failCount, fileName: undefined }
 }
 
 export function getTaskOutputImageZipEntries(tasks: TaskOutputZipTask[]): DownloadImageZipEntry[] {
@@ -165,24 +191,35 @@ function triggerDownload(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-async function shareDownload(blob: Blob, fileName: string): Promise<{ cancelled: boolean }> {
+async function shareDownload(blob: Blob, fileName: string): Promise<{ cancelled: boolean; method: DownloadMethod }> {
   if (typeof navigator.share !== 'function') {
     triggerDownload(blob, fileName)
-    return { cancelled: false }
+    return { cancelled: false, method: 'download' }
   }
 
   const file = new File([blob], fileName, { type: blob.type })
-  if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+  try {
+    if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+      triggerDownload(blob, fileName)
+      return { cancelled: false, method: 'download' }
+    }
+  } catch {
     triggerDownload(blob, fileName)
-    return { cancelled: false }
+    return { cancelled: false, method: 'download' }
   }
   try {
     await navigator.share({ files: [file], title: fileName })
-    return { cancelled: false }
+    return { cancelled: false, method: 'share' }
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') return { cancelled: true }
+    if (err instanceof DOMException && err.name === 'AbortError') return { cancelled: true, method: 'share' }
     throw err
   }
+}
+
+function getDownloadHint(method: DownloadMethod, fileName: string) {
+  return method === 'share'
+    ? `已分享 ${fileName}，请在系统分享面板中选择“存储到文件”`
+    : `已开始下载 ${fileName}`
 }
 
 function isNativeApp() {

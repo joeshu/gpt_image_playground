@@ -122,7 +122,7 @@ export default function ImageContextMenu() {
 
       const result = await downloadImageIds([imageId || src], fileNameBase)
       if (result.cancelled) {
-        showToast(result.locationHint ?? '已取消保存', 'info')
+        showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info')
       } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
@@ -159,7 +159,7 @@ export default function ImageContextMenu() {
         ? await downloadImageEntriesAsZip(getImageZipEntries(outputImageIds, fileNameBase), fileNameBase)
         : await downloadImageIds(outputImageIds, fileNameBase)
       if (result.cancelled) {
-        showToast(result.locationHint ?? '已取消保存', 'info')
+        showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info')
       } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else if (result.failCount > 0) {

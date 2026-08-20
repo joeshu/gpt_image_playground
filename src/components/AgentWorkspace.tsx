@@ -977,7 +977,7 @@ export default function AgentWorkspace() {
                                      : await downloadImageIds(imageIds, fileNameBase);
                                    const { successCount, failCount } = result
                                   if (result.cancelled) {
-                                    useStore.getState().showToast(result.locationHint ?? '已取消保存', 'info');
+                                    useStore.getState().showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info');
                                   } else if (successCount === 0) {
                                    useStore.getState().showToast('下载失败', 'error');
                                  } else if (failCount > 0) {

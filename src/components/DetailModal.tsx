@@ -362,7 +362,7 @@ export default function DetailModal() {
     try {
       const result = await downloadImageIds([currentOutputImageId], `task-${task.id}`)
       if (result.cancelled) {
-        showToast(result.locationHint ?? '已取消保存', 'info')
+        showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info')
       } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
@@ -381,7 +381,7 @@ export default function DetailModal() {
     try {
       const result = await downloadImageIds([currentOriginalOutputImageId], `task-${task.id}-orig`)
       if (result.cancelled) {
-        showToast(result.locationHint ?? '已取消保存', 'info')
+        showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info')
       } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else {
@@ -403,7 +403,7 @@ export default function DetailModal() {
         ? await downloadImageEntriesAsZip(getImageZipEntries(task.outputImages, fileNameBase), fileNameBase)
         : await downloadImageIds(task.outputImages, fileNameBase)
       if (result.cancelled) {
-        showToast(result.locationHint ?? '已取消保存', 'info')
+        showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info')
       } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else if (result.failCount > 0) {
@@ -426,7 +426,7 @@ export default function DetailModal() {
         ? await downloadImageEntriesAsZip(getImageZipEntries(streamPartialImageIds, fileNameBase), fileNameBase)
         : await downloadImageIds(streamPartialImageIds, fileNameBase)
       if (result.cancelled) {
-        showToast(result.locationHint ?? '已取消保存', 'info')
+        showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info')
       } else if (result.successCount === 0) {
         showToast('下载失败', 'error')
       } else if (result.failCount > 0) {

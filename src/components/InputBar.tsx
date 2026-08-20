@@ -216,7 +216,7 @@ export default function InputBar() {
       const { successCount, failCount } = result
 
       if (result.cancelled) {
-        showToast(result.locationHint ?? '已取消保存', 'info')
+        showToast(result.successCount > 0 ? `已取消后续下载，已完成 ${result.successCount} 张图片` : (result.locationHint ?? '已取消保存'), 'info')
       } else if (successCount === 0) {
         showToast('下载失败', 'error')
       } else if (failCount > 0) {
@@ -282,7 +282,7 @@ export default function InputBar() {
       }
 
       if (cancelled) {
-        showToast(cancellationHint, 'info')
+        showToast(successCount > 0 ? `已取消后续下载，已完成 ${successCount} 张图片` : cancellationHint, 'info')
       } else if (successCount === 0) {
         showToast('选中的收藏夹没有图片', 'info')
       } else if (failCount > 0) {
