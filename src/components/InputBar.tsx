@@ -1087,6 +1087,18 @@ export default function InputBar() {
     adjustTextareaHeight()
   }, [prompt, inputImages, adjustTextareaHeight, isMobile, mobileCollapsed, promptExpanded])
 
+  useEffect(() => {
+    const refreshHeight = () => window.requestAnimationFrame(adjustTextareaHeight)
+    const visualViewport = window.visualViewport
+    window.addEventListener('resize', refreshHeight)
+    visualViewport?.addEventListener('resize', refreshHeight)
+
+    return () => {
+      window.removeEventListener('resize', refreshHeight)
+      visualViewport?.removeEventListener('resize', refreshHeight)
+    }
+  }, [adjustTextareaHeight])
+
   // 监听 selectionchange 更新光标位置（onSelect 在 contentEditable 下不可靠）
   useEffect(() => {
     const handleSelectionChange = () => {
