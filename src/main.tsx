@@ -6,10 +6,11 @@ import 'streamdown/styles.css'
 import 'katex/dist/katex.min.css'
 import './index.css'
 import { installMobileViewportGuards } from './lib/viewport'
+import { isNativeApp } from './lib/platform'
 
 installMobileViewportGuards()
 
-if ('serviceWorker' in navigator) {
+if (!isNativeApp() && 'serviceWorker' in navigator) {
   if (import.meta.env.PROD) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((error) => {

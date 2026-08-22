@@ -68,11 +68,13 @@ import { ALL_FAVORITES_COLLECTION_ID, DEFAULT_FAVORITE_COLLECTION_ID, createDefa
 import { createPersistedState, mergePersistedAgentConversations, migratePersistedState, normalizePersistedState } from './lib/persistedState'
 import { addImageSizeParam, createTaskDonePatch, createTaskErrorPatch, deriveAgentImageActualParams, deriveGalleryActualParams, firstActualParams, hasActualParams, hasActualSizeParam, mapActualParamsByImage, mapRevisedPromptsByImage, markInterruptedOpenAIRunningTasks } from './lib/taskState'
 import { stripInjectedCodexCliSizePrompt } from './lib/size'
+import { StorageQuotaError } from './lib/storage'
 
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
 const SUPPORT_PROMPT_IMAGE_THRESHOLD = 50
 const falRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+let initStorePromise: Promise<void> | null = null
 const customRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const openAIWatchdogTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const agentRoundControllers = new Map<string, AbortController>()
@@ -1443,7 +1445,7 @@ async function recoverFalTask(taskId: string) {
 }
 
 /** 初始化：从 IndexedDB 加载任务，按需恢复输入图片，并清理孤立图片 */
-export async function initStore() {
+async function initStoreInternal() {
   const legacyAgentConversations = normalizeAgentConversations(useStore.getState().agentConversations)
   const storedTasks = await getAllTasks()
   const storedAgentConversations = normalizeAgentConversations(await getAllAgentConversations())
@@ -1642,6 +1644,15 @@ export async function initStore() {
   }
 }
 
+export function initStore(): Promise<void> {
+  if (!initStorePromise) {
+    initStorePromise = initStoreInternal().finally(() => {
+      initStorePromise = null
+    })
+  }
+  return initStorePromise
+}
+
 /** 提交新任务 */
 export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean } = {}) {
   const { settings, prompt, inputImages, maskDraft, params, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, showToast, setConfirmDialog } =
@@ -1671,6 +1682,11 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
       activeProfile = reusedProfile
       requestSettings = createSettingsForApiProfile(normalizedSettings, reusedProfile)
     }
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    showToast('当前处于离线状态，已保留输入内容，网络恢复后再提交', 'info')
+    return
   }
 
   if (validateApiProfile(activeProfile)) {
@@ -1717,8 +1733,16 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   }
 
   // 持久化输入图片到 IndexedDB（此前只在内存缓存中）
-  for (const img of orderedInputImages) {
-    await storeImage(img.dataUrl)
+  try {
+    for (const img of orderedInputImages) {
+      await storeImage(img.dataUrl)
+    }
+  } catch (err) {
+    if (err instanceof StorageQuotaError) {
+      showToast(err.message, 'error')
+      return
+    }
+    throw err
   }
 
   const normalizedParams = normalizeParamsForSettings(params, requestSettings, { hasInputImages: orderedInputImages.length > 0 })
@@ -2355,6 +2379,11 @@ export async function submitAgentMessage() {
   const state = useStore.getState()
   const { settings, prompt, inputImages, maskDraft, params, showToast } = state
   const normalizedSettings = normalizeSettings(settings)
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    showToast('当前处于离线状态，已保留输入内容，网络恢复后再提交', 'info')
+    return
+  }
 
   const agentValidationError = getAgentProfileValidationError(normalizedSettings)
   if (agentValidationError) {

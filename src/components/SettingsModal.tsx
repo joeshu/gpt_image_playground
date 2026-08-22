@@ -62,6 +62,7 @@ import ProfileImportUrlModal, { type CopyImportUrlOptions } from './settings/Pro
 import ZipDownloadRouteModal, { ZIP_DOWNLOAD_ROUTE_OPTIONS } from './settings/ZipDownloadRouteModal'
 import MarkdownRenderer from './MarkdownRenderer'
 import { clearExportHistory, getExportHistory, type ExportHistoryEntry } from '../lib/exportHistory'
+import { estimateStorage, formatStorageBytes, type StorageEstimate } from '../lib/storage'
 
 function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -193,6 +194,7 @@ export default function SettingsModal() {
   const [duplicateProfileTooltipVisible, setDuplicateProfileTooltipVisible] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('api')
   const [exportHistory, setExportHistory] = useState<ExportHistoryEntry[]>([])
+  const [storageEstimate, setStorageEstimate] = useState<StorageEstimate | null>(null)
   const [exportConfig, setExportConfig] = useState(true)
   const [exportTasks, setExportTasks] = useState(true)
   const [importConfig, setImportConfig] = useState(true)
@@ -346,6 +348,17 @@ export default function SettingsModal() {
   useEffect(() => {
     if (showSettings && settingsTabRequest) setActiveTab(settingsTabRequest)
   }, [settingsTabRequest, showSettings])
+
+  useEffect(() => {
+    if (!showSettings || activeTab !== 'data') return
+    let cancelled = false
+    void estimateStorage().then((estimate) => {
+      if (!cancelled) setStorageEstimate(estimate)
+    }).catch(() => {
+      if (!cancelled) setStorageEstimate(null)
+    })
+    return () => { cancelled = true }
+  }, [activeTab, showSettings])
 
   const handleClearExportHistory = () => {
     clearExportHistory()
@@ -698,6 +711,7 @@ export default function SettingsModal() {
     setDraft(nextDraft)
     setTimeoutInput(String(getActiveApiProfile(nextDraft).timeout))
     setShowProfileMenu(false)
+    void estimateStorage().then(setStorageEstimate).catch(() => setStorageEstimate(null))
   }
 
   const createNewProfile = () => {
@@ -1772,6 +1786,24 @@ export default function SettingsModal() {
                     所有的配置、任务和生成的图片均仅保存在您的浏览器本地（除非您使用的服务商存储了它们）。如果您需要清理浏览器站点数据、重置浏览器或使用其他设备，请先导出备份。
                   </div>
                 </div>
+
+                {storageEstimate && (
+                  <div className="rounded-2xl border border-gray-200/70 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-medium text-gray-800 dark:text-gray-100">本地存储</span>
+                      <span className="text-gray-500 dark:text-gray-400">{formatStorageBytes(storageEstimate.usage)} / {formatStorageBytes(storageEstimate.quota)}</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.08]">
+                      <div
+                        className={`h-full rounded-full ${storageEstimate.usageRatio >= 0.9 ? 'bg-red-500' : storageEstimate.usageRatio >= 0.75 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                        style={{ width: `${Math.min(100, Math.round(storageEstimate.usageRatio * 100))}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      可用 {formatStorageBytes(storageEstimate.available)}。空间不足时，请先导出后清理旧任务和图片。
+                    </p>
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] space-y-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-1">
