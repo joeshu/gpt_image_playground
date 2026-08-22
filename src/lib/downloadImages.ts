@@ -3,6 +3,9 @@ import type { TaskRecord } from '../types'
 import { getNumberedFileNameBase, sanitizeFileNamePart } from './exportFileName'
 import { ensureImageCached } from './imageCache'
 import { addExportHistory } from './exportHistory'
+import { isNativeApp } from './platform'
+
+const NATIVE_EXPORT_BATCH_SIZE = 8
 
 const MIME_EXTENSIONS: Record<string, string> = {
   'image/png': 'png',
@@ -30,6 +33,80 @@ type TaskOutputZipTask = Pick<TaskRecord, 'id' | 'createdAt' | 'outputImages'>
 
 export { formatExportFileTime } from './exportFileName'
 
+async function downloadNativeImageBatches(imageIds: string[], fileNameBase: string): Promise<DownloadImagesResult> {
+  return downloadNativeZipBatches(getImageZipEntries(imageIds, fileNameBase), fileNameBase)
+}
+
+async function downloadNativeZipBatches(entries: DownloadImageZipEntry[], zipFileNameBase: string): Promise<DownloadImagesResult> {
+  let successCount = 0
+  let failCount = 0
+  let lastFileName: string | undefined
+  let lastHint: string | undefined
+  const totalBatches = Math.ceil(entries.length / NATIVE_EXPORT_BATCH_SIZE)
+
+  for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+    const batch = entries.slice(batchIndex * NATIVE_EXPORT_BATCH_SIZE, (batchIndex + 1) * NATIVE_EXPORT_BATCH_SIZE)
+    const zipFiles: Record<string, Uint8Array | [Uint8Array, { mtime: Date }]> = {}
+    let batchSuccessCount = 0
+    let batchFailCount = 0
+    const usedNames = new Set<string>()
+
+    for (const entry of batch) {
+      try {
+        const blob = await getImageBlob(entry.imageId)
+        const base = sanitizeFileNamePart(entry.fileNameBase || 'image') || 'image'
+        const ext = getBlobExtension(blob)
+        let fileName = `${base}.${ext}`
+        let duplicateIndex = 2
+        while (usedNames.has(fileName)) {
+          fileName = `${base}-${String(duplicateIndex).padStart(2, '0')}.${ext}`
+          duplicateIndex++
+        }
+        usedNames.add(fileName)
+        zipFiles[fileName] = [new Uint8Array(await blob.arrayBuffer()), { mtime: new Date() }]
+        batchSuccessCount++
+      } catch (err) {
+        console.error(err)
+        batchFailCount++
+      }
+    }
+
+    if (batchSuccessCount === 0) {
+      failCount += batchFailCount
+      continue
+    }
+
+    const zipped = zipSync(zipFiles, { level: 6 })
+    const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer
+    const baseName = sanitizeFileNamePart(zipFileNameBase) || 'images'
+    const fileName = totalBatches === 1 ? `${baseName}.zip` : `${baseName}-${String(batchIndex + 1).padStart(2, '0')}.zip`
+    const shareResult = await shareDownload(new Blob([buffer], { type: 'application/zip' }), fileName)
+    if (shareResult.cancelled) {
+      return {
+        successCount,
+        failCount,
+        fileName,
+        locationHint: successCount > 0 ? `已取消后续分享，已完成 ${successCount} 张图片` : '已取消分享',
+        cancelled: true,
+      }
+    }
+
+    successCount += batchSuccessCount
+    failCount += batchFailCount
+    lastFileName = fileName
+    lastHint = getDownloadHint(shareResult.method, fileName)
+    addExportHistory(fileName, batchSuccessCount)
+    if (batchIndex + 1 < totalBatches) await delay(150)
+  }
+
+  return {
+    successCount,
+    failCount,
+    fileName: lastFileName,
+    locationHint: lastHint,
+  }
+}
+
 export async function downloadImageIds(imageIds: string[], fileNameBase = 'images'): Promise<DownloadImagesResult> {
   if (imageIds.length === 0) return { successCount: 0, failCount: 0 }
 
@@ -38,37 +115,7 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
   const multiple = imageIds.length > 1
 
   if (isNativeApp() && multiple) {
-    const blobs: Array<{ blob: Blob; index: number }> = []
-    for (let index = 0; index < imageIds.length; index++) {
-      try {
-        blobs.push({ blob: await getImageBlob(imageIds[index]), index })
-      } catch (err) {
-        console.error(err)
-        failCount++
-      }
-    }
-
-    if (blobs.length > 0) {
-      const entries = await Promise.all(blobs.map(async ({ blob, index }) => [
-        `${fileNameBase}-${String(index + 1).padStart(2, '0')}.${getBlobExtension(blob)}`,
-        new Uint8Array(await blob.arrayBuffer()),
-      ] as const))
-      const zipped = zipSync(Object.fromEntries(entries), { level: 6 })
-      const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer
-      const fileName = `${sanitizeFileNamePart(fileNameBase) || 'images'}.zip`
-      const shareResult = await shareDownload(new Blob([buffer], { type: 'application/zip' }), fileName)
-      if (!shareResult.cancelled) addExportHistory(fileName, blobs.length)
-      return {
-        successCount: shareResult.cancelled ? 0 : blobs.length,
-        failCount: shareResult.cancelled ? 0 : failCount,
-        fileName,
-        locationHint: shareResult.cancelled
-          ? '已取消分享'
-          : getDownloadHint(shareResult.method, fileName),
-        cancelled: shareResult.cancelled,
-      }
-    }
-    return { successCount: 0, failCount }
+    return downloadNativeImageBatches(imageIds, fileNameBase)
   }
 
   let lastFileName: string | undefined
@@ -107,6 +154,7 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
 
 export async function downloadImageEntriesAsZip(entries: DownloadImageZipEntry[], zipFileNameBase = 'images'): Promise<DownloadImagesResult> {
   if (entries.length === 0) return { successCount: 0, failCount: 0 }
+  if (isNativeApp()) return downloadNativeZipBatches(entries, zipFileNameBase)
 
   let successCount = 0
   let failCount = 0
@@ -220,10 +268,6 @@ function getDownloadHint(method: DownloadMethod, fileName: string) {
   return method === 'share'
     ? `已分享 ${fileName}，请在系统分享面板中选择“存储到文件”`
     : `已开始下载 ${fileName}`
-}
-
-function isNativeApp() {
-  return typeof window !== 'undefined' && (window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:')
 }
 
 function getBlobExtension(blob: Blob): string {

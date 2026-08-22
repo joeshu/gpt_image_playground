@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
+
+const TASK_PAGE_SIZE = 48
 import { useStore, reuseConfig, editOutputs, removeTask, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
 import { ALL_FAVORITES_COLLECTION_ID, getTaskFavoriteCollectionIds } from '../lib/favoriteState'
 import TaskCard from './TaskCard'
@@ -44,6 +46,14 @@ export default function TaskGrid() {
       return taskMatchesSearchQuery(t, q)
     })
   }, [tasks, searchQuery, filterStatus, filterFavorite, activeFavoriteCollectionId, defaultFavoriteCollectionId])
+
+  const [visibleTaskCount, setVisibleTaskCount] = useState(TASK_PAGE_SIZE)
+
+  useEffect(() => {
+    setVisibleTaskCount(TASK_PAGE_SIZE)
+  }, [searchQuery, filterStatus, filterFavorite, activeFavoriteCollectionId, defaultFavoriteCollectionId])
+
+  const visibleTasks = filteredTasks.slice(0, visibleTaskCount)
 
   const handleDelete = (task: typeof tasks[0]) => {
     setConfirmDialog({
@@ -288,7 +298,7 @@ export default function TaskGrid() {
       className="relative min-h-[50vh]"
     >
       <div ref={gridRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
-        {filteredTasks.map((task) => (
+        {visibleTasks.map((task) => (
           <div key={task.id} className="task-card-wrapper" data-task-id={task.id}>
             <TaskCard
               task={task}
@@ -314,6 +324,17 @@ export default function TaskGrid() {
           </div>
         ))}
       </div>
+      {visibleTasks.length < filteredTasks.length && (
+        <div className="flex justify-center pb-10">
+          <button
+            type="button"
+            onClick={() => setVisibleTaskCount((count) => Math.min(filteredTasks.length, count + TASK_PAGE_SIZE))}
+            className="min-h-11 rounded-xl border border-gray-200 bg-white px-5 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.06]"
+          >
+            加载更多（已显示 {visibleTasks.length} / {filteredTasks.length}）
+          </button>
+        </div>
+      )}
       {selectionBox && (
         <div
           className="fixed bg-blue-500/20 border border-blue-500/50 pointer-events-none z-[30]"
