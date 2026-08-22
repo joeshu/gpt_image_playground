@@ -1,4 +1,5 @@
 import type { AgentConversation, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
+import { StorageQuotaError, isStorageQuotaError } from './storage'
 
 const DB_NAME = 'gpt-image-playground'
 const DB_VERSION = 3
@@ -47,7 +48,9 @@ function dbTransaction<T>(
         const store = tx.objectStore(storeName)
         const req = fn(store)
         req.onsuccess = () => resolve(req.result)
-        req.onerror = () => reject(req.error)
+        req.onerror = () => reject(isStorageQuotaError(req.error) ? new StorageQuotaError() : req.error)
+        tx.onerror = () => reject(isStorageQuotaError(tx.error) ? new StorageQuotaError() : tx.error)
+        tx.onabort = () => reject(isStorageQuotaError(tx.error) ? new StorageQuotaError() : tx.error)
       }),
   )
 }

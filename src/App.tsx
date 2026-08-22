@@ -28,8 +28,30 @@ export default function App() {
   const appMode = useStore((s) => s.appMode)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
+  const showToast = useStore((s) => s.showToast)
   useDockerApiUrlMigrationNotice()
   useGlobalClickSuppression()
+
+  useEffect(() => {
+    const handleOffline = () => showToast('当前处于离线状态，已保留输入内容，暂时无法提交新请求', 'info')
+    const handleOnline = () => {
+      showToast('网络已恢复，正在检查未完成任务', 'success')
+      void initStore().catch((error) => console.warn('Failed to refresh local tasks after reconnect:', error))
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      void initStore().catch((error) => console.warn('Failed to refresh local tasks after resume:', error))
+    }
+
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [showToast])
 
   useEffect(() => {
     if (defaultConfigImportStarted) return

@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { useVersionCheck } from '../hooks/useVersionCheck'
 import { useTooltip } from '../hooks/useTooltip'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
+import { isIosDevice, isNativeApp } from '../lib/platform'
 import ViewportTooltip from './ViewportTooltip'
 import HelpModal from './HelpModal'
 import HistoryModal from './HistoryModal'
@@ -35,7 +36,8 @@ export default function Header() {
   const { hasUpdate, latestRelease, dismiss } = useVersionCheck()
   const [showHelp, setShowHelp] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [isPwaInstalled, setIsPwaInstalled] = useState(isInstalledPwa)
+  const nativeApp = isNativeApp()
+  const [isPwaInstalled, setIsPwaInstalled] = useState(() => nativeApp || isInstalledPwa())
   const [hintVisible, setHintVisible] = useState(false)
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('up')
   const [showHistoryModal, setShowHistoryModal] = useState(false)
@@ -88,6 +90,8 @@ export default function Header() {
   const settingsTooltip = useTooltip()
 
   useEffect(() => {
+    if (nativeApp) return
+
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault()
       setInstallPrompt(event as BeforeInstallPromptEvent)
@@ -106,7 +110,7 @@ export default function Header() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
     }
-  }, [])
+  }, [nativeApp])
 
   const handleInstallClick = async () => {
     if (installPrompt) {
@@ -121,8 +125,7 @@ export default function Header() {
         setIsPwaInstalled(isInstalledPwa())
       }
     } else {
-      const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-      if (isIos) {
+      if (isIosDevice()) {
         setConfirmDialog({
           title: '安装为应用',
           message: '在 Safari 浏览器中，点击底部「分享」按钮，选择「添加到主屏幕」即可安装此应用。',

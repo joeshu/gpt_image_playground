@@ -421,6 +421,13 @@ input[type="number"] {
   padding-right: max(1rem, var(--safe-area-right));
 }
 
+/* 长历史记录中只布局接近视口的卡片，保留占位高度避免滚动跳动。 */
+.task-card-wrapper {
+  content-visibility: auto;
+  contain: layout style paint;
+  contain-intrinsic-size: 420px;
+}
+
 .safe-area-top {
   padding-top: var(--safe-area-top);
 }
