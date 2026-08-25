@@ -69,6 +69,8 @@ import { createPersistedState, mergePersistedAgentConversations, migratePersiste
 import { addImageSizeParam, createTaskDonePatch, createTaskErrorPatch, deriveAgentImageActualParams, deriveGalleryActualParams, firstActualParams, hasActualParams, hasActualSizeParam, mapActualParamsByImage, mapRevisedPromptsByImage, markInterruptedOpenAIRunningTasks } from './lib/taskState'
 import { stripInjectedCodexCliSizePrompt } from './lib/size'
 import { StorageQuotaError } from './lib/storage'
+import { getApiKeySignature, hydrateNativeApiKeys, markNativeSecretStorageReady, persistNativeApiKeys, redactSettingsApiKeys, shouldRedactPersistedApiKeys } from './lib/nativeSecretStorage'
+import { isNativeApp } from './lib/platform'
 
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
@@ -1055,6 +1057,24 @@ useStore.subscribe((state) => {
   void flushAgentConversationsToIndexedDB()
 })
 
+let lastNativeApiKeySignature = JSON.stringify(getApiKeySignature(useStore.getState().settings))
+let lastNativeProfileIds = useStore.getState().settings.profiles.map((profile) => profile.id)
+useStore.subscribe((state) => {
+  if (!shouldRedactPersistedApiKeys()) return
+  const signature = JSON.stringify(getApiKeySignature(state.settings))
+  if (signature === lastNativeApiKeySignature) return
+
+  const profileIds = state.settings.profiles.map((profile) => profile.id)
+  const profileIdSet = new Set(profileIds)
+  const removedProfileIds = lastNativeProfileIds.filter((id) => !profileIdSet.has(id))
+  lastNativeApiKeySignature = signature
+  lastNativeProfileIds = profileIds
+  void persistNativeApiKeys(state.settings, removedProfileIds).catch((err) => {
+    console.error('Failed to update native Keychain storage:', err)
+    state.showToast('API 密钥未能写入系统钥匙串，请重试', 'error')
+  })
+})
+
 // ===== Actions =====
 
 let uid = 0
@@ -1446,6 +1466,18 @@ async function recoverFalTask(taskId: string) {
 
 /** 初始化：从 IndexedDB 加载任务，按需恢复输入图片，并清理孤立图片 */
 async function initStoreInternal() {
+  if (isNativeApp() && !shouldRedactPersistedApiKeys()) {
+    try {
+      const settings = await hydrateNativeApiKeys(useStore.getState().settings)
+      useStore.setState({ settings })
+      markNativeSecretStorageReady()
+      // Keychain 写入全部成功后，立即重写持久化状态以移除明文密钥。
+      useStore.setState({})
+    } catch (err) {
+      console.warn('Failed to initialize native Keychain storage; keeping existing persisted credentials:', err)
+    }
+  }
+
   const legacyAgentConversations = normalizeAgentConversations(useStore.getState().agentConversations)
   const storedTasks = await getAllTasks()
   const storedAgentConversations = normalizeAgentConversations(await getAllAgentConversations())
@@ -4399,7 +4431,7 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
     const params = {
       options,
       exportedAt,
-      settings,
+      settings: redactSettingsApiKeys(settings),
       tasks,
       imageTasks: tasks,
       favoriteCollections,
