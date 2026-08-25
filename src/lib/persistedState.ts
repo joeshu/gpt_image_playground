@@ -4,6 +4,7 @@ import { normalizeAgentConversations } from './agentConversationState'
 import { ensureDefaultFavoriteCollection, normalizeFavoriteCollections, resolveDefaultFavoriteCollectionId } from './favoriteState'
 import { cleanStaleAgentInputDrafts, getPersistableAgentInputDrafts, isEmptyAgentInputDraft, normalizeAgentInputDraft, normalizeAgentInputDrafts, normalizeAgentInputDraftsByKey, saveGalleryInputDraft } from './inputDraftState'
 import { getPersistableAgentConversations, stripPersistedAgentConversations } from './agentResponseState'
+import { redactApiProfiles, redactSettingsApiKeys, shouldRedactPersistedApiKeys } from './nativeSecretStorage'
 
 export interface PersistedAppState {
   settings: AppSettings
@@ -88,11 +89,19 @@ function normalizeParams(value: unknown, fallback: TaskParams): TaskParams {
 }
 
 export function createPersistedState(state: PersistedStateSource, includeLegacyAgentConversations = false): PersistedAppState {
-  const settings = normalizeSettings(state.settings)
+  const normalizedSettings = normalizeSettings(state.settings)
+  const protectSecrets = shouldRedactPersistedApiKeys()
+  const settings = protectSecrets ? redactSettingsApiKeys(normalizedSettings) : normalizedSettings
+  const previousPresetConfig = state.previousPresetConfig
+    ? {
+        ...state.previousPresetConfig,
+        profiles: protectSecrets ? redactApiProfiles(state.previousPresetConfig.profiles) : state.previousPresetConfig.profiles,
+      }
+    : null
   const galleryInputDraft = saveGalleryInputDraft(state)
   return {
     settings,
-    previousPresetConfig: state.previousPresetConfig ?? null,
+    previousPresetConfig,
     dismissedPresetProfileIds: state.dismissedPresetProfileIds ?? [],
     dismissedPresetProviderIds: state.dismissedPresetProviderIds ?? [],
     params: state.params,
