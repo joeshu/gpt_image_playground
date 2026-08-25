@@ -586,3 +586,29 @@ input[type="number"] {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* Compact one-hand parameter strip: all controls remain available without making the composer three rows taller. */
+@media (max-width: 639px) {
+  .mobile-param-strip {
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 0.25rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-param-strip > label {
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .mobile-param-strip button,
+  .mobile-param-strip input,
+  .mobile-param-strip [role="button"] {
+    min-height: 2.5rem;
+  }
+
+  .mobile-param-strip::after {
+    content: "";
+    width: 0.25rem;
+  }
+}
