@@ -695,3 +695,44 @@ input[type="number"] {
     animation: none;
   }
 }
+
+
+/* Settings becomes a compact, scroll-independent tab workspace on iPhone. */
+@media (max-width: 639px) {
+  [data-settings-header] {
+    min-height: 3.5rem;
+    padding: 0.875rem 1rem 0.625rem;
+    padding-top: 1.25rem;
+  }
+
+  [data-settings-tabs] {
+    background: hsl(var(--muted) / 0.55);
+  }
+
+  [data-settings-tab-strip] {
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    scroll-padding-inline: 0.75rem;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-settings-tab-strip]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-settings-tab-strip] > button {
+    min-height: 2.75rem;
+    scroll-snap-align: start;
+    touch-action: manipulation;
+  }
+
+  [data-settings-scroll] {
+    padding: 1rem;
+  }
+
+  [data-settings-content] :where(input, textarea, select, button[role="switch"]) {
+    min-height: 2.75rem;
+  }
+}
