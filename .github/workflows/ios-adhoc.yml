@@ -54,6 +54,9 @@ jobs:
           cd ios/App
           pod install
 
+      - name: Configure native iOS project
+        run: bash scripts/configure-ios.sh
+
       - name: Install signing identity and profile
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
