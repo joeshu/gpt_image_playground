@@ -1,0 +1,75 @@
+name: Sync Upstream Safely
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out iOS branch
+        uses: actions/checkout@v4
+        with:
+          ref: ios-mobile
+          fetch-depth: 0
+
+      - name: Merge upstream into temporary branch
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git remote add upstream https://github.com/CookSleep/gpt_image_playground.git
+          git fetch upstream main
+          git switch -C sync/upstream-main
+          if ! git merge --no-edit upstream/main; then
+            git diff --name-only --diff-filter=U | tee upstream-conflicts.txt
+            git merge --abort
+            echo "::error::Upstream merge has conflicts. See upstream-conflicts artifact."
+            exit 1
+          fi
+
+      - name: Verify merged application
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm test
+
+      - name: Push sync branch
+        run: git push --force-with-lease origin sync/upstream-main
+
+      - name: Create or update synchronization PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh pr list --base ios-mobile --head sync/upstream-main --state open --json number --jq 'length' | grep -q '^0$'; then
+            gh pr create \
+              --base ios-mobile \
+              --head sync/upstream-main \
+              --title 'chore: sync upstream main' \
+              --body 'Automated upstream synchronization. Web build and tests passed. Review iOS workflow results before merging.'
+          else
+            echo "Open upstream synchronization PR already exists."
+          fi
+
+      - name: Upload conflict report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-sync-conflicts
+          path: upstream-conflicts.txt
+          if-no-files-found: ignore
+          retention-days: 14
