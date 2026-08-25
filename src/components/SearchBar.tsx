@@ -131,7 +131,7 @@ export default function SearchBar() {
 
   return (
     <div ref={rootRef} data-no-drag-select className="mt-3 mb-3 flex flex-col gap-2 sm:mt-6 sm:mb-4 sm:flex-row sm:gap-3">
-      <div className="order-2 flex w-full min-w-0 gap-2 overflow-x-auto pb-0.5 sm:order-none sm:w-auto sm:flex-shrink-0 sm:overflow-visible sm:pb-0 z-20">
+      <div className="order-2 flex w-full min-w-0 gap-2 overflow-x-auto hide-scrollbar pb-0.5 sm:order-none sm:w-auto sm:flex-shrink-0 sm:overflow-visible sm:pb-0 z-20">
         <SearchActionButton
           tooltip={favoriteTooltip}
           onClick={handleFavoriteClick}
