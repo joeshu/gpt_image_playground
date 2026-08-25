@@ -202,7 +202,7 @@ export default function App() {
       {appMode === 'agent' ? (
         <AgentWorkspace />
       ) : (
-        <main data-home-main data-drag-select-surface className="pb-48">
+        <main data-home-main data-drag-select-surface className="home-main-content">
           <div className="safe-area-x max-w-7xl mx-auto">
             <SearchBar />
             {filterFavorite && !activeFavoriteCollectionId ? <FavoriteCollectionsView /> : <TaskGrid />}
