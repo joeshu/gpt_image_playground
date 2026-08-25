@@ -736,3 +736,48 @@ input[type="number"] {
     min-height: 2.75rem;
   }
 }
+
+
+/* Task detail keeps the output prominent while pinning primary actions above the Home Indicator. */
+@media (max-width: 767px) {
+  [data-detail-mobile-header] {
+    min-height: 3.25rem;
+    height: 3.25rem;
+    padding-top: 0.25rem;
+  }
+
+  [data-detail-media] {
+    height: clamp(18rem, 38dvh, 24rem);
+    min-height: 18rem;
+  }
+
+  [data-detail-info] {
+    min-height: 0;
+    padding: 1rem;
+    padding-bottom: 0;
+  }
+
+  [data-detail-actions] {
+    position: sticky;
+    z-index: 15;
+    bottom: 0;
+    margin: 0 -1rem;
+    padding: 0.75rem 1rem calc(0.75rem + var(--safe-area-bottom));
+    background: rgb(255 255 255 / 0.92);
+    box-shadow: 0 -8px 24px rgb(15 23 42 / 0.06);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  [data-detail-actions] button {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 767px) and (prefers-color-scheme: dark) {
+  [data-detail-actions] {
+    background: rgb(17 24 39 / 0.92);
+    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2);
+  }
+}
