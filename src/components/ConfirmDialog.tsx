@@ -91,11 +91,13 @@ export default function ConfirmDialog() {
   return (
     <div
       data-no-drag-select
+      data-ios-sheet-backdrop
       className="fixed inset-0 z-[110] flex items-center justify-center p-4"
       onClick={handleClose}
     >
       <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-md animate-overlay-in" />
       <div
+        data-ios-confirm-sheet
         className="relative bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/50 dark:border-white/[0.08] rounded-3xl shadow-[0_8px_40px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_40px_rgb(0,0,0,0.4)] max-w-sm w-full p-6 z-10 ring-1 ring-black/5 dark:ring-white/10 animate-confirm-in"
         onClick={(e) => e.stopPropagation()}
       >
