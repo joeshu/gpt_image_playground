@@ -5,6 +5,9 @@ APP_DIR="ios/App/App"
 PLIST_PATH="$APP_DIR/Info.plist"
 PROJECT_PATH="ios/App/App.xcodeproj/project.pbxproj"
 PRIVACY_PATH="$APP_DIR/PrivacyInfo.xcprivacy"
+KEYCHAIN_PLUGIN_PATH="$APP_DIR/SecureStoragePlugin.swift"
+VIEW_CONTROLLER_PATH="$APP_DIR/AppViewController.swift"
+STORYBOARD_PATH="$APP_DIR/Base.lproj/Main.storyboard"
 
 test -f "$PLIST_PATH"
 test -f "$PROJECT_PATH"
@@ -59,6 +62,121 @@ cat > "$PRIVACY_PATH" <<'EOF'
 </plist>
 EOF
 
+cat > "$KEYCHAIN_PLUGIN_PATH" <<'SWIFT'
+import Capacitor
+import Foundation
+import Security
+
+@objc(SecureStoragePlugin)
+public class SecureStoragePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "SecureStoragePlugin"
+    public let jsName = "SecureStorage"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise)
+    ]
+
+    private var service: String {
+        return (Bundle.main.bundleIdentifier ?? "dev.cooksleep.gptimageplayground") + ".secure-storage"
+    }
+
+    @objc func get(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else {
+            call.reject("Missing Keychain key")
+            return
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            call.resolve(["value": NSNull()])
+            return
+        }
+        guard status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
+            call.reject("Keychain read failed: \(status)")
+            return
+        }
+        call.resolve(["value": value])
+    }
+
+    @objc func set(_ call: CAPPluginCall) {
+        guard
+            let key = call.getString("key"), !key.isEmpty,
+            let value = call.getString("value")
+        else {
+            call.reject("Missing Keychain key or value")
+            return
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key
+        ]
+        let data = Data(value.utf8)
+        let updateStatus = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecSuccess {
+            call.resolve()
+            return
+        }
+        guard updateStatus == errSecItemNotFound else {
+            call.reject("Keychain update failed: \(updateStatus)")
+            return
+        }
+
+        var item = query
+        item[kSecValueData as String] = data
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(item as CFDictionary, nil)
+        if addStatus == errSecSuccess {
+            call.resolve()
+        } else {
+            call.reject("Keychain write failed: \(addStatus)")
+        }
+    }
+
+    @objc func remove(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else {
+            call.reject("Missing Keychain key")
+            return
+        }
+
+        let status = SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key
+        ] as CFDictionary)
+        if status == errSecSuccess || status == errSecItemNotFound {
+            call.resolve()
+        } else {
+            call.reject("Keychain delete failed: \(status)")
+        }
+    }
+}
+SWIFT
+
+cat > "$VIEW_CONTROLLER_PATH" <<'SWIFT'
+import Capacitor
+import UIKit
+
+public class AppViewController: CAPBridgeViewController {
+    override public func capacitorDidLoad() {
+        bridge?.registerPluginInstance(SecureStoragePlugin())
+    }
+}
+SWIFT
+
+perl -0pi -e 's/customClass="CAPBridgeViewController" customModule="Capacitor"/customClass="AppViewController" customModule="App" customModuleProvider="target"/g' "$STORYBOARD_PATH"
+grep -q 'customClass="AppViewController"' "$STORYBOARD_PATH"
+
 ruby <<'RUBY'
 require 'xcodeproj'
 
@@ -67,11 +185,18 @@ target = project.targets.find { |item| item.name == 'App' }
 raise 'App target not found' unless target
 
 group = project.main_group.find_subpath('App', true)
-file = group.files.find { |item| item.path == 'PrivacyInfo.xcprivacy' } || group.new_file('PrivacyInfo.xcprivacy')
-target.resources_build_phase.add_file_reference(file, true) unless target.resources_build_phase.files_references.include?(file)
+privacy = group.files.find { |item| item.path == 'PrivacyInfo.xcprivacy' } || group.new_file('PrivacyInfo.xcprivacy')
+target.resources_build_phase.add_file_reference(privacy, true) unless target.resources_build_phase.files_references.include?(privacy)
+
+['SecureStoragePlugin.swift', 'AppViewController.swift'].each do |path|
+  file = group.files.find { |item| item.path == path } || group.new_file(path)
+  target.source_build_phase.add_file_reference(file, true) unless target.source_build_phase.files_references.include?(file)
+end
 project.save
 RUBY
 
 /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$PLIST_PATH"
 grep -q "PrivacyInfo.xcprivacy" "$PROJECT_PATH"
-echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0"
+grep -q "SecureStoragePlugin.swift" "$PROJECT_PATH"
+grep -q "AppViewController.swift" "$PROJECT_PATH"
+echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage"
