@@ -539,3 +539,50 @@ input[type="number"] {
   isolation: isolate;
   -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
+
+
+/* iPhone composer: dock to the Home Indicator and reserve its measured height in the gallery. */
+.home-main-content {
+  padding-bottom: max(12rem, calc(var(--input-bar-clearance, 11rem) + 1rem));
+}
+
+@media (max-width: 639px) {
+  [data-input-bar] {
+    bottom: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  [data-input-bar] > div:last-child {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: calc(0.75rem + var(--safe-area-bottom));
+    box-shadow: 0 -10px 35px rgb(15 23 42 / 0.12);
+  }
+
+  [data-input-bar] button,
+  [data-input-bar] [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  [data-task-grid-root] {
+    padding-top: 0.25rem;
+  }
+
+  .task-card-wrapper {
+    contain-intrinsic-size: 360px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-input-bar],
+  [data-input-bar] *,
+  .task-card-wrapper,
+  .collapse-section {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
