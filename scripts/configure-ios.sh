@@ -7,6 +7,7 @@ PROJECT_PATH="ios/App/App.xcodeproj/project.pbxproj"
 PRIVACY_PATH="$APP_DIR/PrivacyInfo.xcprivacy"
 KEYCHAIN_PLUGIN_PATH="$APP_DIR/SecureStoragePlugin.swift"
 NATIVE_EXPORT_PLUGIN_PATH="$APP_DIR/NativeExportPlugin.swift"
+NATIVE_LIFECYCLE_PLUGIN_PATH="$APP_DIR/NativeLifecyclePlugin.swift"
 VIEW_CONTROLLER_PATH="$APP_DIR/AppViewController.swift"
 STORYBOARD_PATH="$APP_DIR/Base.lproj/Main.storyboard"
 
@@ -231,6 +232,52 @@ public class NativeExportPlugin: CAPPlugin, CAPBridgedPlugin {
 }
 SWIFT
 
+cat > "$NATIVE_LIFECYCLE_PLUGIN_PATH" <<'SWIFT'
+import Capacitor
+import UIKit
+
+@objc(NativeLifecyclePlugin)
+public class NativeLifecyclePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "NativeLifecyclePlugin"
+    public let jsName = "NativeLifecycle"
+    public let pluginMethods: [CAPPluginMethod] = []
+    private var observers: [NSObjectProtocol] = []
+
+    override public func load() {
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(
+                forName: UIApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.notifyListeners("appStateChange", data: ["isActive": true])
+            },
+            center.addObserver(
+                forName: UIApplication.willResignActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.notifyListeners("appStateChange", data: ["isActive": false])
+            },
+            center.addObserver(
+                forName: UIApplication.didReceiveMemoryWarningNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.notifyListeners("memoryWarning", data: [:])
+            }
+        ]
+    }
+
+    deinit {
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+}
+SWIFT
+
 cat > "$VIEW_CONTROLLER_PATH" <<'SWIFT'
 import Capacitor
 import UIKit
@@ -239,6 +286,7 @@ public class AppViewController: CAPBridgeViewController {
     override public func capacitorDidLoad() {
         bridge?.registerPluginInstance(SecureStoragePlugin())
         bridge?.registerPluginInstance(NativeExportPlugin())
+        bridge?.registerPluginInstance(NativeLifecyclePlugin())
     }
 }
 SWIFT
@@ -257,7 +305,7 @@ group = project.main_group.find_subpath('App', true)
 privacy = group.files.find { |item| item.path == 'PrivacyInfo.xcprivacy' } || group.new_file('PrivacyInfo.xcprivacy')
 target.resources_build_phase.add_file_reference(privacy, true) unless target.resources_build_phase.files_references.include?(privacy)
 
-['SecureStoragePlugin.swift', 'NativeExportPlugin.swift', 'AppViewController.swift'].each do |path|
+['SecureStoragePlugin.swift', 'NativeExportPlugin.swift', 'NativeLifecyclePlugin.swift', 'AppViewController.swift'].each do |path|
   file = group.files.find { |item| item.path == path } || group.new_file(path)
   target.source_build_phase.add_file_reference(file, true) unless target.source_build_phase.files_references.include?(file)
 end
@@ -268,5 +316,6 @@ RUBY
 grep -q "PrivacyInfo.xcprivacy" "$PROJECT_PATH"
 grep -q "SecureStoragePlugin.swift" "$PROJECT_PATH"
 grep -q "NativeExportPlugin.swift" "$PROJECT_PATH"
+grep -q "NativeLifecyclePlugin.swift" "$PROJECT_PATH"
 grep -q "AppViewController.swift" "$PROJECT_PATH"
-echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage and native export"
+echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage, native export, and lifecycle events"
