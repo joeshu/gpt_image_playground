@@ -295,9 +295,9 @@ export default function TaskGrid() {
     <div 
       ref={rootRef}
       data-task-grid-root
-      className="relative min-h-[50vh]"
+      className="relative min-h-[50dvh]"
     >
-      <div ref={gridRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
+      <div ref={gridRef} className="grid grid-cols-1 gap-3 pb-6 sm:grid-cols-2 sm:gap-4 sm:pb-10 lg:grid-cols-3">
         {visibleTasks.map((task) => (
           <div key={task.id} className="task-card-wrapper" data-task-id={task.id}>
             <TaskCard
