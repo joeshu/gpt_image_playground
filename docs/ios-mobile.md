@@ -34,3 +34,18 @@ Never auto-merge an upstream PR before the Unsigned IPA workflow and device smok
 3. Install and launch-test the unsigned build in its intended environment.
 4. Run the Ad-hoc workflow when signing secrets and registered devices are available.
 5. Verify launch, API request, background/resume, photo import, export, and upgrade from the previous IPA.
+
+
+## Deterministic native configuration
+
+Both IPA workflows generate the Capacitor project from the pinned npm dependencies and then run `scripts/configure-ios.sh`. The script applies version-controlled native settings after every generation:
+
+- iOS 16.0 minimum deployment target;
+- app version from `package.json` and build number from GitHub Actions;
+- camera, photo-library read, and photo-library save usage descriptions;
+- Files app sharing and in-place document access;
+- indirect input support;
+- non-exempt encryption declaration;
+- an app privacy manifest declaring no tracking or collected-data categories.
+
+This keeps upstream synchronization low-conflict while making the generated Xcode project reproducible. The script must pass before either IPA is built.
