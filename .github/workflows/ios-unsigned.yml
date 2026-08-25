@@ -44,6 +44,9 @@ jobs:
         working-directory: ios/App
         run: pod install
 
+      - name: Configure native iOS project
+        run: bash scripts/configure-ios.sh
+
       - name: Build unsigned iOS app
         run: |
           set -euo pipefail
