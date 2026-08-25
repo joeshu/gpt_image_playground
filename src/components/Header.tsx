@@ -150,9 +150,9 @@ export default function Header() {
   return (
     <>
       <header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08] transition-transform duration-300 ease-in-out ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
-        <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between relative">
-          <div className="flex-1 min-w-0 pr-2 flex items-center gap-2">
-            <h1 className="inline-flex min-w-0 items-start relative mr-2">
+        <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between gap-1 relative">
+          <div className="flex min-w-0 flex-1 items-center gap-1 pr-1 sm:gap-2 sm:pr-2">
+            <h1 className="relative mr-1 inline-flex min-w-0 items-start sm:mr-2">
               {showFavoriteCollectionTitle ? (
                 <>
                   <span className="min-w-0 truncate text-[17px] font-bold tracking-tight text-gray-800 dark:text-gray-100 sm:hidden" title={favoriteCollectionTitle}>{favoriteCollectionTitle}</span>
@@ -170,7 +170,7 @@ export default function Header() {
                   href="https://github.com/CookSleep/gpt_image_playground"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[17px] sm:text-lg font-bold tracking-tight text-gray-800 dark:text-gray-100 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="truncate text-[16px] font-bold tracking-tight text-gray-800 transition-colors hover:text-gray-600 dark:text-gray-100 dark:hover:text-gray-300 sm:text-lg"
                 >
                   GPT Image Playground
                 </a>
@@ -256,7 +256,7 @@ export default function Header() {
               Agent
             </button>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
             {!isPwaInstalled && (
               <div
                 className="relative"
@@ -267,7 +267,7 @@ export default function Header() {
                     dismissAllTooltips()
                     handleInstallClick()
                   }}
-                   className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                   className="flex h-11 w-10 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-900 sm:w-11"
                   aria-label="安装为应用"
                 >
                   <InstallIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -286,7 +286,7 @@ export default function Header() {
                   dismissAllTooltips()
                   setShowHelp(true)
                 }}
-                 className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                 className="flex h-11 w-10 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-900 sm:w-11"
                 aria-label="操作指南"
               >
                 <HelpCircleIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -301,7 +301,7 @@ export default function Header() {
             >
               <button
                 onClick={() => setShowSettings(true)}
-                 className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                 className="flex h-11 w-10 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-900 sm:w-11"
                 aria-label="设置"
               >
                 <SettingsIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -312,8 +312,8 @@ export default function Header() {
             </div>
           </div>
         </div>
-        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-20 opacity-100 pb-2'}`}>
-          <div className="grid grid-cols-2 gap-1 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-gray-100/70 dark:bg-white/[0.04] p-1 mx-2">
+        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-16 opacity-100 pb-1.5'}`}>
+          <div className="grid min-h-10 grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
             <button
               type="button"
               onClick={() => setAppMode('gallery')}
@@ -341,7 +341,7 @@ export default function Header() {
 
       <div className={`safe-area-top invisible pointer-events-none transition-all duration-300 ease-in-out ${appMode === 'agent' && !agentMobileHeaderVisible ? 'max-h-0 sm:max-h-[500px] opacity-0 sm:opacity-100 overflow-hidden sm:overflow-visible' : 'max-h-[500px] opacity-100'}`} aria-hidden="true">
         <div className="safe-header-inner" />
-        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 pb-0' : 'max-h-20 pb-2'}`}>
+        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 pb-0' : 'max-h-16 pb-1.5'}`}>
           <div className="p-1">
             <div className="py-1.5 text-sm">占位</div>
           </div>
