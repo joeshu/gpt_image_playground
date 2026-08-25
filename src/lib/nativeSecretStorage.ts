@@ -53,8 +53,12 @@ export async function hydrateNativeApiKeys(settings: AppSettings): Promise<AppSe
   return normalizeSettings({ ...normalized, apiKey: activeApiKey, profiles })
 }
 
-export async function persistNativeApiKeys(settings: AppSettings) {
+export async function persistNativeApiKeys(settings: AppSettings, removedProfileIds: string[] = []) {
   if (!isNativeApp() || !nativeSecretStorageReady) return
+
+  for (const profileId of removedProfileIds) {
+    await SecureStorage.remove({ key: getProfileSecretKey(profileId) })
+  }
 
   const normalized = normalizeSettings(settings)
   for (const profile of normalized.profiles) {
