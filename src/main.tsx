@@ -7,8 +7,10 @@ import 'katex/dist/katex.min.css'
 import './index.css'
 import { installMobileViewportGuards } from './lib/viewport'
 import { isNativeApp } from './lib/platform'
+import { installNativeHaptics } from './lib/nativeHaptics'
 
 installMobileViewportGuards()
+installNativeHaptics()
 
 if (!isNativeApp() && 'serviceWorker' in navigator) {
   if (import.meta.env.PROD) {
