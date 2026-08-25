@@ -612,3 +612,28 @@ input[type="number"] {
     width: 0.25rem;
   }
 }
+
+
+/* Mobile task cards prioritize the generated image and provide thumb-sized action targets. */
+@media (max-width: 639px) {
+  [data-task-card-actions] {
+    width: 100%;
+    justify-content: flex-end;
+    border-top: 1px solid hsl(var(--border));
+    padding-top: 0.375rem;
+    padding-right: 0;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  [data-task-card-actions] button {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.625rem;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
