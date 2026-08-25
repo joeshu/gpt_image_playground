@@ -781,3 +781,24 @@ input[type="number"] {
     box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2);
   }
 }
+
+
+/* VisualViewport-driven keyboard avoidance for iOS Safari and Capacitor WebViews. */
+@media (max-width: 639px) {
+  html.ios-keyboard-open [data-input-bar] {
+    bottom: var(--keyboard-inset, 0px) !important;
+  }
+
+  html.ios-keyboard-open [data-ios-sheet],
+  html.ios-keyboard-open [data-ios-confirm-sheet] {
+    max-height: var(--visual-viewport-height, 100dvh);
+  }
+
+  html.ios-keyboard-open [data-input-bar] > div:last-child {
+    padding-bottom: 0.75rem;
+  }
+
+  html.ios-keyboard-open [data-detail-actions] {
+    padding-bottom: 0.75rem;
+  }
+}
