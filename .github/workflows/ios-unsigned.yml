@@ -50,6 +50,7 @@ jobs:
       - name: Build unsigned iOS app
         run: |
           set -euo pipefail
+          mkdir -p build
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
