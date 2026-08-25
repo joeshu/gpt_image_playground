@@ -6,6 +6,7 @@ PLIST_PATH="$APP_DIR/Info.plist"
 PROJECT_PATH="ios/App/App.xcodeproj/project.pbxproj"
 PRIVACY_PATH="$APP_DIR/PrivacyInfo.xcprivacy"
 KEYCHAIN_PLUGIN_PATH="$APP_DIR/SecureStoragePlugin.swift"
+NATIVE_EXPORT_PLUGIN_PATH="$APP_DIR/NativeExportPlugin.swift"
 VIEW_CONTROLLER_PATH="$APP_DIR/AppViewController.swift"
 STORYBOARD_PATH="$APP_DIR/Base.lproj/Main.storyboard"
 
@@ -163,6 +164,73 @@ public class SecureStoragePlugin: CAPPlugin, CAPBridgedPlugin {
 }
 SWIFT
 
+cat > "$NATIVE_EXPORT_PLUGIN_PATH" <<'SWIFT'
+import Capacitor
+import Foundation
+import UIKit
+
+@objc(NativeExportPlugin)
+public class NativeExportPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "NativeExportPlugin"
+    public let jsName = "NativeExport"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "share", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func share(_ call: CAPPluginCall) {
+        guard
+            let base64 = call.getString("base64"),
+            let data = Data(base64Encoded: base64),
+            let rawFileName = call.getString("fileName")
+        else {
+            call.reject("Invalid export file")
+            return
+        }
+
+        let fileName = URL(fileURLWithPath: rawFileName).lastPathComponent
+        guard !fileName.isEmpty else {
+            call.reject("Invalid export file name")
+            return
+        }
+
+        do {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("GPTImagePlaygroundExports", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let fileURL = directory.appendingPathComponent(fileName)
+            try data.write(to: fileURL, options: .atomic)
+
+            DispatchQueue.main.async {
+                guard let presenter = self.bridge?.viewController else {
+                    try? FileManager.default.removeItem(at: directory)
+                    call.reject("Native share controller is unavailable")
+                    return
+                }
+
+                let controller = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+                if let popover = controller.popoverPresentationController {
+                    popover.sourceView = presenter.view
+                    popover.sourceRect = CGRect(
+                        x: presenter.view.bounds.midX,
+                        y: presenter.view.bounds.maxY,
+                        width: 1,
+                        height: 1
+                    )
+                }
+                controller.completionWithItemsHandler = { _, completed, _, _ in
+                    try? FileManager.default.removeItem(at: directory)
+                    call.resolve(["cancelled": !completed])
+                }
+                presenter.present(controller, animated: true)
+            }
+        } catch {
+            call.reject("Unable to prepare export file: \(error.localizedDescription)")
+        }
+    }
+}
+SWIFT
+
 cat > "$VIEW_CONTROLLER_PATH" <<'SWIFT'
 import Capacitor
 import UIKit
@@ -170,6 +238,7 @@ import UIKit
 public class AppViewController: CAPBridgeViewController {
     override public func capacitorDidLoad() {
         bridge?.registerPluginInstance(SecureStoragePlugin())
+        bridge?.registerPluginInstance(NativeExportPlugin())
     }
 }
 SWIFT
@@ -188,7 +257,7 @@ group = project.main_group.find_subpath('App', true)
 privacy = group.files.find { |item| item.path == 'PrivacyInfo.xcprivacy' } || group.new_file('PrivacyInfo.xcprivacy')
 target.resources_build_phase.add_file_reference(privacy, true) unless target.resources_build_phase.files_references.include?(privacy)
 
-['SecureStoragePlugin.swift', 'AppViewController.swift'].each do |path|
+['SecureStoragePlugin.swift', 'NativeExportPlugin.swift', 'AppViewController.swift'].each do |path|
   file = group.files.find { |item| item.path == path } || group.new_file(path)
   target.source_build_phase.add_file_reference(file, true) unless target.source_build_phase.files_references.include?(file)
 end
@@ -198,5 +267,6 @@ RUBY
 /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$PLIST_PATH"
 grep -q "PrivacyInfo.xcprivacy" "$PROJECT_PATH"
 grep -q "SecureStoragePlugin.swift" "$PROJECT_PATH"
+grep -q "NativeExportPlugin.swift" "$PROJECT_PATH"
 grep -q "AppViewController.swift" "$PROJECT_PATH"
-echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage"
+echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage and native export"
