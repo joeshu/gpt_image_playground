@@ -1886,7 +1886,7 @@ export default function InputBar() {
             <div className="sm:hidden flex flex-col gap-2">
               <div className={`collapse-section${mobileCollapsed ? ' collapsed' : ''}`}>
                 <div className="collapse-inner">
-                  {renderParams('grid-cols-2')}
+                  {renderParams('mobile-param-strip grid-flow-col auto-cols-[minmax(7rem,1fr)] overflow-x-auto hide-scrollbar snap-x snap-mandatory pb-1')}
                   <div className="h-2" />
                 </div>
               </div>
