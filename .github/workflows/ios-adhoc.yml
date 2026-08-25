@@ -1,0 +1,137 @@
+name: Build Ad-hoc iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-adhoc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      APP_BUNDLE_ID: dev.cooksleep.gptimageplayground
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate signing secrets
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$IOS_CERTIFICATE_BASE64" || { echo "::error::Missing IOS_CERTIFICATE_BASE64"; exit 1; }
+          test -n "$IOS_CERTIFICATE_PASSWORD" || { echo "::error::Missing IOS_CERTIFICATE_PASSWORD"; exit 1; }
+          test -n "$IOS_PROVISIONING_PROFILE_BASE64" || { echo "::error::Missing IOS_PROVISIONING_PROFILE_BASE64"; exit 1; }
+          test -n "$IOS_TEAM_ID" || { echo "::error::Missing IOS_TEAM_ID"; exit 1; }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install and verify web app
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run build
+
+      - name: Generate and sync Capacitor iOS project
+        run: |
+          set -euo pipefail
+          npx cap add ios
+          npx cap sync ios
+          cd ios/App
+          pod install
+
+      - name: Install signing identity and profile
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/ios-build.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          security create-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          PROFILE_UUID="$(security cms -D -i "$PROFILE_PATH" | /usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin)"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+
+      - name: Archive and export Ad-hoc IPA
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/export build/report
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>ad-hoc</string>
+            <key>teamID</key><string>$IOS_TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict>
+              <key>$APP_BUNDLE_ID</key><string>$PROFILE_UUID</string>
+            </dict>
+          </dict></plist>
+          EOF
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -archivePath build/GPTImagePlayground.xcarchive \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$APP_BUNDLE_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
+            CODE_SIGN_STYLE=Manual \
+            archive | tee build/xcodebuild.log
+          xcodebuild -exportArchive \
+            -archivePath build/GPTImagePlayground.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist build/ExportOptions.plist | tee build/export.log
+          IPA_PATH="$(find build/export -maxdepth 1 -name '*.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+          mv "$IPA_PATH" "build/GPT-Image-Playground-${{ github.run_number }}-adhoc.ipa"
+          cat > build/report/build-info.json <<EOF
+          {
+            "variant": "ad-hoc",
+            "runNumber": "${{ github.run_number }}",
+            "commit": "${{ github.sha }}",
+            "bundleId": "$APP_BUNDLE_ID",
+            "builtAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+      - name: Upload Ad-hoc IPA and symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpt-image-playground-ios-adhoc-${{ github.run_number }}
+          path: |
+            build/*.ipa
+            build/GPTImagePlayground.xcarchive/dSYMs
+            build/report/build-info.json
+            build/xcodebuild.log
+            build/export.log
+          if-no-files-found: error
+          retention-days: 30
