@@ -1127,7 +1127,8 @@ export default function SettingsModal() {
   return (
         <div
           data-no-drag-select
-          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          data-ios-sheet-backdrop
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           onPointerDownCapture={blockDataTransferInteraction}
           onClickCapture={blockDataTransferClick}
           onContextMenuCapture={blockDataTransferInteraction}
@@ -1138,6 +1139,7 @@ export default function SettingsModal() {
       />
       <div
         ref={settingsScrollBoundaryRef}
+        data-ios-sheet
         className="relative z-10 w-full max-w-3xl rounded-3xl border border-white/50 bg-white/95 shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10 flex h-[85vh] sm:h-[600px] ios-modal-height flex-col overflow-hidden ios-safe-bottom"
       >
         {/* Header */}
