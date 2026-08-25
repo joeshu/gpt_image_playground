@@ -21,6 +21,8 @@ import ImageContextMenu from './components/ImageContextMenu'
 import SupportPromptModal from './components/SupportPromptModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
+import { subscribeNativeLifecycle } from './lib/nativeLifecycle'
+import { clearImageCaches } from './lib/imageCache'
 
 let defaultConfigImportStarted = false
 
@@ -33,20 +35,58 @@ export default function App() {
   useGlobalClickSuppression()
 
   useEffect(() => {
-    const handleOffline = () => showToast('当前处于离线状态，已保留输入内容，暂时无法提交新请求', 'info')
-    const handleOnline = () => {
-      showToast('网络已恢复，正在检查未完成任务', 'success')
-      void initStore().catch((error) => console.warn('Failed to refresh local tasks after reconnect:', error))
+    let disposed = false
+    let removeNativeListeners: (() => void) | null = null
+    let lastRefreshAt = 0
+    let pausedAt = 0
+
+    const refreshAfterInterruption = (reason: 'network' | 'resume') => {
+      const now = Date.now()
+      if (now - lastRefreshAt < 1500) return
+      lastRefreshAt = now
+
+      // 活跃请求仍由原 Promise/恢复计时器负责，重新载入 IndexedDB 会覆盖内存中的最新状态。
+      if (useStore.getState().tasks.some((task) => task.status === 'running')) {
+        if (reason === 'network') showToast('网络已恢复，正在继续当前任务', 'success')
+        return
+      }
+
+      if (reason === 'network') showToast('网络已恢复，正在检查未完成任务', 'success')
+      void initStore().catch((error) => console.warn(`Failed to refresh local tasks after ${reason}:`, error))
     }
+
+    const handleOffline = () => showToast('当前处于离线状态，已保留输入内容，暂时无法提交新请求', 'info')
+    const handleOnline = () => refreshAfterInterruption('network')
     const handleVisibility = () => {
-      if (document.visibilityState !== 'visible') return
-      void initStore().catch((error) => console.warn('Failed to refresh local tasks after resume:', error))
+      if (document.visibilityState === 'visible') refreshAfterInterruption('resume')
     }
 
     window.addEventListener('offline', handleOffline)
     window.addEventListener('online', handleOnline)
     document.addEventListener('visibilitychange', handleVisibility)
+
+    void subscribeNativeLifecycle({
+      onPause: () => {
+        pausedAt = Date.now()
+      },
+      onResume: () => {
+        if (pausedAt && Date.now() - pausedAt < 1500) return
+        refreshAfterInterruption('resume')
+      },
+      onMemoryWarning: () => {
+        clearImageCaches()
+        console.warn('Released transient image caches after iOS memory warning')
+      },
+    }).then((remove) => {
+      if (disposed) remove()
+      else removeNativeListeners = remove
+    }).catch((error) => {
+      console.warn('Failed to subscribe to native lifecycle events:', error)
+    })
+
     return () => {
+      disposed = true
+      removeNativeListeners?.()
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('online', handleOnline)
       document.removeEventListener('visibilitychange', handleVisibility)
