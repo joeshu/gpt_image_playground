@@ -8,6 +8,7 @@ PRIVACY_PATH="$APP_DIR/PrivacyInfo.xcprivacy"
 KEYCHAIN_PLUGIN_PATH="$APP_DIR/SecureStoragePlugin.swift"
 NATIVE_EXPORT_PLUGIN_PATH="$APP_DIR/NativeExportPlugin.swift"
 NATIVE_LIFECYCLE_PLUGIN_PATH="$APP_DIR/NativeLifecyclePlugin.swift"
+NATIVE_HAPTICS_PLUGIN_PATH="$APP_DIR/NativeHapticsPlugin.swift"
 VIEW_CONTROLLER_PATH="$APP_DIR/AppViewController.swift"
 STORYBOARD_PATH="$APP_DIR/Base.lproj/Main.storyboard"
 
@@ -278,6 +279,58 @@ public class NativeLifecyclePlugin: CAPPlugin, CAPBridgedPlugin {
 }
 SWIFT
 
+cat > "$NATIVE_HAPTICS_PLUGIN_PATH" <<'SWIFT'
+import Capacitor
+import UIKit
+
+@objc(NativeHapticsPlugin)
+public class NativeHapticsPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "NativeHapticsPlugin"
+    public let jsName = "NativeHaptics"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "selection", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "impact", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "notification", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func selection(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let generator = UISelectionFeedbackGenerator()
+            generator.prepare()
+            generator.selectionChanged()
+            call.resolve()
+        }
+    }
+
+    @objc func impact(_ call: CAPPluginCall) {
+        let style = call.getString("style") == "medium"
+            ? UIImpactFeedbackGenerator.FeedbackStyle.medium
+            : UIImpactFeedbackGenerator.FeedbackStyle.light
+        DispatchQueue.main.async {
+            let generator = UIImpactFeedbackGenerator(style: style)
+            generator.prepare()
+            generator.impactOccurred()
+            call.resolve()
+        }
+    }
+
+    @objc func notification(_ call: CAPPluginCall) {
+        let type: UINotificationFeedbackGenerator.FeedbackType
+        switch call.getString("type") {
+        case "warning": type = .warning
+        case "error": type = .error
+        default: type = .success
+        }
+        DispatchQueue.main.async {
+            let generator = UINotificationFeedbackGenerator()
+            generator.prepare()
+            generator.notificationOccurred(type)
+            call.resolve()
+        }
+    }
+}
+SWIFT
+
 cat > "$VIEW_CONTROLLER_PATH" <<'SWIFT'
 import Capacitor
 import UIKit
@@ -287,6 +340,7 @@ public class AppViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(SecureStoragePlugin())
         bridge?.registerPluginInstance(NativeExportPlugin())
         bridge?.registerPluginInstance(NativeLifecyclePlugin())
+        bridge?.registerPluginInstance(NativeHapticsPlugin())
     }
 }
 SWIFT
@@ -305,7 +359,7 @@ group = project.main_group.find_subpath('App', true)
 privacy = group.files.find { |item| item.path == 'PrivacyInfo.xcprivacy' } || group.new_file('PrivacyInfo.xcprivacy')
 target.resources_build_phase.add_file_reference(privacy, true) unless target.resources_build_phase.files_references.include?(privacy)
 
-['SecureStoragePlugin.swift', 'NativeExportPlugin.swift', 'NativeLifecyclePlugin.swift', 'AppViewController.swift'].each do |path|
+['SecureStoragePlugin.swift', 'NativeExportPlugin.swift', 'NativeLifecyclePlugin.swift', 'NativeHapticsPlugin.swift', 'AppViewController.swift'].each do |path|
   file = group.files.find { |item| item.path == path } || group.new_file(path)
   target.source_build_phase.add_file_reference(file, true) unless target.source_build_phase.files_references.include?(file)
 end
@@ -317,5 +371,6 @@ grep -q "PrivacyInfo.xcprivacy" "$PROJECT_PATH"
 grep -q "SecureStoragePlugin.swift" "$PROJECT_PATH"
 grep -q "NativeExportPlugin.swift" "$PROJECT_PATH"
 grep -q "NativeLifecyclePlugin.swift" "$PROJECT_PATH"
+grep -q "NativeHapticsPlugin.swift" "$PROJECT_PATH"
 grep -q "AppViewController.swift" "$PROJECT_PATH"
-echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage, native export, and lifecycle events"
+echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage, native export, lifecycle events, and haptic feedback"
