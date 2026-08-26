@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask, updateTaskInStore } from '../store'
+import { useStore, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask, submitTask, updateTaskInStore } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { useTooltip } from '../hooks/useTooltip'
@@ -15,6 +15,7 @@ import { replaceImageMentionsForApi } from '../lib/promptImageMentions'
 import { getAgentTextApiProfile, getApiProviderLabel, isAgentTextApiProfile } from '../lib/apiProfiles'
 import { getTaskComparisonImageIds, getTaskLineage } from '../lib/taskLineage'
 import { buildProtectedTextPrompt, getProtectableTexts, normalizeProtectedTexts } from '../lib/protectedText'
+import { buildTextRepairPrompt } from '../lib/textRepair'
 import { verifyImageText } from '../lib/textVerification'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
@@ -47,6 +48,7 @@ export default function DetailModal() {
   const [showImageComparison, setShowImageComparison] = useState(false)
   const [showTextVerificationOverlay, setShowTextVerificationOverlay] = useState(false)
   const [isVerifyingText, setIsVerifyingText] = useState(false)
+  const [isStartingTextRepair, setIsStartingTextRepair] = useState(false)
   const [textVerificationError, setTextVerificationError] = useState('')
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -120,6 +122,7 @@ export default function DetailModal() {
     setShowImageComparison(false)
     setShowTextVerificationOverlay(false)
     setIsVerifyingText(false)
+    setIsStartingTextRepair(false)
     setTextVerificationError('')
   }, [detailTaskId])
 
@@ -498,6 +501,28 @@ export default function DetailModal() {
         ? protectedTexts.filter((item) => item !== text)
         : [...protectedTexts, text],
     )
+  }
+
+  const handleAutomaticTextRepair = async () => {
+    if (!task || !currentOutputImageId || !textVerificationReport || textVerificationReport.status !== 'warning') return
+    setIsStartingTextRepair(true)
+    try {
+      const dataUrl = await ensureImageCached(currentOutputImageId)
+      if (!dataUrl) throw new Error('待修复图片加载失败')
+      const state = useStore.getState()
+      state.clearMaskDraft()
+      state.setInputImages([{ id: currentOutputImageId, dataUrl }])
+      state.setParams({ ...task.params, n: 1 })
+      state.setPrompt(buildTextRepairPrompt(task.prompt, textVerificationReport, protectedTexts))
+      setDetailTaskId(null)
+      showToast('已创建文字修复任务，完成后将自动再次核验', 'info')
+      await submitTask()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '创建文字修复任务失败'
+      showToast(message, 'error')
+    } finally {
+      setIsStartingTextRepair(false)
+    }
   }
 
   const handleProtectedRework = async () => {
@@ -1171,6 +1196,37 @@ export default function DetailModal() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {textVerificationReport.status === 'warning' && (
+                      <div className="rounded-xl border border-orange-200 bg-orange-50/80 p-3 dark:border-orange-500/20 dark:bg-orange-500/[0.08]">
+                        <div className="text-xs font-medium text-orange-700 dark:text-orange-300">自动文字修复</div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+                          仅修复核验发现的文字和数字问题，保持其他版式不变；生成完成后自动再次核验。
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleAutomaticTextRepair}
+                          disabled={isStartingTextRepair}
+                          className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-medium text-white transition hover:bg-orange-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {isStartingTextRepair ? '正在创建修复任务…' : '一键修复并自动复核'}
+                        </button>
+                      </div>
+                    )}
+
+                    {task.autoTextVerificationStatus && task.autoTextVerificationStatus !== 'done' && (
+                      <div className={`rounded-lg px-3 py-2 text-xs ${
+                        task.autoTextVerificationStatus === 'error'
+                          ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300'
+                          : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300'
+                      }`}>
+                        {task.autoTextVerificationStatus === 'error'
+                          ? `自动复核失败：${task.autoTextVerificationError || '请手动重新核验'}`
+                          : task.autoTextVerificationStatus === 'running'
+                            ? '修复图片已生成，正在自动复核文字…'
+                            : '等待自动文字复核…'}
                       </div>
                     )}
 
