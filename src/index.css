@@ -819,3 +819,12 @@ input[type="number"] {
     padding-bottom: 0.75rem;
   }
 }
+
+
+/* iOS keeps :hover after a tap; destructive actions must return to their neutral state. */
+@media (hover: none) and (pointer: coarse) {
+  [data-agent-delete-action]:hover {
+    color: inherit;
+    background: transparent;
+  }
+}
