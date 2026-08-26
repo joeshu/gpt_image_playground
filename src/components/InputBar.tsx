@@ -24,6 +24,7 @@ import InputParamsPanel from './input/inputParamsPanel'
 import PromptEnhancerModal from './PromptEnhancerModal'
 import PromptVersionHistoryModal from './PromptVersionHistoryModal'
 import PromptTemplateModal from './PromptTemplateModal'
+import StateOwnedPptBriefModal from './StateOwnedPptBriefModal'
 import PromptPreflightModal from './PromptPreflightModal'
 import { runPromptPreflight, type PromptPreflightResult } from '../lib/promptPreflight'
 import { savePromptVersion } from '../lib/promptVersionHistory'
@@ -364,6 +365,7 @@ export default function InputBar() {
   const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
   const [showPromptVersions, setShowPromptVersions] = useState(false)
   const [showPromptTemplates, setShowPromptTemplates] = useState(false)
+  const [showStateOwnedPptBrief, setShowStateOwnedPptBrief] = useState(false)
   const [showPromptPreflight, setShowPromptPreflight] = useState(false)
   const [promptPreflightResult, setPromptPreflightResult] = useState<PromptPreflightResult | null>(null)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
@@ -1863,6 +1865,14 @@ export default function InputBar() {
           <div className="mt-2 flex flex-wrap justify-end gap-2">
             <button
               type="button"
+              onClick={() => setShowStateOwnedPptBrief(true)}
+              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50/80 px-3 text-xs font-medium text-red-700 transition hover:bg-red-100 active:scale-[0.98] dark:border-red-500/20 dark:bg-red-500/[0.08] dark:text-red-300"
+            >
+              <span aria-hidden="true">▤</span>
+              汇报结构卡
+            </button>
+            <button
+              type="button"
               onClick={() => setShowPromptTemplates(true)}
               className="flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-3 text-xs font-medium text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] dark:border-amber-500/20 dark:bg-amber-500/[0.08] dark:text-amber-300"
             >
@@ -2075,6 +2085,19 @@ export default function InputBar() {
           />
         </div>
       </div>
+
+      <StateOwnedPptBriefModal
+        open={showStateOwnedPptBrief}
+        currentPrompt={prompt}
+        onClose={() => setShowStateOwnedPptBrief(false)}
+        onApply={(briefPrompt) => {
+          savePromptVersion({ prompt: briefPrompt, source: 'template' })
+          setPrompt(briefPrompt)
+          setPromptExpanded(true)
+          setMobileCollapsed(false)
+          showToast('已套用国企汇报 PPT 结构卡，可继续修改', 'success')
+        }}
+      />
 
       <PromptPreflightModal
         open={showPromptPreflight}
