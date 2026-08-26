@@ -1155,6 +1155,20 @@ export default function DetailModal() {
                   <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{textVerificationError}</p>
                 )}
 
+                {task.autoTextVerificationStatus && task.autoTextVerificationStatus !== 'done' && (
+                  <div className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+                    task.autoTextVerificationStatus === 'error'
+                      ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300'
+                      : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300'
+                  }`}>
+                    {task.autoTextVerificationStatus === 'error'
+                      ? `自动复核失败：${task.autoTextVerificationError || '请手动重新核验'}`
+                      : task.autoTextVerificationStatus === 'running'
+                        ? '修复图片已生成，正在自动复核文字…'
+                        : '等待自动文字复核…'}
+                  </div>
+                )}
+
                 {textVerificationReport && (
                   <div className="mt-3 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
