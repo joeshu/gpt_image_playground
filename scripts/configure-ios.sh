@@ -384,6 +384,8 @@ public class NativeNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, UNUserNotif
         content.title = title
         content.body = call.getString("body") ?? ""
         content.sound = .default
+        if let taskId = call.getString("taskId"), !taskId.isEmpty { content.userInfo["taskId"] = taskId }
+        if let conversationId = call.getString("conversationId"), !conversationId.isEmpty { content.userInfo["conversationId"] = conversationId }
         let request = UNNotificationRequest(
             identifier: "task-completion-\(UUID().uuidString)",
             content: content,
@@ -396,6 +398,19 @@ public class NativeNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, UNUserNotif
                 call.resolve()
             }
         }
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        notifyListeners("notificationAction", data: [
+            "taskId": userInfo["taskId"] as? String ?? "",
+            "conversationId": userInfo["conversationId"] as? String ?? ""
+        ])
+        completionHandler()
     }
 
     public func userNotificationCenter(
