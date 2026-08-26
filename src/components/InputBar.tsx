@@ -1,16 +1,16 @@
 import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { deleteFavoriteCollection, useStore, submitTask, submitAgentMessage, stopAgentResponse, addImageFromFile, removeMultipleTasks, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
-import { DEFAULT_PARAMS, type InputImage, type TaskRecord } from '../types'
+import { DEFAULT_PARAMS, type TaskRecord } from '../types'
 import { getActiveAgentRounds } from '../lib/agentConversationState'
-import { getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, isAgentTextApiProfile, normalizeSettings } from '../lib/apiProfiles'
+import { getActiveApiProfile, getAgentImageApiProfile, normalizeSettings } from '../lib/apiProfiles'
 import { ensureImageCached, getCachedImage } from '../lib/imageCache'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { getAtImageQuery, getImageMentionLabel, getPromptIndexFromVisibleIndex, getPromptMentionParts, getSelectedImageMentionLabel, imageMentionMatches, insertImageMentionAtVisibleRange, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, stripImageMentionMarkers } from '../lib/promptImageMentions'
 import { normalizeCodexCliImageSize, normalizeImageSize } from '../lib/size'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { getSafeBoundingClientRect } from '../lib/domRect'
-import { collectAgentRoundOutputImageSlots, resolveAgentPromptImageReferenceEntries } from '../lib/agentImageReferences'
+import { collectAgentRoundOutputImageSlots } from '../lib/agentImageReferences'
 import { ALL_FAVORITES_COLLECTION_ID, getTaskFavoriteCollectionIds } from '../lib/favoriteState'
 import { getContentEditableCursor, getContentEditablePlainText, getContentEditableSelection, getMentionTagHtml, setContentEditableCursor, setContentEditableSelection, syncMentionTagSelection } from '../lib/contentEditableMentions'
 import { useHintTooltip } from '../hooks/useHintTooltip'
@@ -21,10 +21,6 @@ import ButtonTooltip from './input/buttonTooltip'
 import DragUploadOverlay from './input/dragUploadOverlay'
 import InputBatchBars from './input/inputBatchBars'
 import InputParamsPanel from './input/inputParamsPanel'
-import PromptEnhancerModal from './PromptEnhancerModal'
-import PromptVersionHistoryModal from './PromptVersionHistoryModal'
-import PromptTemplateModal from './PromptTemplateModal'
-import StateOwnedPptBriefModal from './StateOwnedPptBriefModal'
 import PromptPreflightModal from './PromptPreflightModal'
 import { runPromptPreflight, type PromptPreflightResult } from '../lib/promptPreflight'
 import { savePromptVersion } from '../lib/promptVersionHistory'
@@ -55,11 +51,6 @@ function useIsMobile() {
 type AtImageOption =
   | { type: 'input'; key: string; label: string; imageId: string; dataUrl: string; imageIndex: number }
   | { type: 'agent-output'; key: string; label: string; imageId: string; insertText: string }
-
-type PromptEnhancerReference = {
-  image: InputImage
-  label: string
-}
 
 function agentImageMentionMatches(query: string, label: string) {
   const normalized = query.trim().toLowerCase()
@@ -94,7 +85,11 @@ function AtImageOptionThumb({ option }: { option: AtImageOption }) {
   )
 }
 
-export default function InputBar() {
+interface InputBarProps {
+  onOpenPromptStudio?: () => void
+}
+
+export default function InputBar({ onOpenPromptStudio }: InputBarProps) {
   const prompt = useStore((s) => s.prompt)
   const appMode = useStore((s) => s.appMode)
   const setPrompt = useStore((s) => s.setPrompt)
@@ -367,12 +362,6 @@ export default function InputBar() {
   const [imageHintId, setImageHintId] = useState<string | null>(null)
   const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem('mobile-composer-collapsed') !== 'false')
   const [showSizePicker, setShowSizePicker] = useState(false)
-  const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
-  const [agentPromptReferenceImages, setAgentPromptReferenceImages] = useState<PromptEnhancerReference[]>([])
-  const [agentPromptReferenceLoading, setAgentPromptReferenceLoading] = useState(false)
-  const [showPromptVersions, setShowPromptVersions] = useState(false)
-  const [showPromptTemplates, setShowPromptTemplates] = useState(false)
-  const [showStateOwnedPptBrief, setShowStateOwnedPptBrief] = useState(false)
   const [showPromptPreflight, setShowPromptPreflight] = useState(false)
   const [promptPreflightResult, setPromptPreflightResult] = useState<PromptPreflightResult | null>(null)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
@@ -463,10 +452,6 @@ export default function InputBar() {
   }, [isMobile, mobileCollapsed])
 
   const settingsActiveProfile = useMemo(() => getActiveApiProfile(settings), [settings])
-  const promptEnhancerProfile = useMemo(() => {
-    const profile = getAgentTextApiProfile(settings)
-    return profile && isAgentTextApiProfile(profile) ? profile : null
-  }, [settings])
   const currentActiveProfile = useMemo(() => (
     appMode === 'agent'
       ? getAgentImageApiProfile(settings) ?? settingsActiveProfile
@@ -480,70 +465,6 @@ export default function InputBar() {
   const activeAgentConversation = appMode === 'agent'
     ? agentConversations.find((conversation) => conversation.id === activeAgentConversationId) ?? null
     : null
-  const agentPromptReferenceEntries = useMemo(() => {
-    if (!activeAgentConversation) return []
-    return resolveAgentPromptImageReferenceEntries(
-      prompt,
-      getActiveAgentRounds(activeAgentConversation),
-      tasks,
-    )
-  }, [activeAgentConversation, prompt, tasks])
-  useEffect(() => {
-    let cancelled = false
-    if (!showPromptEnhancer || agentPromptReferenceEntries.length === 0) {
-      setAgentPromptReferenceImages([])
-      setAgentPromptReferenceLoading(false)
-      return
-    }
-
-    setAgentPromptReferenceLoading(true)
-    const loadAgentPromptReferences = async () => {
-      try {
-        const loaded = await Promise.all(agentPromptReferenceEntries.map(async ({ imageId, label }) => {
-          const dataUrl = await ensureImageCached(imageId)
-          return dataUrl ? { image: { id: imageId, dataUrl }, label } : null
-        }))
-        if (!cancelled) {
-          setAgentPromptReferenceImages(loaded.filter((entry): entry is PromptEnhancerReference => Boolean(entry)))
-        }
-      } catch {
-        if (!cancelled) setAgentPromptReferenceImages([])
-      } finally {
-        if (!cancelled) setAgentPromptReferenceLoading(false)
-      }
-    }
-
-    void loadAgentPromptReferences()
-    return () => {
-      cancelled = true
-    }
-  }, [agentPromptReferenceEntries, showPromptEnhancer])
-  const promptEnhancerReferenceEntries = useMemo(() => {
-    const merged = new Map<string, PromptEnhancerReference>()
-    const addReference = (image: InputImage, label: string) => {
-      const existing = merged.get(image.id)
-      if (!existing) {
-        merged.set(image.id, { image, label })
-        return
-      }
-      const labels = existing.label.split('、')
-      if (!labels.includes(label)) {
-        existing.label = labels.concat(label).join('、')
-      }
-    }
-
-    inputImages.forEach((image, index) => addReference(image, getImageMentionLabel(index)))
-    agentPromptReferenceImages.forEach(({ image, label }) => addReference(image, label))
-    return Array.from(merged.values())
-  }, [agentPromptReferenceImages, inputImages])
-  const promptEnhancerReferenceImages = useMemo(
-    () => promptEnhancerReferenceEntries.map(({ image }) => image),
-    [promptEnhancerReferenceEntries],
-  )
-  const promptEnhancerReferenceLabels = useMemo(
-    () => promptEnhancerReferenceEntries.map(({ label }) => label),
-    [promptEnhancerReferenceEntries],
-  )
   const activeAgentIsRunning = Boolean(activeAgentConversation?.rounds.some((round) => round.status === 'running'))
   const effectiveSettings = useMemo(() => (
     activeProfile.id === settingsActiveProfile.id
@@ -1933,39 +1854,14 @@ export default function InputBar() {
             )}
           </div>
 
-          <div className="mt-2 flex flex-wrap justify-end gap-2">
+          <div className="mt-2 flex justify-end">
             <button
               type="button"
-              onClick={() => setShowStateOwnedPptBrief(true)}
-              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50/80 px-3 text-xs font-medium text-red-700 transition hover:bg-red-100 active:scale-[0.98] dark:border-red-500/20 dark:bg-red-500/[0.08] dark:text-red-300"
-            >
-              <span aria-hidden="true">▤</span>
-              汇报结构卡
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPromptTemplates(true)}
-              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-3 text-xs font-medium text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] dark:border-amber-500/20 dark:bg-amber-500/[0.08] dark:text-amber-300"
-            >
-              <span aria-hidden="true">▦</span>
-              模板
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPromptVersions(true)}
-              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white/80 px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50 active:scale-[0.98] dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300"
-            >
-              <span aria-hidden="true">↺</span>
-              版本
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPromptEnhancer(true)}
-              disabled={!prompt.trim()}
-              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 dark:border-blue-500/20 dark:bg-blue-500/[0.08] dark:text-blue-300"
+              onClick={() => onOpenPromptStudio?.()}
+              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-100 active:scale-[0.98] dark:border-blue-500/20 dark:bg-blue-500/[0.08] dark:text-blue-300"
             >
               <span aria-hidden="true">✦</span>
-              智能优化提示词
+              提示词工作室
             </button>
           </div>
 
@@ -2157,19 +2053,6 @@ export default function InputBar() {
         </div>
       </div>
 
-      <StateOwnedPptBriefModal
-        open={showStateOwnedPptBrief}
-        currentPrompt={prompt}
-        onClose={() => setShowStateOwnedPptBrief(false)}
-        onApply={(briefPrompt) => {
-          savePromptVersion({ prompt: briefPrompt, source: 'template' })
-          setPrompt(briefPrompt)
-          setPromptExpanded(true)
-          setMobileCollapsed(false)
-          showToast('已套用国企汇报 PPT 结构卡，可继续修改', 'success')
-        }}
-      />
-
       <PromptPreflightModal
         open={showPromptPreflight}
         result={promptPreflightResult}
@@ -2180,45 +2063,6 @@ export default function InputBar() {
         }}
       />
 
-      <PromptTemplateModal
-        open={showPromptTemplates}
-        currentPrompt={prompt}
-        onClose={() => setShowPromptTemplates(false)}
-        onApply={(templatePrompt) => {
-          savePromptVersion({ prompt: templatePrompt, source: 'template' })
-          setPrompt(templatePrompt)
-          setPromptExpanded(true)
-          setMobileCollapsed(false)
-          showToast('已套用提示词模板，可继续修改', 'success')
-        }}
-      />
-
-      <PromptVersionHistoryModal
-        open={showPromptVersions}
-        onClose={() => setShowPromptVersions(false)}
-        onRestore={(restoredPrompt) => {
-          setPrompt(restoredPrompt)
-          setPromptExpanded(true)
-          setMobileCollapsed(false)
-          showToast('已回退到所选提示词版本', 'success')
-        }}
-      />
-
-      <PromptEnhancerModal
-        open={showPromptEnhancer}
-        prompt={prompt}
-        profile={promptEnhancerProfile}
-        referenceImages={promptEnhancerReferenceImages}
-        referenceImageLabels={promptEnhancerReferenceLabels}
-        referenceImagesLoading={agentPromptReferenceLoading}
-        onClose={() => setShowPromptEnhancer(false)}
-        onApply={(enhancedPrompt) => {
-          setPrompt(enhancedPrompt)
-          setPromptExpanded(true)
-          setMobileCollapsed(false)
-          showToast('已应用增强提示词，可继续修改或直接生成', 'success')
-        }}
-      />
     </>
   )
 }

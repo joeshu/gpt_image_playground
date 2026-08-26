@@ -24,6 +24,7 @@ import { PlusIcon } from './icons'
 
 const MODULES: Array<{ value: CreationWorkspaceModule; label: string; description: string }> = [
   { value: 'overview', label: '项目总览', description: '查看当前项目的规则完整度与下一步动作' },
+  { value: 'prompt', label: '提示词工作室', description: '集中管理增强、模板、版本和国企汇报结构' },
   { value: 'brand', label: '品牌资产', description: '统一品牌名称、色彩和视觉资产说明' },
   { value: 'style', label: '风格锁定', description: '固定系列图片需要保持的视觉规则' },
   { value: 'series', label: '系列与批量', description: '建立跨图一致性与批量变量组合' },
@@ -94,9 +95,10 @@ function ModuleCard({
 
 interface CreationWorkbenchProps {
   onClose: () => void
+  onOpenPromptStudio?: () => void
 }
 
-export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
+export default function CreationWorkbench({ onClose, onOpenPromptStudio }: CreationWorkbenchProps) {
   const currentPrompt = useStore((state) => state.prompt)
   const inputImages = useStore((state) => state.inputImages)
   const showToast = useStore((state) => state.showToast)
@@ -380,6 +382,9 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
                       <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">{activeProject.brand.referenceImageIds.length} 张参考图</span>
                     </div>
                   </ModuleCard>
+                  <ModuleCard title="提示词工作室" description="将增强、模板、版本和国企汇报结构卡集中到一个创作入口。" onClick={() => setActiveModule('prompt')}>
+                    <div className="text-xs text-gray-600 dark:text-gray-300">当前任务类型与输入提示词联动</div>
+                  </ModuleCard>
                   <ModuleCard title="风格锁定" description="把视觉方向、版式和禁用项固定为项目级规则。" onClick={() => setActiveModule('style')}>
                     <div className="flex items-center gap-2 text-xs">
                       <span className={`rounded-full px-2 py-1 ${activeProject.style.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06]'}`}>{activeProject.style.enabled ? '已启用' : '未启用'}</span>
@@ -401,6 +406,20 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
                     </div>
                     <button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700">应用规则</button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeModule === 'prompt' && (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
+                  <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">提示词工作室</div>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-300">在这里进入统一的提示词工具入口；Gallery 与 Agent 输入栏仍保留快捷入口，避免打断快速创作。</p>
+                  <button type="button" onClick={() => onOpenPromptStudio?.()} className="mt-4 min-h-11 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white shadow-sm hover:bg-blue-700">打开提示词工作室</button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="text-sm font-semibold text-gray-900 dark:text-white">项目规则</div><p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">品牌与风格规则仍由当前项目控制，应用提示词时会写入版本历史。</p></div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="text-sm font-semibold text-gray-900 dark:text-white">生成前预检</div><p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">提交生成时自动检查比例、参考图、文字密度和格式兼容性，不增加 AI 调用。</p></div>
                 </div>
               </div>
             )}

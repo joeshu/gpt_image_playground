@@ -8,7 +8,7 @@ import ViewportTooltip from './ViewportTooltip'
 import HelpModal from './HelpModal'
 import HistoryModal from './HistoryModal'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
-import { CreationWorkbenchIcon, EditIcon, HelpCircleIcon, HistoryIcon, InstallIcon, SettingsIcon } from './icons'
+import { EditIcon, HelpCircleIcon, HistoryIcon, InstallIcon, SettingsIcon } from './icons'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -21,11 +21,13 @@ function isInstalledPwa() {
 }
 
 interface HeaderProps {
-  creationWorkbenchOpen: boolean
+  activeSurface: 'home' | 'creation' | 'results'
+  onOpenHome: (mode: 'gallery' | 'agent') => void
   onOpenCreationWorkbench: () => void
+  onOpenResultsCenter: () => void
 }
 
-export default function Header({ creationWorkbenchOpen, onOpenCreationWorkbench }: HeaderProps) {
+export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbench, onOpenResultsCenter }: HeaderProps) {
   const appMode = useStore((s) => s.appMode)
   const setAppMode = useStore((s) => s.setAppMode)
   const setShowSettings = useStore((s) => s.setShowSettings)
@@ -248,17 +250,31 @@ export default function Header({ creationWorkbenchOpen, onOpenCreationWorkbench 
           <div className="hidden sm:flex items-center gap-1 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-gray-100/70 dark:bg-white/[0.04] p-1 mr-4">
             <button
               type="button"
-              onClick={() => setAppMode('gallery')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'gallery' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+              onClick={() => onOpenHome('gallery')}
+              className={`px-3.5 py-1.5 rounded-lg text-sm transition-colors ${activeSurface === 'home' && appMode === 'gallery' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
             >
               画廊
             </button>
             <button
               type="button"
-              onClick={() => setAppMode('agent')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+              onClick={() => onOpenHome('agent')}
+              className={`px-3.5 py-1.5 rounded-lg text-sm transition-colors ${activeSurface === 'home' && appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
             >
               Agent
+            </button>
+            <button
+              type="button"
+              onClick={onOpenCreationWorkbench}
+              className={`px-3.5 py-1.5 rounded-lg text-sm transition-colors ${activeSurface === 'creation' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+            >
+              工作台
+            </button>
+            <button
+              type="button"
+              onClick={onOpenResultsCenter}
+              className={`px-3.5 py-1.5 rounded-lg text-sm transition-colors ${activeSurface === 'results' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+            >
+              结果
             </button>
           </div>
           <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
@@ -282,20 +298,6 @@ export default function Header({ creationWorkbenchOpen, onOpenCreationWorkbench 
                 </ViewportTooltip>
               </div>
             )}
-            <div className="relative">
-              <button
-                onClick={() => {
-                  dismissAllTooltips()
-                  onOpenCreationWorkbench()
-                }}
-                className={`flex h-11 w-10 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-900 sm:w-11 ${creationWorkbenchOpen ? 'bg-gray-100 text-blue-600 dark:bg-white/[0.08] dark:text-blue-300' : 'text-gray-600 dark:text-gray-400'}`}
-                aria-label="创作工作台"
-                aria-pressed={creationWorkbenchOpen}
-                title="创作工作台"
-              >
-                <CreationWorkbenchIcon className="h-5 w-5" />
-              </button>
-            </div>
             <div
               className="relative"
               {...helpTooltip.handlers}
@@ -332,20 +334,34 @@ export default function Header({ creationWorkbenchOpen, onOpenCreationWorkbench 
           </div>
         </div>
         <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-16 opacity-100 pb-1.5'}`}>
-          <div className="grid min-h-10 grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+          <div className="grid min-h-10 grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
             <button
               type="button"
-              onClick={() => setAppMode('gallery')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'gallery' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+              onClick={() => onOpenHome('gallery')}
+              className={`px-1 py-1.5 rounded-lg text-xs transition-colors ${activeSurface === 'home' && appMode === 'gallery' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
             >
               画廊
             </button>
             <button
               type="button"
-              onClick={() => setAppMode('agent')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+              onClick={() => onOpenHome('agent')}
+              className={`px-1 py-1.5 rounded-lg text-xs transition-colors ${activeSurface === 'home' && appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
             >
               Agent
+            </button>
+            <button
+              type="button"
+              onClick={onOpenCreationWorkbench}
+              className={`px-1 py-1.5 rounded-lg text-xs transition-colors ${activeSurface === 'creation' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+            >
+              工作台
+            </button>
+            <button
+              type="button"
+              onClick={onOpenResultsCenter}
+              className={`px-1 py-1.5 rounded-lg text-xs transition-colors ${activeSurface === 'results' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+            >
+              结果
             </button>
           </div>
         </div>

@@ -323,7 +323,7 @@ export interface FavoriteCollection {
 
 // ===== 高级创作工作台 =====
 
-export type CreationWorkspaceModule = 'overview' | 'brand' | 'style' | 'series'
+export type CreationWorkspaceModule = 'overview' | 'prompt' | 'brand' | 'style' | 'series'
 export type CreationAspectRatio = 'auto' | '1:1' | '16:9' | '9:16' | '4:3'
 
 export interface CreationBrandAssets {

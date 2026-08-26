@@ -19,6 +19,8 @@ import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
 import CreationWorkbench from './components/CreationWorkbench'
+import PromptStudioModal from './components/PromptStudioModal'
+import ResultsCenter from './components/ResultsCenter'
 import SupportPromptModal from './components/SupportPromptModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
@@ -30,12 +32,15 @@ let defaultConfigImportStarted = false
 let resolveStoreReady: (() => void) | null = null
 const storeReady = new Promise<void>((resolve) => { resolveStoreReady = resolve })
 
+type AppSurface = 'home' | 'creation' | 'results'
+
 export default function App() {
   const appMode = useStore((s) => s.appMode)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
   const showToast = useStore((s) => s.showToast)
-  const [creationWorkbenchOpen, setCreationWorkbenchOpen] = useState(false)
+  const [activeSurface, setActiveSurface] = useState<AppSurface>('home')
+  const [promptStudioOpen, setPromptStudioOpen] = useState(false)
   useDockerApiUrlMigrationNotice()
   useGlobalClickSuppression()
 
@@ -233,11 +238,36 @@ export default function App() {
   return (
     <>
       <Header
-        creationWorkbenchOpen={creationWorkbenchOpen}
-        onOpenCreationWorkbench={() => setCreationWorkbenchOpen(true)}
+        activeSurface={activeSurface}
+        onOpenHome={(mode) => {
+          setActiveSurface('home')
+          useStore.getState().setAppMode(mode)
+        }}
+        onOpenCreationWorkbench={() => {
+          setPromptStudioOpen(false)
+          setActiveSurface('creation')
+        }}
+        onOpenResultsCenter={() => {
+          setPromptStudioOpen(false)
+          setActiveSurface('results')
+        }}
       />
-      {creationWorkbenchOpen ? (
-        <CreationWorkbench onClose={() => setCreationWorkbenchOpen(false)} />
+      {activeSurface === 'creation' ? (
+        <CreationWorkbench
+          onClose={() => {
+            setPromptStudioOpen(false)
+            setActiveSurface('home')
+          }}
+          onOpenPromptStudio={() => setPromptStudioOpen(true)}
+        />
+      ) : activeSurface === 'results' ? (
+        <ResultsCenter
+          onClose={() => setActiveSurface('home')}
+          onOpenCreationWorkbench={() => {
+            setPromptStudioOpen(false)
+            setActiveSurface('creation')
+          }}
+        />
       ) : appMode === 'agent' ? (
         <AgentWorkspace />
       ) : (
@@ -248,7 +278,8 @@ export default function App() {
           </div>
         </main>
       )}
-      {!creationWorkbenchOpen && <InputBar />}
+      {activeSurface === 'home' && <InputBar onOpenPromptStudio={() => setPromptStudioOpen(true)} />}
+      <PromptStudioModal open={promptStudioOpen} onClose={() => setPromptStudioOpen(false)} />
       <DetailModal />
       <Lightbox />
       <SettingsModal />
