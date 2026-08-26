@@ -25,6 +25,7 @@ const CATEGORIES: Array<{ value: PromptTemplateCategory | 'all'; label: string }
   { value: 'portrait', label: '人物' },
   { value: 'logo', label: 'Logo' },
   { value: 'infographic', label: '信息图' },
+  { value: 'ppt-report', label: '汇报 PPT' },
   { value: 'custom', label: '我的模板' },
 ]
 
