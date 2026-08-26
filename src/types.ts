@@ -238,6 +238,9 @@ export interface TaskRecord {
   textVerificationByImage?: Record<string, TextVerificationReport>
   /** 输出图片对应的不可修改文字清单，key 为 outputImages 中的图片 id */
   protectedTextsByImage?: Record<string, string[]>
+  /** 主动文字修复任务的自动复核状态 */
+  autoTextVerificationStatus?: 'pending' | 'running' | 'done' | 'error'
+  autoTextVerificationError?: string
   /** 是否启用透明背景后处理 */
   transparentOutput?: boolean
   /** 实际发送给 API 的透明背景辅助提示词 */
