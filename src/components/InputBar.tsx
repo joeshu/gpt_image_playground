@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { deleteFavoriteCollection, useStore, submitTask, submitAgentMessage, stopAgentResponse, addImageFromFile, removeMultipleTasks, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
-import { DEFAULT_PARAMS, type TaskRecord } from '../types'
+import { DEFAULT_PARAMS, type InputImage, type TaskRecord } from '../types'
 import { getActiveAgentRounds } from '../lib/agentConversationState'
 import { getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, isAgentTextApiProfile, normalizeSettings } from '../lib/apiProfiles'
 import { ensureImageCached, getCachedImage } from '../lib/imageCache'
@@ -10,7 +10,7 @@ import { getAtImageQuery, getImageMentionLabel, getPromptIndexFromVisibleIndex, 
 import { normalizeCodexCliImageSize, normalizeImageSize } from '../lib/size'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { getSafeBoundingClientRect } from '../lib/domRect'
-import { collectAgentRoundOutputImageSlots } from '../lib/agentImageReferences'
+import { collectAgentRoundOutputImageSlots, resolveAgentPromptImageReferenceEntries } from '../lib/agentImageReferences'
 import { ALL_FAVORITES_COLLECTION_ID, getTaskFavoriteCollectionIds } from '../lib/favoriteState'
 import { getContentEditableCursor, getContentEditablePlainText, getContentEditableSelection, getMentionTagHtml, setContentEditableCursor, setContentEditableSelection, syncMentionTagSelection } from '../lib/contentEditableMentions'
 import { useHintTooltip } from '../hooks/useHintTooltip'
@@ -55,6 +55,11 @@ function useIsMobile() {
 type AtImageOption =
   | { type: 'input'; key: string; label: string; imageId: string; dataUrl: string; imageIndex: number }
   | { type: 'agent-output'; key: string; label: string; imageId: string; insertText: string }
+
+type PromptEnhancerReference = {
+  image: InputImage
+  label: string
+}
 
 function agentImageMentionMatches(query: string, label: string) {
   const normalized = query.trim().toLowerCase()
@@ -363,6 +368,7 @@ export default function InputBar() {
   const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem('mobile-composer-collapsed') !== 'false')
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
+  const [agentPromptReferenceImages, setAgentPromptReferenceImages] = useState<PromptEnhancerReference[]>([])
   const [showPromptVersions, setShowPromptVersions] = useState(false)
   const [showPromptTemplates, setShowPromptTemplates] = useState(false)
   const [showStateOwnedPptBrief, setShowStateOwnedPptBrief] = useState(false)
@@ -473,6 +479,62 @@ export default function InputBar() {
   const activeAgentConversation = appMode === 'agent'
     ? agentConversations.find((conversation) => conversation.id === activeAgentConversationId) ?? null
     : null
+  const agentPromptReferenceEntries = useMemo(() => {
+    if (!activeAgentConversation) return []
+    return resolveAgentPromptImageReferenceEntries(
+      prompt,
+      getActiveAgentRounds(activeAgentConversation),
+      tasks,
+    )
+  }, [activeAgentConversation, prompt, tasks])
+  useEffect(() => {
+    let cancelled = false
+    if (!showPromptEnhancer || agentPromptReferenceEntries.length === 0) {
+      setAgentPromptReferenceImages([])
+      return
+    }
+
+    const loadAgentPromptReferences = async () => {
+      const loaded = await Promise.all(agentPromptReferenceEntries.map(async ({ imageId, label }) => {
+        const dataUrl = await ensureImageCached(imageId)
+        return dataUrl ? { image: { id: imageId, dataUrl }, label } : null
+      }))
+      if (!cancelled) {
+        setAgentPromptReferenceImages(loaded.filter((entry): entry is PromptEnhancerReference => Boolean(entry)))
+      }
+    }
+
+    void loadAgentPromptReferences()
+    return () => {
+      cancelled = true
+    }
+  }, [agentPromptReferenceEntries, showPromptEnhancer])
+  const promptEnhancerReferenceEntries = useMemo(() => {
+    const merged = new Map<string, PromptEnhancerReference>()
+    const addReference = (image: InputImage, label: string) => {
+      const existing = merged.get(image.id)
+      if (!existing) {
+        merged.set(image.id, { image, label })
+        return
+      }
+      const labels = existing.label.split('、')
+      if (!labels.includes(label)) {
+        existing.label = labels.concat(label).join('、')
+      }
+    }
+
+    inputImages.forEach((image, index) => addReference(image, getImageMentionLabel(index)))
+    agentPromptReferenceImages.forEach(({ image, label }) => addReference(image, label))
+    return Array.from(merged.values())
+  }, [agentPromptReferenceImages, inputImages])
+  const promptEnhancerReferenceImages = useMemo(
+    () => promptEnhancerReferenceEntries.map(({ image }) => image),
+    [promptEnhancerReferenceEntries],
+  )
+  const promptEnhancerReferenceLabels = useMemo(
+    () => promptEnhancerReferenceEntries.map(({ label }) => label),
+    [promptEnhancerReferenceEntries],
+  )
   const activeAgentIsRunning = Boolean(activeAgentConversation?.rounds.some((round) => round.status === 'running'))
   const effectiveSettings = useMemo(() => (
     activeProfile.id === settingsActiveProfile.id
@@ -2137,7 +2199,8 @@ export default function InputBar() {
         open={showPromptEnhancer}
         prompt={prompt}
         profile={promptEnhancerProfile}
-        referenceImages={inputImages}
+        referenceImages={promptEnhancerReferenceImages}
+        referenceImageLabels={promptEnhancerReferenceLabels}
         onClose={() => setShowPromptEnhancer(false)}
         onApply={(enhancedPrompt) => {
           setPrompt(enhancedPrompt)
