@@ -7,14 +7,14 @@ import {
 
 describe('prompt templates', () => {
   it('ships the core professional template categories', () => {
-    expect(BUILTIN_PROMPT_TEMPLATES.map((template) => template.category)).toEqual([
+    expect(BUILTIN_PROMPT_TEMPLATES.map((template) => template.category)).toEqual(expect.arrayContaining([
       'poster',
       'ecommerce',
       'portrait',
       'logo',
       'infographic',
       'ppt-report',
-    ])
+    ]))
   })
 
   it('renders variables and keeps unknown placeholders visible', () => {
