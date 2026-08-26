@@ -66,9 +66,15 @@ export async function requestBrowserNotificationPermission(): Promise<BrowserNot
 }
 
 export async function subscribeNotificationActions(listener: (target: NotificationTarget) => void) {
-  if (!isNativeApp()) return () => undefined
+  const handleWebAction = (event: Event) => listener((event as CustomEvent<NotificationTarget>).detail)
+  window.addEventListener('task-notification-action', handleWebAction)
+  if (!isNativeApp()) return () => window.removeEventListener('task-notification-action', handleWebAction)
+
   const handle = await NativeNotifications.addListener('notificationAction', listener)
-  return () => { void handle.remove() }
+  return () => {
+    window.removeEventListener('task-notification-action', handleWebAction)
+    void handle.remove()
+  }
 }
 
 export function showBrowserNotification(title: string, options?: NotificationOptions, target: NotificationTarget = {}) {
