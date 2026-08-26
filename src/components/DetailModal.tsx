@@ -13,9 +13,10 @@ import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from 
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { replaceImageMentionsForApi } from '../lib/promptImageMentions'
 import { getApiProviderLabel } from '../lib/apiProfiles'
-import { getTaskLineage } from '../lib/taskLineage'
+import { getTaskComparisonImageIds, getTaskLineage } from '../lib/taskLineage'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
+import ImageCompareModal from './ImageCompareModal'
 import ViewportTooltip from './ViewportTooltip'
 
 export default function DetailModal() {
@@ -40,6 +41,7 @@ export default function DetailModal() {
   const [now, setNow] = useState(Date.now())
   const [showRawUrlsModal, setShowRawUrlsModal] = useState(false)
   const [showRawResponseModal, setShowRawResponseModal] = useState(false)
+  const [showImageComparison, setShowImageComparison] = useState(false)
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
   const rawUrlsModalRef = useRef<HTMLDivElement>(null)
@@ -109,6 +111,7 @@ export default function DetailModal() {
   // Reset index when task changes
   useEffect(() => {
     setImageIndex(0)
+    setShowImageComparison(false)
   }, [detailTaskId])
 
   useEffect(() => {
@@ -185,6 +188,9 @@ export default function DetailModal() {
   const currentOutputError = currentOutputSlot?.error || ''
   const currentOriginalOutputImageId = currentOutputImageIndex >= 0 ? task?.transparentOriginalImages?.[currentOutputImageIndex] || '' : ''
   const currentOutputPreviewSrc = currentOutputImageId ? outputPreviewSrcs[currentOutputImageId] || '' : ''
+  const comparisonImageIds = task
+    ? getTaskComparisonImageIds(task, lineage.parent, currentOutputImageId)
+    : null
 
   useEffect(() => {
     const outputImageIds = task?.outputImages ?? []
@@ -976,9 +982,20 @@ export default function DetailModal() {
 
             {(lineage.parent || lineage.children.length > 0) && (
               <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
-                <div className="mb-2 flex items-center gap-1.5">
-                  <LinkIcon className="h-4 w-4 text-blue-500" />
-                  <h3 className="text-xs font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">版本链</h3>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <LinkIcon className="h-4 w-4 shrink-0 text-blue-500" />
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">版本链</h3>
+                  </div>
+                  {comparisonImageIds && (
+                    <button
+                      type="button"
+                      onClick={() => setShowImageComparison(true)}
+                      className="flex h-9 shrink-0 items-center rounded-lg border border-blue-200 bg-white/85 px-3 text-xs font-medium text-blue-600 transition hover:bg-white active:scale-[0.98] dark:border-blue-500/25 dark:bg-white/[0.06] dark:text-blue-300 dark:hover:bg-white/[0.1]"
+                    >
+                      对比版本
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {lineage.parent && (
@@ -1263,6 +1280,14 @@ export default function DetailModal() {
             </div>
           </div>
         </div>
+      )}
+
+      {showImageComparison && comparisonImageIds && (
+        <ImageCompareModal
+          beforeImageId={comparisonImageIds.beforeImageId}
+          afterImageId={comparisonImageIds.afterImageId}
+          onClose={() => setShowImageComparison(false)}
+        />
       )}
     </div>
   )
