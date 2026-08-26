@@ -125,7 +125,7 @@ describe('agent image references', () => {
     const firstRound = round({ index: 1, outputTaskIds: ['task-a'] })
     const rounds = [firstRound]
     const entries = resolveAgentPromptImageReferenceEntries(
-      '先看 @第1轮图2，再看 \\u2063@第1轮图2\\u2064，最后看 @第1轮图1',
+      '先看 @第1轮图2，再看 ' + getSelectedTextMentionLabel('@第1轮图2') + '，最后看 @第1轮图1',
       rounds,
       [task('task-a', ['image-a1', 'image-a2'])],
     )
