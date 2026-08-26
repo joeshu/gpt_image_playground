@@ -1,3 +1,6 @@
+import { registerPlugin } from '@capacitor/core'
+import { isNativeApp } from './platform'
+
 export type BrowserNotificationPermission = NotificationPermission | 'unsupported'
 export type BrowserNotificationPermissionResult =
   | { ok: true }
@@ -5,6 +8,14 @@ export type BrowserNotificationPermissionResult =
 export type BrowserNotificationReadiness =
   | { ok: true }
   | { ok: false; reason: 'unsupported' | 'insecure' | 'denied' | 'default' }
+
+interface NativeNotificationsPlugin {
+  getPermission(): Promise<{ permission: 'granted' | 'denied' | 'default' }>
+  requestPermission(): Promise<{ permission: 'granted' | 'denied' | 'default' }>
+  notify(options: { title: string; body: string }): Promise<void>
+}
+
+const NativeNotifications = registerPlugin<NativeNotificationsPlugin>('NativeNotifications')
 
 function getNotificationConstructor() {
   if (typeof window === 'undefined' || !('Notification' in window)) return null
@@ -16,6 +27,7 @@ function isSecureNotificationContext() {
 }
 
 export function getBrowserNotificationReadiness(): BrowserNotificationReadiness {
+  if (isNativeApp()) return { ok: true }
   const NotificationConstructor = getNotificationConstructor()
   if (!NotificationConstructor) return { ok: false, reason: 'unsupported' }
   if (!isSecureNotificationContext()) return { ok: false, reason: 'insecure' }
@@ -24,6 +36,20 @@ export function getBrowserNotificationReadiness(): BrowserNotificationReadiness 
 }
 
 export async function requestBrowserNotificationPermission(): Promise<BrowserNotificationPermissionResult> {
+  if (isNativeApp()) {
+    try {
+      const current = await NativeNotifications.getPermission()
+      if (current.permission === 'granted') return { ok: true }
+      if (current.permission === 'denied') return { ok: false, reason: 'denied' }
+      const requested = await NativeNotifications.requestPermission()
+      return requested.permission === 'granted'
+        ? { ok: true }
+        : { ok: false, reason: requested.permission }
+    } catch (error) {
+      return { ok: false, reason: 'error', error }
+    }
+  }
+
   const readiness = getBrowserNotificationReadiness()
   if (readiness.ok || readiness.reason !== 'default') return readiness
 
@@ -38,6 +64,13 @@ export async function requestBrowserNotificationPermission(): Promise<BrowserNot
 }
 
 export function showBrowserNotification(title: string, options?: NotificationOptions) {
+  if (isNativeApp()) {
+    void NativeNotifications.notify({ title, body: options?.body ?? '' }).catch((error) => {
+      console.warn('Native task notification failed:', error)
+    })
+    return true
+  }
+
   const NotificationConstructor = getNotificationConstructor()
   if (!NotificationConstructor || !isSecureNotificationContext() || NotificationConstructor.permission !== 'granted') return false
 
