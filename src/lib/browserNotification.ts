@@ -67,7 +67,7 @@ export async function requestBrowserNotificationPermission(): Promise<BrowserNot
   }
 }
 
-export async function subscribeNotificationActions(listener: (target: NotificationTarget) => void) {
+export async function subscribeNotificationActions(listener: (target: NotificationTarget) => void | Promise<void>) {
   const handleWebAction = (event: Event) => listener((event as CustomEvent<NotificationTarget>).detail)
   window.addEventListener('task-notification-action', handleWebAction)
   if (!isNativeApp()) return () => window.removeEventListener('task-notification-action', handleWebAction)
@@ -77,9 +77,8 @@ export async function subscribeNotificationActions(listener: (target: Notificati
     if (!target.taskId && !target.conversationId) return
     if (target.actionId && target.actionId === lastActionId) return
     lastActionId = target.actionId ?? ''
-    listener(target)
-    void NativeNotifications.clearPendingAction().catch((error) => {
-      console.warn('Failed to clear pending notification action:', error)
+    void Promise.resolve(listener(target)).then(() => NativeNotifications.clearPendingAction()).catch((error) => {
+      console.warn('Failed to handle pending notification action:', error)
     })
   }
   const handle = await NativeNotifications.addListener('notificationAction', handleAction)
