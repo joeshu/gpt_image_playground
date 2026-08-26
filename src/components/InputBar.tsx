@@ -2137,6 +2137,7 @@ export default function InputBar() {
         open={showPromptEnhancer}
         prompt={prompt}
         profile={promptEnhancerProfile}
+        referenceImages={inputImages}
         onClose={() => setShowPromptEnhancer(false)}
         onApply={(enhancedPrompt) => {
           setPrompt(enhancedPrompt)
