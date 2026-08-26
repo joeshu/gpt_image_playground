@@ -11,6 +11,7 @@ interface PromptEnhancerModalProps {
   prompt: string
   profile: ApiProfile | null
   referenceImages?: InputImage[]
+  referenceImageLabels?: string[]
   onClose: () => void
   onApply: (prompt: string) => void
 }
@@ -31,7 +32,7 @@ const SECTION_LABELS: Array<[keyof PromptEnhancementResult['sections'], string]>
   ['constraints', '约束'],
 ]
 
-export default function PromptEnhancerModal({ open, prompt, profile, referenceImages = [], onClose, onApply }: PromptEnhancerModalProps) {
+export default function PromptEnhancerModal({ open, prompt, profile, referenceImages = [], referenceImageLabels = [], onClose, onApply }: PromptEnhancerModalProps) {
   const [level, setLevel] = useState<PromptEnhancementLevel>('balanced')
   const [taskTypeOverride, setTaskTypeOverride] = useState<PromptTaskType | null>(null)
   const [result, setResult] = useState<PromptEnhancementResult | null>(null)
@@ -40,6 +41,10 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
   const detectedIntent = useMemo(() => compilePromptIntent(prompt), [prompt])
   const activeTaskType = taskTypeOverride ?? detectedIntent.taskType
   const referenceImageCount = Math.min(referenceImages.length, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES)
+  const referenceLabelSummary = referenceImageLabels
+    .slice(0, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES)
+    .filter(Boolean)
+    .join('、')
 
   useCloseOnEscape(open && !isLoading, onClose)
   usePreventBackgroundScroll(open)
@@ -63,7 +68,14 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
     setError('')
     try {
       savePromptVersion({ prompt, source: 'original' })
-      const enhanced = await enhancePrompt({ profile, prompt, level, taskType: activeTaskType, referenceImages })
+      const enhanced = await enhancePrompt({
+        profile,
+        prompt,
+        level,
+        taskType: activeTaskType,
+        referenceImages,
+        referenceImageLabels,
+      })
       savePromptVersion({ prompt: enhanced.enhancedPrompt, source: 'enhanced', enhancementLevel: level })
       setResult(enhanced)
     } catch (reason) {
@@ -145,6 +157,9 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
             {referenceImageCount > 0
               ? `本次将分析 ${referenceImageCount} 张参考图的版式、色彩、层级、留白与风格；不会自动改写当前业务事实。`
               : '未附带参考图；上传或 @ 引用图片后，增强器可感知其版式和风格。'}
+            {referenceLabelSummary && (
+              <div className="mt-1 truncate text-[10px] text-blue-600 dark:text-blue-300">已映射引用：{referenceLabelSummary}</div>
+            )}
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
