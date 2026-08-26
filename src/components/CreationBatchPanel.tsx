@@ -11,6 +11,7 @@ import {
   removeCreationBatchJob,
   saveCreationBatchState,
 } from '../lib/creationBatch'
+import { savePromptVersion } from '../lib/promptVersionHistory'
 import { submitTask, useStore } from '../store'
 import type { CreationBatchJob, CreationBatchItem, CreationProject, InputImage, TaskRecord } from '../types'
 
@@ -266,6 +267,7 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
           useStore.getState().setParams(job.params)
           useStore.getState().setInputImages(images)
           useStore.getState().setPrompt(prompt)
+          savePromptVersion({ prompt, source: 'generated' })
           await submitTask()
           const createdTask = useStore.getState().tasks.find((task) => !beforeTaskIds.has(task.id))
           if (!createdTask) throw new Error('任务未提交，请检查 API 配置、网络状态和提示词')
