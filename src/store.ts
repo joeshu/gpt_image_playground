@@ -3654,7 +3654,7 @@ async function runAutomaticTextVerification(opts: {
       throw new Error('自动复核需要先配置支持图像理解的 Agent Responses API')
     }
 
-    const reports = {}
+    const reports: NonNullable<TaskRecord['textVerificationByImage']> = {}
     for (let index = 0; index < outputIds.length; index += 1) {
       const resultImageId = outputIds[index]
       const resultDataUrl = outputDataUrls[index]
