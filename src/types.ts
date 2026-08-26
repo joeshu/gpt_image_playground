@@ -321,6 +321,59 @@ export interface FavoriteCollection {
   updatedAt: number
 }
 
+// ===== 高级创作工作台 =====
+
+export type CreationWorkspaceModule = 'overview' | 'brand' | 'style' | 'series'
+export type CreationAspectRatio = 'auto' | '1:1' | '16:9' | '9:16' | '4:3'
+
+export interface CreationBrandAssets {
+  name: string
+  slogan: string
+  primaryColor: string
+  secondaryColor: string
+  neutralColor: string
+  visualNotes: string
+  referenceImageIds: string[]
+}
+
+export interface CreationStyleLock {
+  enabled: boolean
+  visualDirection: string
+  keywords: string
+  avoid: string
+  layoutRules: string
+}
+
+export interface CreationVariable {
+  id: string
+  name: string
+  values: string[]
+}
+
+export interface CreationSeriesConfig {
+  name: string
+  subject: string
+  consistencyRules: string
+  aspectRatio: CreationAspectRatio
+  variables: CreationVariable[]
+}
+
+export interface CreationProject {
+  id: string
+  name: string
+  description: string
+  brand: CreationBrandAssets
+  style: CreationStyleLock
+  series: CreationSeriesConfig
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CreationWorkspaceState {
+  projects: CreationProject[]
+  activeProjectId: string | null
+}
+
 // ===== Agent 模式 =====
 
 export type AgentMessageRole = 'user' | 'assistant'

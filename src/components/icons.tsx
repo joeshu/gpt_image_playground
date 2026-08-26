@@ -113,6 +113,15 @@ export function EditIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function CreationWorkbenchIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 8.5h16M6.5 5h11A2.5 2.5 0 0120 7.5v9A2.5 2.5 0 0117.5 19h-11A2.5 2.5 0 014 16.5v-9A2.5 2.5 0 016.5 5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 12h3m-1.5-1.5V15M15.5 11.5h.01M15.5 14.5h.01" />
+    </svg>
+  )
+}
+
 export function RefreshIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
@@ -232,4 +241,3 @@ export function TransparentBgIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
-
