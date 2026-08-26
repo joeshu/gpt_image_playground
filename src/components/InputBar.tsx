@@ -22,6 +22,8 @@ import DragUploadOverlay from './input/dragUploadOverlay'
 import InputBatchBars from './input/inputBatchBars'
 import InputParamsPanel from './input/inputParamsPanel'
 import PromptEnhancerModal from './PromptEnhancerModal'
+import PromptVersionHistoryModal from './PromptVersionHistoryModal'
+import { savePromptVersion } from '../lib/promptVersionHistory'
 
 /** API 支持的最大参考图数量 */
 const API_MAX_IMAGES = 16
@@ -357,6 +359,7 @@ export default function InputBar() {
   const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem('mobile-composer-collapsed') !== 'false')
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
+  const [showPromptVersions, setShowPromptVersions] = useState(false)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
   const [imageDragIndex, setImageDragIndex] = useState<number | null>(null)
@@ -480,12 +483,13 @@ export default function InputBar() {
     ? '描述要完成的任务，可输入 @ 来引用图片...'
     : '描述你想生成的图片，可输入 @ 来指定参考图...'
   const submitCurrentMode = useCallback(() => {
+    savePromptVersion({ prompt, source: 'generated' })
     if (appMode === 'agent') {
       void submitAgentMessage()
     } else {
       void submitTask()
     }
-  }, [appMode])
+  }, [appMode, prompt])
   const stopActiveAgentResponse = useCallback(() => {
     stopAgentResponse(activeAgentConversationId)
   }, [activeAgentConversationId])
@@ -1835,7 +1839,15 @@ export default function InputBar() {
             )}
           </div>
 
-          <div className="mt-2 flex justify-end">
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPromptVersions(true)}
+              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white/80 px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50 active:scale-[0.98] dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300"
+            >
+              <span aria-hidden="true">↺</span>
+              版本
+            </button>
             <button
               type="button"
               onClick={() => setShowPromptEnhancer(true)}
@@ -2034,6 +2046,17 @@ export default function InputBar() {
           />
         </div>
       </div>
+
+      <PromptVersionHistoryModal
+        open={showPromptVersions}
+        onClose={() => setShowPromptVersions(false)}
+        onRestore={(restoredPrompt) => {
+          setPrompt(restoredPrompt)
+          setPromptExpanded(true)
+          setMobileCollapsed(false)
+          showToast('已回退到所选提示词版本', 'success')
+        }}
+      />
 
       <PromptEnhancerModal
         open={showPromptEnhancer}
