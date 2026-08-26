@@ -95,7 +95,7 @@ function extractReferences(prompt: string) {
 }
 
 function extractImmutableRequirements(prompt: string) {
-  return Array.from(prompt.matchAll(/[^。；\n]{0,30}(?:不可修改|不能修改|必须保留|原文保留|数字不变|文字不变)[^。；\n]{0,50}/g), (match) => match[0].trim())
+  return Array.from(prompt.matchAll(/(?:不可修改|不能修改|必须保留|原文保留|数字不变|文字不变)[^。；，,\n]{0,30}/g), (match) => match[0].trim())
 }
 
 export function compilePromptIntent(prompt: string, overrideType?: PromptTaskType): PromptIntent {
