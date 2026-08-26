@@ -6,7 +6,8 @@ import { formatImageRatio } from '../lib/size'
 import { getParamDisplay, ActualValueBadge } from '../lib/paramDisplay'
 import { DEFAULT_IMAGES_MODEL, DEFAULT_FAL_MODEL } from '../lib/apiProfiles'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
-import { CodeIcon, TransparentBgIcon } from './icons'
+import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
+import { CodeIcon, DownloadIcon, TransparentBgIcon } from './icons'
 import ViewportTooltip from './ViewportTooltip'
 
 interface Props {
@@ -77,9 +78,11 @@ export default function TaskCard({
   const [swipeActionActive, setSwipeActionActive] = useState(false)
   const [swipeDirection, setSwipeDirection] = useState<-1 | 0 | 1>(0)
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const toggleTaskSelection = useStore((s) => s.toggleTaskSelection)
   const settings = useStore((s) => s.settings)
   const openFavoritePicker = useStore((s) => s.openFavoritePicker)
+  const showToast = useStore((s) => s.showToast)
   const streamPreviewSrc = useStore((s) => s.streamPreviews[task.id] || '')
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const swipeResetTimerRef = useRef<number | null>(null)
@@ -304,6 +307,31 @@ export default function TaskCard({
       ? 'bg-gray-500 dark:bg-gray-600'
       : 'bg-blue-500'
     : 'bg-gray-200 dark:bg-gray-700'
+
+  const handleDownload = async () => {
+    if (!task.outputImages.length || isDownloading) return
+    setIsDownloading(true)
+    try {
+      const fileNameBase = `task-${task.id}`
+      const result = settings.zipDownloadRoutes.includes('task-detail-all') && task.outputImages.length > 1
+        ? await downloadImageEntriesAsZip(getImageZipEntries(task.outputImages, fileNameBase), fileNameBase)
+        : await downloadImageIds(task.outputImages, fileNameBase)
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
+        showToast('下载失败', 'error')
+      } else if (result.failCount > 0) {
+        showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')
+      } else {
+        showToast(result.locationHint ?? `下载成功：${result.successCount} 张图片`, 'success')
+      }
+    } catch (err) {
+      console.error(err)
+      showToast('下载失败', 'error')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   const qualityDisplay = getParamDisplay(task, 'quality')
   const showQuality = task.params.quality !== 'auto' || qualityDisplay.isMismatch
@@ -656,6 +684,16 @@ export default function TaskCard({
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
+                </TaskActionButton>
+              )}
+              {task.status === 'done' && task.outputImages.length > 0 && (
+                <TaskActionButton
+                  tooltip={isDownloading ? '正在准备下载' : task.outputImages.length > 1 ? `下载全部 ${task.outputImages.length} 张图片` : '下载图片'}
+                  onClick={() => { void handleDownload() }}
+                  className="p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-950/30 text-gray-400 hover:text-green-500 transition disabled:opacity-40"
+                  disabled={isDownloading}
+                >
+                  <DownloadIcon className={`h-4 w-4 ${isDownloading ? 'animate-pulse' : ''}`} />
                 </TaskActionButton>
               )}
               <TaskActionButton
