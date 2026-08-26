@@ -834,7 +834,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
       {showGestureHint && (
         <button
           type="button"
-          className="absolute bottom-[calc(1.25rem+var(--safe-area-bottom))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/15 bg-black/55 px-4 py-2 text-xs text-white/90 shadow-lg backdrop-blur-md"
+          className={`absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/15 bg-black/55 px-4 py-2 text-xs text-white/90 shadow-lg backdrop-blur-md ${showInputActions ? 'bottom-[calc(5.5rem+var(--safe-area-bottom))]' : 'bottom-[calc(1.25rem+var(--safe-area-bottom))]'}`}
           onClick={(e) => {
             e.stopPropagation()
             localStorage.setItem('image-viewer-gesture-hint-seen', 'true')
