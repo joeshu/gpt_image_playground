@@ -149,6 +149,7 @@ export default function ConfirmDialog() {
             {confirmDialog.showCancel !== false && (
               <button
                 onClick={handleCancel}
+                data-haptic="light"
                 disabled={isSubmitting}
                  className="min-h-11 flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 dark:border-white/[0.08] dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -156,6 +157,7 @@ export default function ConfirmDialog() {
               </button>
             )}
             <button
+              data-haptic={confirmTone === 'danger' ? 'warning' : 'success'}
               onClick={() => {
                 if (!canConfirm || isSubmitting) return
                 if (!confirmDialog.awaitAction) {
