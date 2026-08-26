@@ -9,6 +9,7 @@ KEYCHAIN_PLUGIN_PATH="$APP_DIR/SecureStoragePlugin.swift"
 NATIVE_EXPORT_PLUGIN_PATH="$APP_DIR/NativeExportPlugin.swift"
 NATIVE_LIFECYCLE_PLUGIN_PATH="$APP_DIR/NativeLifecyclePlugin.swift"
 NATIVE_HAPTICS_PLUGIN_PATH="$APP_DIR/NativeHapticsPlugin.swift"
+NATIVE_NOTIFICATIONS_PLUGIN_PATH="$APP_DIR/NativeNotificationsPlugin.swift"
 VIEW_CONTROLLER_PATH="$APP_DIR/AppViewController.swift"
 STORYBOARD_PATH="$APP_DIR/Base.lproj/Main.storyboard"
 
@@ -331,6 +332,82 @@ public class NativeHapticsPlugin: CAPPlugin, CAPBridgedPlugin {
 }
 SWIFT
 
+cat > "$NATIVE_NOTIFICATIONS_PLUGIN_PATH" <<'SWIFT'
+import Capacitor
+import UserNotifications
+
+@objc(NativeNotificationsPlugin)
+public class NativeNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, UNUserNotificationCenterDelegate {
+    public let identifier = "NativeNotificationsPlugin"
+    public let jsName = "NativeNotifications"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "getPermission", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestPermission", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "notify", returnType: CAPPluginReturnPromise)
+    ]
+
+    override public func load() {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    private func permissionName(_ status: UNAuthorizationStatus) -> String {
+        switch status {
+        case .authorized, .provisional, .ephemeral: return "granted"
+        case .denied: return "denied"
+        default: return "default"
+        }
+    }
+
+    @objc func getPermission(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            call.resolve(["permission": self.permissionName(settings.authorizationStatus)])
+        }
+    }
+
+    @objc func requestPermission(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error = error {
+                call.reject("Notification permission failed: \(error.localizedDescription)")
+                return
+            }
+            call.resolve(["permission": granted ? "granted" : "denied"])
+        }
+    }
+
+    @objc func notify(_ call: CAPPluginCall) {
+        guard let title = call.getString("title"), !title.isEmpty else {
+            call.reject("Missing notification title")
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = call.getString("body") ?? ""
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "task-completion-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                call.reject("Notification delivery failed: \(error.localizedDescription)")
+            } else {
+                call.resolve()
+            }
+        }
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+}
+SWIFT
+
 cat > "$VIEW_CONTROLLER_PATH" <<'SWIFT'
 import Capacitor
 import UIKit
@@ -341,6 +418,7 @@ public class AppViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(NativeExportPlugin())
         bridge?.registerPluginInstance(NativeLifecyclePlugin())
         bridge?.registerPluginInstance(NativeHapticsPlugin())
+        bridge?.registerPluginInstance(NativeNotificationsPlugin())
     }
 }
 SWIFT
@@ -359,7 +437,7 @@ group = project.main_group.find_subpath('App', true)
 privacy = group.files.find { |item| item.path == 'PrivacyInfo.xcprivacy' } || group.new_file('PrivacyInfo.xcprivacy')
 target.resources_build_phase.add_file_reference(privacy, true) unless target.resources_build_phase.files_references.include?(privacy)
 
-['SecureStoragePlugin.swift', 'NativeExportPlugin.swift', 'NativeLifecyclePlugin.swift', 'NativeHapticsPlugin.swift', 'AppViewController.swift'].each do |path|
+['SecureStoragePlugin.swift', 'NativeExportPlugin.swift', 'NativeLifecyclePlugin.swift', 'NativeHapticsPlugin.swift', 'NativeNotificationsPlugin.swift', 'AppViewController.swift'].each do |path|
   file = group.files.find { |item| item.path == path } || group.new_file(path)
   target.source_build_phase.add_file_reference(file, true) unless target.source_build_phase.files_references.include?(file)
 end
@@ -372,5 +450,6 @@ grep -q "SecureStoragePlugin.swift" "$PROJECT_PATH"
 grep -q "NativeExportPlugin.swift" "$PROJECT_PATH"
 grep -q "NativeLifecyclePlugin.swift" "$PROJECT_PATH"
 grep -q "NativeHapticsPlugin.swift" "$PROJECT_PATH"
+grep -q "NativeNotificationsPlugin.swift" "$PROJECT_PATH"
 grep -q "AppViewController.swift" "$PROJECT_PATH"
-echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage, native export, lifecycle events, and haptic feedback"
+echo "Configured iOS app version $APP_VERSION ($BUILD_NUMBER), deployment target 16.0 with Keychain storage, native export, lifecycle events, haptic feedback, and native notifications"
