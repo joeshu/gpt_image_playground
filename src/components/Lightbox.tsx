@@ -8,6 +8,7 @@ import { suppressGlobalClicks } from '../lib/clickSuppression'
 import { ensureImageCached, getCachedImage } from '../lib/imageCache'
 import { downloadImageIds } from '../lib/downloadImages'
 import { clampImagePan, getImagePanBounds } from '../lib/imageViewerGeometry'
+import { getAdjacentImageIds } from '../lib/imageViewerPreload'
 import ButtonTooltip from './input/buttonTooltip'
 import { CloseIcon, DownloadIcon, EditIcon, RefreshIcon } from './icons'
 
@@ -132,6 +133,13 @@ export default function Lightbox() {
   const currentIndex = lightboxImageId ? lightboxImageList.indexOf(lightboxImageId) : -1
   const total = lightboxImageList.length
   const showNav = total > 1
+
+  useEffect(() => {
+    if (!lightboxImageId) return
+    getAdjacentImageIds(lightboxImageList, lightboxImageId).forEach((id) => {
+      void ensureImageCached(id).catch(() => undefined)
+    })
+  }, [lightboxImageId, lightboxImageList])
 
   const goTo = useCallback((idx: number) => {
     if (lightboxImageList.length === 0) return
@@ -291,6 +299,16 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
   // 缩放倍率显示：2s 无操作后自动隐藏
   const [showZoomBadge, setShowZoomBadge] = useState(false)
   const [showGestureHint, setShowGestureHint] = useState(() => localStorage.getItem('image-viewer-gesture-hint-seen') !== 'true')
+
+  useEffect(() => {
+    if (!showGestureHint) return
+    const timer = window.setTimeout(() => {
+      localStorage.setItem('image-viewer-gesture-hint-seen', 'true')
+      setShowGestureHint(false)
+    }, 4500)
+    return () => window.clearTimeout(timer)
+  }, [showGestureHint])
+
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 拖拽状态
   const dragRef = useRef({
