@@ -87,9 +87,10 @@ function AtImageOptionThumb({ option }: { option: AtImageOption }) {
 
 interface InputBarProps {
   onOpenPromptStudio?: () => void
+  promptStudioApplyToken?: number
 }
 
-export default function InputBar({ onOpenPromptStudio }: InputBarProps) {
+export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 0 }: InputBarProps) {
   const prompt = useStore((s) => s.prompt)
   const appMode = useStore((s) => s.appMode)
   const setPrompt = useStore((s) => s.setPrompt)
@@ -446,6 +447,14 @@ export default function InputBar({ onOpenPromptStudio }: InputBarProps) {
   const [nInputFocused, setNInputFocused] = useState(false)
   const dragCounter = useRef(0)
   const isMobile = useIsMobile()
+
+  const lastPromptStudioApplyTokenRef = useRef(promptStudioApplyToken)
+  useEffect(() => {
+    if (lastPromptStudioApplyTokenRef.current === promptStudioApplyToken) return
+    lastPromptStudioApplyTokenRef.current = promptStudioApplyToken
+    setPromptExpanded(true)
+    setMobileCollapsed(false)
+  }, [promptStudioApplyToken])
 
   useEffect(() => {
     if (isMobile) localStorage.setItem('mobile-composer-collapsed', String(mobileCollapsed))

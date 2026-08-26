@@ -41,8 +41,18 @@ export default function App() {
   const showToast = useStore((s) => s.showToast)
   const [activeSurface, setActiveSurface] = useState<AppSurface>('home')
   const [promptStudioOpen, setPromptStudioOpen] = useState(false)
+  const [promptStudioApplyToken, setPromptStudioApplyToken] = useState(0)
+  const [creationBatchBusy, setCreationBatchBusy] = useState(false)
   useDockerApiUrlMigrationNotice()
   useGlobalClickSuppression()
+
+  const canNavigateToSurface = (surface: AppSurface) => {
+    if (creationBatchBusy && surface !== 'creation') {
+      showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
+      return false
+    }
+    return true
+  }
 
   useEffect(() => {
     let disposed = false
@@ -240,6 +250,8 @@ export default function App() {
       <Header
         activeSurface={activeSurface}
         onOpenHome={(mode) => {
+          if (!canNavigateToSurface('home')) return
+          setPromptStudioOpen(false)
           setActiveSurface('home')
           useStore.getState().setAppMode(mode)
         }}
@@ -248,38 +260,54 @@ export default function App() {
           setActiveSurface('creation')
         }}
         onOpenResultsCenter={() => {
+          if (!canNavigateToSurface('results')) return
           setPromptStudioOpen(false)
           setActiveSurface('results')
         }}
+        onOpenSettings={() => {
+          if (creationBatchBusy) {
+            showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
+            return
+          }
+          useStore.getState().setShowSettings(true)
+        }}
       />
-      {activeSurface === 'creation' ? (
-        <CreationWorkbench
+      {activeSurface === 'results' ? (
+        <ResultsCenter
           onClose={() => {
-            setPromptStudioOpen(false)
+            if (!canNavigateToSurface('home')) return
             setActiveSurface('home')
           }}
-          onOpenPromptStudio={() => setPromptStudioOpen(true)}
-        />
-      ) : activeSurface === 'results' ? (
-        <ResultsCenter
-          onClose={() => setActiveSurface('home')}
           onOpenCreationWorkbench={() => {
             setPromptStudioOpen(false)
             setActiveSurface('creation')
           }}
         />
-      ) : appMode === 'agent' ? (
+      ) : activeSurface === 'home' && appMode === 'agent' ? (
         <AgentWorkspace />
-      ) : (
+      ) : activeSurface === 'home' ? (
         <main data-home-main data-drag-select-surface className="home-main-content">
           <div className="safe-area-x max-w-7xl mx-auto">
             <SearchBar />
             {filterFavorite && !activeFavoriteCollectionId ? <FavoriteCollectionsView /> : <TaskGrid />}
           </div>
         </main>
-      )}
-      {activeSurface === 'home' && <InputBar onOpenPromptStudio={() => setPromptStudioOpen(true)} />}
-      <PromptStudioModal open={promptStudioOpen} onClose={() => setPromptStudioOpen(false)} />
+      ) : null}
+      <CreationWorkbench
+        visible={activeSurface === 'creation'}
+        onBatchBusyChange={setCreationBatchBusy}
+        onClose={() => {
+          setPromptStudioOpen(false)
+          setActiveSurface('home')
+        }}
+        onOpenPromptStudio={() => setPromptStudioOpen(true)}
+      />
+      {activeSurface === 'home' && <InputBar onOpenPromptStudio={() => setPromptStudioOpen(true)} promptStudioApplyToken={promptStudioApplyToken} />}
+      <PromptStudioModal
+        open={promptStudioOpen}
+        onClose={() => setPromptStudioOpen(false)}
+        onPromptApplied={() => setPromptStudioApplyToken((value) => value + 1)}
+      />
       <DetailModal />
       <Lightbox />
       <SettingsModal />

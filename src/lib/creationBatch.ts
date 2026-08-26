@@ -13,6 +13,7 @@ import { buildCreationPrompt, normalizeCreationProject } from './creationWorkspa
 import { getCommercialDeliveryCheck, type CommercialDeliveryStatus } from './commercialDeliveryCheck'
 
 export const CREATION_BATCH_STORAGE_KEY = 'gpt-image-playground.creation-batches'
+export const CREATION_BATCH_CHANGED_EVENT = 'creation-batches-changed'
 export const MAX_CREATION_BATCH_JOBS = 10
 export const MAX_CREATION_BATCH_ITEMS = 999
 
@@ -226,7 +227,13 @@ export function loadCreationBatchState(storage: StorageLike | null = getDefaultS
 export function saveCreationBatchState(state: CreationBatchState, storage: StorageLike | null = getDefaultStorage()) {
   if (!storage) return false
   try {
-    storage.setItem(CREATION_BATCH_STORAGE_KEY, JSON.stringify(normalizeCreationBatchState(state)))
+    const normalized = normalizeCreationBatchState(state)
+    storage.setItem(CREATION_BATCH_STORAGE_KEY, JSON.stringify(normalized))
+    if (typeof window !== 'undefined') {
+      // 同一页面内的结果中心需要看到 runner 的实时状态；重新载入时仍由
+      // normalizeCreationBatchState 将 running 安全降级为 paused，等待用户手动恢复。
+      window.dispatchEvent(new CustomEvent(CREATION_BATCH_CHANGED_EVENT, { detail: state }))
+    }
     return true
   } catch {
     return false
@@ -252,6 +259,7 @@ export function getCreationBatchProgress(job: CreationBatchJob) {
     pending,
     running,
     cancelled,
+    finished,
     percent: total > 0 ? Math.round((finished / total) * 100) : 0,
   }
 }

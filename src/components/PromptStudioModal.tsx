@@ -54,7 +54,7 @@ function ToolCard({
   )
 }
 
-export default function PromptStudioModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function PromptStudioModal({ open, onClose, onPromptApplied }: { open: boolean; onClose: () => void; onPromptApplied?: () => void }) {
   const prompt = useStore((s) => s.prompt)
   const setPrompt = useStore((s) => s.setPrompt)
   const appMode = useStore((s) => s.appMode)
@@ -144,6 +144,7 @@ export default function PromptStudioModal({ open, onClose }: { open: boolean; on
   const applyPrompt = (nextPrompt: string) => {
     savePromptVersion({ prompt: nextPrompt, source: 'template' })
     setPrompt(nextPrompt)
+    onPromptApplied?.()
     setActiveTool(null)
     showToast('已应用提示词，可继续修改或生成', 'success')
   }
@@ -214,6 +215,7 @@ export default function PromptStudioModal({ open, onClose }: { open: boolean; on
         onClose={() => setActiveTool(null)}
         onApply={(nextPrompt) => {
           setPrompt(nextPrompt)
+          onPromptApplied?.()
           setActiveTool(null)
           showToast('已应用增强提示词，可继续修改或直接生成', 'success')
         }}
@@ -229,6 +231,7 @@ export default function PromptStudioModal({ open, onClose }: { open: boolean; on
         onClose={() => setActiveTool(null)}
         onRestore={(nextPrompt) => {
           setPrompt(nextPrompt)
+          onPromptApplied?.()
           setActiveTool(null)
           showToast('已回退到所选提示词版本', 'success')
         }}

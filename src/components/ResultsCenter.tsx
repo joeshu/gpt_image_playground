@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { editOutputs, removeTask, reuseConfig, useStore } from '../store'
 import type { CreationBatchJob, TaskRecord } from '../types'
 import { getCommercialDeliveryCheck } from '../lib/commercialDeliveryCheck'
 import {
+  CREATION_BATCH_CHANGED_EVENT,
   getCreationBatchDeliverySummary,
   getCreationBatchProgress,
   loadCreationBatchState,
@@ -102,7 +103,7 @@ function BatchArchive({ jobs, tasks, onOpenWorkbench }: { jobs: CreationBatchJob
               </div>
               <div className="text-left sm:text-right">
                 <div className="text-lg font-semibold tabular-nums text-blue-700 dark:text-blue-300">{progress.percent}%</div>
-                <div className="text-[10px] text-gray-400">{progress.done} / {progress.total} 已完成</div>
+                <div className="text-[10px] text-gray-400">{progress.finished} / {progress.total} 已处理</div>
               </div>
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.08]">
@@ -130,14 +131,32 @@ export default function ResultsCenter({ onClose, onOpenCreationWorkbench }: { on
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>('all')
   const [batchJobs, setBatchJobs] = useState<CreationBatchJob[]>(() => loadCreationBatchState().jobs)
+  const refreshBatchJobs = useCallback(() => {
+    setBatchJobs(loadCreationBatchState().jobs)
+  }, [])
 
   useEffect(() => {
-    setBatchJobs(loadCreationBatchState().jobs)
-  }, [activeTab, tasks])
+    refreshBatchJobs()
+  }, [activeTab, refreshBatchJobs, tasks])
+
+  useEffect(() => {
+    const handleBatchChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ jobs?: CreationBatchJob[] }>).detail
+      if (Array.isArray(detail?.jobs)) {
+        setBatchJobs(detail.jobs)
+      } else {
+        refreshBatchJobs()
+      }
+    }
+    window.addEventListener(CREATION_BATCH_CHANGED_EVENT, handleBatchChanged)
+    return () => window.removeEventListener(CREATION_BATCH_CHANGED_EVENT, handleBatchChanged)
+  }, [refreshBatchJobs])
 
   const taskStats = useMemo(() => {
     const outputTasks = tasks.filter((task) => task.outputImages.length > 0)
-    const checks = outputTasks.flatMap(getTaskDeliveryChecks)
+    const checks = outputTasks
+      .filter((task) => task.status === 'done')
+      .flatMap(getTaskDeliveryChecks)
     return {
       outputTasks: outputTasks.length,
       running: tasks.filter((task) => task.status === 'running').length,

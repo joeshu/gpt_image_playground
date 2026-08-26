@@ -96,9 +96,12 @@ function ModuleCard({
 interface CreationWorkbenchProps {
   onClose: () => void
   onOpenPromptStudio?: () => void
+  onBatchBusyChange?: (busy: boolean) => void
+  /** 工作台离开当前一级页面时保持挂载，避免批量队列 runner 被卸载。 */
+  visible?: boolean
 }
 
-export default function CreationWorkbench({ onClose, onOpenPromptStudio }: CreationWorkbenchProps) {
+export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatchBusyChange, visible = true }: CreationWorkbenchProps) {
   const currentPrompt = useStore((state) => state.prompt)
   const inputImages = useStore((state) => state.inputImages)
   const showToast = useStore((state) => state.showToast)
@@ -119,7 +122,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio }: Creat
     onClose()
   }
 
-  useCloseOnEscape(true, requestClose)
+  useCloseOnEscape(visible, requestClose)
 
   useEffect(() => {
     saveCreationWorkspace(workspace)
@@ -166,6 +169,19 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio }: Creat
         projects: updateNestedProject(project, current.projects, { series: { ...project.series, ...patch } }),
       }
     })
+  }
+
+  const handleBatchBusyChange = (busy: boolean) => {
+    setBatchBusy(busy)
+    onBatchBusyChange?.(busy)
+  }
+
+  const handleOpenPromptStudio = () => {
+    if (batchBusy) {
+      showToast('批量生成进行中，暂不能修改当前提示词', 'info')
+      return
+    }
+    onOpenPromptStudio?.()
   }
 
   const handleNewProject = () => {
@@ -300,7 +316,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio }: Creat
   }
 
   return (
-    <main data-creation-workbench className="min-h-[100svh] bg-gray-50 pb-8 dark:bg-gray-950">
+    <main data-creation-workbench aria-hidden={!visible} className={`${visible ? '' : 'hidden'} min-h-[100svh] bg-gray-50 pb-8 dark:bg-gray-950`}>
       <div className="safe-area-x mx-auto max-w-7xl px-0 pt-24 sm:pt-28">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
@@ -415,7 +431,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio }: Creat
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
                   <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">提示词工作室</div>
                   <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-300">在这里进入统一的提示词工具入口；Gallery 与 Agent 输入栏仍保留快捷入口，避免打断快速创作。</p>
-                  <button type="button" onClick={() => onOpenPromptStudio?.()} className="mt-4 min-h-11 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white shadow-sm hover:bg-blue-700">打开提示词工作室</button>
+                  <button type="button" onClick={handleOpenPromptStudio} className="mt-4 min-h-11 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white shadow-sm hover:bg-blue-700">打开提示词工作室</button>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="text-sm font-semibold text-gray-900 dark:text-white">项目规则</div><p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">品牌与风格规则仍由当前项目控制，应用提示词时会写入版本历史。</p></div>
@@ -486,7 +502,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio }: Creat
                 project={activeProject}
                 currentPrompt={currentPrompt}
                 inputImages={inputImages}
-                onBusyChange={setBatchBusy}
+                onBusyChange={handleBatchBusyChange}
               />
             </div>
           </section>
