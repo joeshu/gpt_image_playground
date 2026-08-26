@@ -42,6 +42,7 @@ import {
 import { copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import { createCustomProfileImportUrl } from '../lib/profileImportUrl'
 import { requestBrowserNotificationPermission, type BrowserNotificationPermissionResult } from '../lib/browserNotification'
+import { isNativeApp } from '../lib/platform'
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_STREAM_PARTIAL_IMAGES, REASONING_EFFORT_VALUES, type AgentApiConfigMode, type ApiProfile, type AppSettings, type CustomProviderDefinition, type ReasoningEffort, type ZipDownloadRoute } from '../types'
 import {
   CUSTOM_PROVIDER_LLM_PROMPT,
@@ -608,7 +609,9 @@ export default function SettingsModal() {
     } else if (result.reason === 'insecure') {
       showToast('系统通知需要 HTTPS 或 localhost 安全上下文', 'error')
     } else if (result.reason === 'denied') {
-      showToast('通知权限已被浏览器拒绝，请在地址栏左侧的网站设置中手动开启', 'error')
+      showToast(isNativeApp()
+        ? '通知权限已关闭，请前往 iOS“设置”中的通知权限重新开启'
+        : '通知权限已被浏览器拒绝，请在地址栏左侧的网站设置中手动开启', 'error')
     } else {
       showToast('没有开启系统通知', 'info')
     }
