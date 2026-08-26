@@ -1,5 +1,6 @@
 import type { AppSettings } from '../../types'
 import Select from '../Select'
+import StorageUsageCard from './StorageUsageCard'
 
 interface GeneralSettingsTabProps {
   draft: AppSettings
@@ -18,6 +19,7 @@ export default function GeneralSettingsTab({
 }: GeneralSettingsTabProps) {
   return (
     <div className="space-y-4">
+      <StorageUsageCard />
       <div className="hidden sm:block">
         <div className="mb-1 flex items-center justify-between">
           <span className="block text-sm text-gray-600 dark:text-gray-300">任务提交方式</span>
