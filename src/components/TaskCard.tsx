@@ -406,7 +406,7 @@ export default function TaskCard({
       )}
       <div className="flex min-h-0 flex-col sm:h-40 sm:flex-row">
         {/* 左侧图片区域 */}
-        <div className="relative flex h-52 w-full flex-shrink-0 items-center justify-center overflow-hidden bg-gray-100 sm:h-full sm:w-40 sm:min-w-[10rem] dark:bg-black/20">
+        <div data-task-card-media className="relative flex h-52 w-full flex-shrink-0 items-center justify-center overflow-hidden bg-gray-100 sm:h-full sm:w-40 sm:min-w-[10rem] dark:bg-black/20">
           {task.status === 'running' && streamPreviewSrc && (
             <>
               <img
@@ -497,7 +497,7 @@ export default function TaskCard({
                 src={thumbSrc}
                 data-image-id={task.outputImages[0]}
                 data-output-image-ids={task.outputImages.join(',')}
-                className="saveable-image w-full h-full object-cover"
+                className="saveable-image h-full w-full object-cover sm:object-cover"
                 alt=""
               />
               {(hasPartialOutputFailure || task.outputImages.length > 1) && (
