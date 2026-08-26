@@ -72,6 +72,9 @@ export function parsePromptEnhancementResponse(responseText: string, originalPro
     originalPrompt,
     enhancedPrompt,
     summary: stringValue(raw.summary),
+    taskType: ['poster', 'ecommerce', 'portrait', 'logo', 'infographic', 'ppt-report', 'state-owned-ppt', 'general'].includes(String(raw.task_type))
+      ? raw.task_type as PromptTaskType
+      : taskType ?? compilePromptIntent(originalPrompt).taskType,
     sections: Object.fromEntries(
       Object.keys(EMPTY_SECTIONS).map((key) => [key, stringValue(rawSections[key])]),
     ) as PromptEnhancementResult['sections'],
