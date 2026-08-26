@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { initStore, restoreExplicitPresetConfig, useStore } from './store'
 import { buildSettingsFromUrlParams, clearUrlSettingParams, getExplicitUrlSettingsIds, hasUrlSettingParams } from './lib/urlSettings'
 import { createDefaultOpenAIProfile, hasDefaultPresetConfig, isAgentTextApiProfile, normalizeSettings } from './lib/apiProfiles'
@@ -34,8 +34,8 @@ export default function App() {
   const appMode = useStore((s) => s.appMode)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
-  const creationWorkbenchOpen = useStore((s) => s.creationWorkbenchOpen)
   const showToast = useStore((s) => s.showToast)
+  const [creationWorkbenchOpen, setCreationWorkbenchOpen] = useState(false)
   useDockerApiUrlMigrationNotice()
   useGlobalClickSuppression()
 
@@ -232,9 +232,12 @@ export default function App() {
 
   return (
     <>
-      <Header />
+      <Header
+        creationWorkbenchOpen={creationWorkbenchOpen}
+        onOpenCreationWorkbench={() => setCreationWorkbenchOpen(true)}
+      />
       {creationWorkbenchOpen ? (
-        <CreationWorkbench />
+        <CreationWorkbench onClose={() => setCreationWorkbenchOpen(false)} />
       ) : appMode === 'agent' ? (
         <AgentWorkspace />
       ) : (

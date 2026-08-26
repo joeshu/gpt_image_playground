@@ -20,12 +20,15 @@ function isInstalledPwa() {
   return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true
 }
 
-export default function Header() {
+interface HeaderProps {
+  creationWorkbenchOpen: boolean
+  onOpenCreationWorkbench: () => void
+}
+
+export default function Header({ creationWorkbenchOpen, onOpenCreationWorkbench }: HeaderProps) {
   const appMode = useStore((s) => s.appMode)
   const setAppMode = useStore((s) => s.setAppMode)
   const setShowSettings = useStore((s) => s.setShowSettings)
-  const setCreationWorkbenchOpen = useStore((s) => s.setCreationWorkbenchOpen)
-  const creationWorkbenchOpen = useStore((s) => s.creationWorkbenchOpen)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
   const agentMobileHeaderVisible = useStore((s) => s.agentMobileHeaderVisible)
   const agentConversations = useStore((s) => s.agentConversations)
@@ -281,7 +284,10 @@ export default function Header() {
             )}
             <div className="relative">
               <button
-                onClick={() => setCreationWorkbenchOpen(true)}
+                onClick={() => {
+                  dismissAllTooltips()
+                  onOpenCreationWorkbench()
+                }}
                 className={`flex h-11 w-10 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-900 sm:w-11 ${creationWorkbenchOpen ? 'bg-gray-100 text-blue-600 dark:bg-white/[0.08] dark:text-blue-300' : 'text-gray-600 dark:text-gray-400'}`}
                 aria-label="创作工作台"
                 aria-pressed={creationWorkbenchOpen}

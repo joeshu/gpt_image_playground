@@ -89,8 +89,11 @@ function ModuleCard({
   )
 }
 
-export default function CreationWorkbench() {
-  const setCreationWorkbenchOpen = useStore((state) => state.setCreationWorkbenchOpen)
+interface CreationWorkbenchProps {
+  onClose: () => void
+}
+
+export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
   const currentPrompt = useStore((state) => state.prompt)
   const inputImages = useStore((state) => state.inputImages)
   const showToast = useStore((state) => state.showToast)
@@ -101,7 +104,7 @@ export default function CreationWorkbench() {
   const activeProject = useMemo(() => getActiveCreationProject(workspace), [workspace])
   const activeModuleInfo = getModule(activeModule)
 
-  useCloseOnEscape(true, () => setCreationWorkbenchOpen(false))
+  useCloseOnEscape(true, onClose)
 
   useEffect(() => {
     saveCreationWorkspace(workspace)
@@ -212,7 +215,7 @@ export default function CreationWorkbench() {
     const prompt = buildCreationPrompt(activeProject, currentPrompt)
     savePromptVersion({ prompt, source: 'template' })
     setPrompt(prompt)
-    setCreationWorkbenchOpen(false)
+    onClose()
     showToast('已将创作规则应用到当前提示词', 'success')
   }
 
@@ -242,7 +245,7 @@ export default function CreationWorkbench() {
       <div className="safe-area-x mx-auto max-w-7xl px-0 pt-24 sm:pt-28">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <button type="button" onClick={() => setCreationWorkbenchOpen(false)} className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-gray-800 dark:hover:bg-white/[0.06] dark:hover:text-gray-200">
+            <button type="button" onClick={onClose} className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-gray-800 dark:hover:bg-white/[0.06] dark:hover:text-gray-200">
               <span aria-hidden="true">←</span>
               返回生成
             </button>
@@ -403,7 +406,7 @@ export default function CreationWorkbench() {
 
         <div className="sticky bottom-0 z-10 mt-6 flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-white/[0.08] dark:bg-gray-900/95 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">自动保存在本机 · 不新增 AI 调用 · 应用后仍可在输入栏继续修改</div>
-          <div className="flex gap-2"><button type="button" onClick={() => setCreationWorkbenchOpen(false)} className="min-h-11 flex-1 rounded-xl bg-gray-100 px-4 text-xs font-medium text-gray-700 dark:bg-white/[0.07] dark:text-gray-200 sm:flex-none">返回</button><button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:flex-none">应用到当前提示词</button></div>
+          <div className="flex gap-2"><button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl bg-gray-100 px-4 text-xs font-medium text-gray-700 dark:bg-white/[0.07] dark:text-gray-200 sm:flex-none">返回</button><button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:flex-none">应用到当前提示词</button></div>
         </div>
       </div>
     </main>
