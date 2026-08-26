@@ -5,7 +5,7 @@ export type BrowserNotificationPermission = NotificationPermission | 'unsupporte
 export type BrowserNotificationPermissionResult =
   | { ok: true }
   | { ok: false; reason: 'unsupported' | 'insecure' | 'denied' | 'default' | 'error'; error?: unknown }
-export type NotificationTarget = { taskId?: string; conversationId?: string }
+export type NotificationTarget = { actionId?: string; taskId?: string; conversationId?: string }
 export type BrowserNotificationReadiness =
   | { ok: true }
   | { ok: false; reason: 'unsupported' | 'insecure' | 'denied' | 'default' }
@@ -14,6 +14,8 @@ interface NativeNotificationsPlugin {
   getPermission(): Promise<{ permission: 'granted' | 'denied' | 'default' }>
   requestPermission(): Promise<{ permission: 'granted' | 'denied' | 'default' }>
   notify(options: { title: string; body: string; taskId?: string; conversationId?: string }): Promise<void>
+  getPendingAction(): Promise<NotificationTarget>
+  clearPendingAction(): Promise<void>
   addListener(eventName: 'notificationAction', listener: (target: NotificationTarget) => void): Promise<PluginListenerHandle>
 }
 
@@ -70,7 +72,19 @@ export async function subscribeNotificationActions(listener: (target: Notificati
   window.addEventListener('task-notification-action', handleWebAction)
   if (!isNativeApp()) return () => window.removeEventListener('task-notification-action', handleWebAction)
 
-  const handle = await NativeNotifications.addListener('notificationAction', listener)
+  let lastActionId = ''
+  const handleAction = (target: NotificationTarget) => {
+    if (!target.taskId && !target.conversationId) return
+    if (target.actionId && target.actionId === lastActionId) return
+    lastActionId = target.actionId ?? ''
+    listener(target)
+    void NativeNotifications.clearPendingAction().catch((error) => {
+      console.warn('Failed to clear pending notification action:', error)
+    })
+  }
+  const handle = await NativeNotifications.addListener('notificationAction', handleAction)
+  const pending = await NativeNotifications.getPendingAction()
+  handleAction(pending)
   return () => {
     window.removeEventListener('task-notification-action', handleWebAction)
     void handle.remove()
