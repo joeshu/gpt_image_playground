@@ -353,7 +353,7 @@ export default function InputBar() {
   const [submitHover, setSubmitHover] = useState(false)
   const [attachHover, setAttachHover] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
-  const [mobileCollapsed, setMobileCollapsed] = useState(false)
+  const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem('mobile-composer-collapsed') !== 'false')
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
@@ -439,8 +439,8 @@ export default function InputBar() {
   const isMobile = useIsMobile()
 
   useEffect(() => {
-    if (isMobile && appMode === 'agent') setMobileCollapsed(true)
-  }, [appMode, isMobile])
+    if (isMobile) localStorage.setItem('mobile-composer-collapsed', String(mobileCollapsed))
+  }, [isMobile, mobileCollapsed])
 
   const settingsActiveProfile = useMemo(() => getActiveApiProfile(settings), [settings])
   const currentActiveProfile = useMemo(() => (
