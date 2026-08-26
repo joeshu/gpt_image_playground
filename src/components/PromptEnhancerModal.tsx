@@ -12,6 +12,8 @@ interface PromptEnhancerModalProps {
   profile: ApiProfile | null
   referenceImages?: InputImage[]
   referenceImageLabels?: string[]
+  /** Agent 历史 @ 图片仍在 IndexedDB 读取时，禁止提前提交。 */
+  referenceImagesLoading?: boolean
   onClose: () => void
   onApply: (prompt: string) => void
 }
@@ -32,7 +34,7 @@ const SECTION_LABELS: Array<[keyof PromptEnhancementResult['sections'], string]>
   ['constraints', '约束'],
 ]
 
-export default function PromptEnhancerModal({ open, prompt, profile, referenceImages = [], referenceImageLabels = [], onClose, onApply }: PromptEnhancerModalProps) {
+export default function PromptEnhancerModal({ open, prompt, profile, referenceImages = [], referenceImageLabels = [], referenceImagesLoading = false, onClose, onApply }: PromptEnhancerModalProps) {
   const [level, setLevel] = useState<PromptEnhancementLevel>('balanced')
   const [taskTypeOverride, setTaskTypeOverride] = useState<PromptTaskType | null>(null)
   const [result, setResult] = useState<PromptEnhancementResult | null>(null)
@@ -60,6 +62,10 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
   if (!open) return null
 
   const handleEnhance = async () => {
+    if (referenceImagesLoading) {
+      setError('正在加载 @ 历史图片，请稍候')
+      return
+    }
     if (!profile?.apiKey) {
       setError('请先在 Agent 配置中设置支持 Responses API 的文本模型')
       return
@@ -157,6 +163,9 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
             {referenceImageCount > 0
               ? `本次将分析 ${referenceImageCount} 张参考图的版式、色彩、层级、留白与风格；不会自动改写当前业务事实。`
               : '未附带参考图；上传或 @ 引用图片后，增强器可感知其版式和风格。'}
+            {referenceImagesLoading && (
+              <div className="mt-1 text-[10px] text-blue-600 dark:text-blue-300">正在加载 Agent 历史 @ 引用…</div>
+            )}
             {referenceLabelSummary && (
               <div className="mt-1 truncate text-[10px] text-blue-600 dark:text-blue-300">已映射引用：{referenceLabelSummary}</div>
             )}
@@ -203,8 +212,8 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
         </div>
 
         <footer className="grid grid-cols-2 gap-3 border-t border-gray-100 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 dark:border-white/[0.08]">
-          <button type="button" onClick={handleEnhance} disabled={isLoading || !prompt.trim()} className="min-h-12 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white disabled:opacity-50">
-            {isLoading ? '增强中…' : result ? '重新增强' : '开始增强'}
+          <button type="button" onClick={handleEnhance} disabled={isLoading || referenceImagesLoading || !prompt.trim()} className="min-h-12 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white disabled:opacity-50">
+            {isLoading ? '增强中…' : referenceImagesLoading ? '读取引用…' : result ? '重新增强' : '开始增强'}
           </button>
           <button
             type="button"
