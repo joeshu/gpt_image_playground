@@ -831,6 +831,15 @@ input[type="number"] {
     bottom: var(--keyboard-inset, 0px) !important;
   }
 
+  [data-agent-scroll-bottom],
+  [data-agent-scroll-top] {
+    right: max(1rem, var(--safe-area-right));
+  }
+
+  [data-agent-scroll-top] {
+    top: calc(5rem + var(--safe-area-top));
+  }
+
   html.ios-keyboard-open [data-ios-sheet],
   html.ios-keyboard-open [data-ios-confirm-sheet] {
     max-height: var(--visual-viewport-height, 100dvh);
