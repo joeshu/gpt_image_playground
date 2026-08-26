@@ -17,10 +17,12 @@ import { getTaskComparisonImageIds, getTaskLineage } from '../lib/taskLineage'
 import { buildProtectedTextPrompt, getProtectableTexts, normalizeProtectedTexts } from '../lib/protectedText'
 import { buildTextRepairPrompt } from '../lib/textRepair'
 import { verifyImageText } from '../lib/textVerification'
+import { analyzeVisualDifference } from '../lib/visualDifference'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
 import ImageCompareModal from './ImageCompareModal'
 import TextVerificationOverlayModal from './TextVerificationOverlayModal'
+import VisualDifferenceOverlayModal from './VisualDifferenceOverlayModal'
 import ViewportTooltip from './ViewportTooltip'
 
 export default function DetailModal() {
@@ -47,6 +49,9 @@ export default function DetailModal() {
   const [showRawResponseModal, setShowRawResponseModal] = useState(false)
   const [showImageComparison, setShowImageComparison] = useState(false)
   const [showTextVerificationOverlay, setShowTextVerificationOverlay] = useState(false)
+  const [showVisualDifferenceOverlay, setShowVisualDifferenceOverlay] = useState(false)
+  const [isAnalyzingVisualDifference, setIsAnalyzingVisualDifference] = useState(false)
+  const [visualDifferenceError, setVisualDifferenceError] = useState('')
   const [isVerifyingText, setIsVerifyingText] = useState(false)
   const [isStartingTextRepair, setIsStartingTextRepair] = useState(false)
   const [textVerificationError, setTextVerificationError] = useState('')
@@ -121,6 +126,9 @@ export default function DetailModal() {
     setImageIndex(0)
     setShowImageComparison(false)
     setShowTextVerificationOverlay(false)
+    setShowVisualDifferenceOverlay(false)
+    setIsAnalyzingVisualDifference(false)
+    setVisualDifferenceError('')
     setIsVerifyingText(false)
     setIsStartingTextRepair(false)
     setTextVerificationError('')
@@ -207,6 +215,9 @@ export default function DetailModal() {
   const canVerifyText = Boolean(verificationSourceImageId && currentOutputImageId && verificationSourceImageId !== currentOutputImageId)
   const textVerificationReport = currentOutputImageId
     ? task?.textVerificationByImage?.[currentOutputImageId]
+    : undefined
+  const visualDifferenceReport = currentOutputImageId
+    ? task?.visualDifferenceByImage?.[currentOutputImageId]
     : undefined
   const protectedTextCandidates = textVerificationReport ? getProtectableTexts(textVerificationReport) : []
   const protectedTexts = currentOutputImageId
@@ -482,6 +493,47 @@ export default function DetailModal() {
     window.requestAnimationFrame(() => {
       modalRef.current?.querySelector<HTMLElement>('[data-detail-info]')?.scrollTo({ top: 0, behavior: 'smooth' })
     })
+  }
+
+  const handleAnalyzeVisualDifference = async () => {
+    if (!task || !canVerifyText || !currentOutputImageId) return
+    const profile = getAgentTextApiProfile(settings)
+    if (!profile || !isAgentTextApiProfile(profile) || !profile.apiKey) {
+      showToast('请先在 Agent 配置中选择支持图像理解的 Responses API', 'error')
+      return
+    }
+
+    setIsAnalyzingVisualDifference(true)
+    setVisualDifferenceError('')
+    try {
+      const [sourceDataUrl, resultDataUrl] = await Promise.all([
+        ensureImageCached(verificationSourceImageId),
+        ensureImageCached(currentOutputImageId),
+      ])
+      if (!sourceDataUrl || !resultDataUrl) throw new Error('差异检测图片加载失败')
+
+      const report = await analyzeVisualDifference({
+        profile,
+        sourceImageId: verificationSourceImageId,
+        sourceDataUrl,
+        resultImageId: currentOutputImageId,
+        resultDataUrl,
+        prompt: task.prompt,
+      })
+      updateTaskInStore(task.id, {
+        visualDifferenceByImage: {
+          ...(task.visualDifferenceByImage ?? {}),
+          [currentOutputImageId]: report,
+        },
+      })
+      showToast(report.status === 'passed' ? '视觉忠实度检测通过' : '视觉差异检测完成，发现需检查项', report.status === 'passed' ? 'success' : 'info')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '视觉差异检测失败'
+      setVisualDifferenceError(message)
+      showToast(message, 'error')
+    } finally {
+      setIsAnalyzingVisualDifference(false)
+    }
   }
 
   const saveProtectedTexts = (values: string[]) => {
@@ -1135,6 +1187,66 @@ export default function DetailModal() {
             )}
 
             {canVerifyText && (
+              <div className="mb-4 rounded-xl border border-cyan-100 bg-cyan-50/60 p-3 dark:border-cyan-500/15 dark:bg-cyan-500/[0.06]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-cyan-700 dark:text-cyan-300">视觉差异</h3>
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">检查布局、颜色、关键元素、裁切与风格</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeVisualDifference}
+                    disabled={isAnalyzingVisualDifference}
+                    className="flex h-9 shrink-0 items-center rounded-lg bg-cyan-700 px-3 text-xs font-medium text-white transition hover:bg-cyan-800 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isAnalyzingVisualDifference ? '检测中…' : visualDifferenceReport ? '重新检测' : '开始检测'}
+                  </button>
+                </div>
+
+                {visualDifferenceError && (
+                  <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{visualDifferenceError}</p>
+                )}
+
+                {visualDifferenceReport && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        visualDifferenceReport.status === 'passed'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                      }`}>
+                        {visualDifferenceReport.status === 'passed' ? '忠实' : '需检查'} · {visualDifferenceReport.fidelityScore} 分
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-gray-500 dark:text-gray-400">{visualDifferenceReport.summary || '检测完成'}</span>
+                      {visualDifferenceReport.regions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowVisualDifferenceOverlay(true)}
+                          className="flex h-9 shrink-0 items-center rounded-lg border border-cyan-200 bg-white/90 px-3 text-xs font-medium text-cyan-700 transition active:scale-[0.98] dark:border-cyan-500/25 dark:bg-white/[0.06] dark:text-cyan-300"
+                        >
+                          查看热区 {visualDifferenceReport.regions.length}
+                        </button>
+                      )}
+                    </div>
+                    {visualDifferenceReport.changes.length > 0 && (
+                      <div className="rounded-lg bg-white/80 px-3 py-2 dark:bg-white/[0.05]">
+                        <div className="text-[11px] font-medium text-cyan-700 dark:text-cyan-300">主要变化</div>
+                        <ul className="mt-1 space-y-1 text-xs text-gray-700 dark:text-gray-200">
+                          {visualDifferenceReport.changes.map((change, index) => (
+                            <li key={`${change}-${index}`} className="flex gap-1.5">
+                              <span className="text-cyan-500">•</span>
+                              <span>{change}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {canVerifyText && (
               <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/60 p-3 dark:border-violet-500/15 dark:bg-violet-500/[0.06]">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -1593,6 +1705,14 @@ export default function DetailModal() {
           imageId={currentOutputImageId}
           report={textVerificationReport}
           onClose={() => setShowTextVerificationOverlay(false)}
+        />
+      )}
+
+      {showVisualDifferenceOverlay && currentOutputImageId && visualDifferenceReport && visualDifferenceReport.regions.length > 0 && (
+        <VisualDifferenceOverlayModal
+          imageId={currentOutputImageId}
+          report={visualDifferenceReport}
+          onClose={() => setShowVisualDifferenceOverlay(false)}
         />
       )}
     </div>
