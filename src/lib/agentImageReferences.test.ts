@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentRound, TaskRecord } from '../types'
 import { DEFAULT_PARAMS } from '../types'
 import { getSelectedImageMentionLabel, getSelectedTextMentionLabel } from './promptImageMentions'
-import { extractAgentReferenceIds, replaceAgentPromptImageReferencesForApi, resolveAgentPromptImageReferences } from './agentImageReferences'
+import { extractAgentReferenceIds, replaceAgentPromptImageReferencesForApi, resolveAgentPromptImageReferenceEntries, resolveAgentPromptImageReferences } from './agentImageReferences'
 
 const round = (patch: Partial<AgentRound>): AgentRound => ({
   id: patch.id ?? `round-${patch.index ?? 1}`,
@@ -119,5 +119,20 @@ describe('agent image references', () => {
       [firstRound, currentRound],
       [task('task-live', ['image-live'])],
     )).toBe('参考 <removed_ref id="round-1-image-1" /> 和 <ref id="round-1-image-2" /> 生成')
+  })
+
+  it('maps historical @ references to unique labelled image entries', () => {
+    const firstRound = round({ index: 1, outputTaskIds: ['task-a'] })
+    const rounds = [firstRound]
+    const entries = resolveAgentPromptImageReferenceEntries(
+      '先看 @第1轮图2，再看 \\u2063@第1轮图2\\u2064，最后看 @第1轮图1',
+      rounds,
+      [task('task-a', ['image-a1', 'image-a2'])],
+    )
+
+    expect(entries).toEqual([
+      { imageId: 'image-a2', label: '@第1轮图2' },
+      { imageId: 'image-a1', label: '@第1轮图1' },
+    ])
   })
 })
