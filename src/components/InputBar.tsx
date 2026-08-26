@@ -369,6 +369,7 @@ export default function InputBar() {
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
   const [agentPromptReferenceImages, setAgentPromptReferenceImages] = useState<PromptEnhancerReference[]>([])
+  const [agentPromptReferenceLoading, setAgentPromptReferenceLoading] = useState(false)
   const [showPromptVersions, setShowPromptVersions] = useState(false)
   const [showPromptTemplates, setShowPromptTemplates] = useState(false)
   const [showStateOwnedPptBrief, setShowStateOwnedPptBrief] = useState(false)
@@ -491,16 +492,24 @@ export default function InputBar() {
     let cancelled = false
     if (!showPromptEnhancer || agentPromptReferenceEntries.length === 0) {
       setAgentPromptReferenceImages([])
+      setAgentPromptReferenceLoading(false)
       return
     }
 
+    setAgentPromptReferenceLoading(true)
     const loadAgentPromptReferences = async () => {
-      const loaded = await Promise.all(agentPromptReferenceEntries.map(async ({ imageId, label }) => {
-        const dataUrl = await ensureImageCached(imageId)
-        return dataUrl ? { image: { id: imageId, dataUrl }, label } : null
-      }))
-      if (!cancelled) {
-        setAgentPromptReferenceImages(loaded.filter((entry): entry is PromptEnhancerReference => Boolean(entry)))
+      try {
+        const loaded = await Promise.all(agentPromptReferenceEntries.map(async ({ imageId, label }) => {
+          const dataUrl = await ensureImageCached(imageId)
+          return dataUrl ? { image: { id: imageId, dataUrl }, label } : null
+        }))
+        if (!cancelled) {
+          setAgentPromptReferenceImages(loaded.filter((entry): entry is PromptEnhancerReference => Boolean(entry)))
+        }
+      } catch {
+        if (!cancelled) setAgentPromptReferenceImages([])
+      } finally {
+        if (!cancelled) setAgentPromptReferenceLoading(false)
       }
     }
 
@@ -2201,6 +2210,7 @@ export default function InputBar() {
         profile={promptEnhancerProfile}
         referenceImages={promptEnhancerReferenceImages}
         referenceImageLabels={promptEnhancerReferenceLabels}
+        referenceImagesLoading={agentPromptReferenceLoading}
         onClose={() => setShowPromptEnhancer(false)}
         onApply={(enhancedPrompt) => {
           setPrompt(enhancedPrompt)
