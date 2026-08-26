@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
 
+# Keep every prompt-feature change behind the same full unsigned IPA gate.
 concurrency:
   group: ios-unsigned-${{ github.ref }}
   cancel-in-progress: true
