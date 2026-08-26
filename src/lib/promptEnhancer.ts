@@ -1,15 +1,19 @@
-import type { ApiProfile } from '../types'
+import type { ApiProfile, InputImage } from '../types'
 import { compilePromptIntent, getPromptTaskTypeLabel, type PromptTaskType } from './promptCompiler'
 import { buildApiUrl, readClientDevProxyConfig, shouldUseApiProxy } from './devProxy'
 import { getApiErrorMessage } from './imageApiShared'
 
 export type PromptEnhancementLevel = 'faithful' | 'balanced' | 'professional'
 
+export const PROMPT_ENHANCER_MAX_REFERENCE_IMAGES = 4
+
 export interface PromptEnhancementResult {
   originalPrompt: string
   enhancedPrompt: string
   summary: string
   taskType: PromptTaskType
+  /** 参考图的视觉结构分析；不应替代用户业务事实。 */
+  referenceNotes: string
   sections: {
     subject: string
     scene: string
@@ -72,6 +76,7 @@ export function parsePromptEnhancementResponse(responseText: string, originalPro
     originalPrompt,
     enhancedPrompt,
     summary: stringValue(raw.summary),
+    referenceNotes: stringValue(raw.reference_notes),
     taskType: ['poster', 'ecommerce', 'portrait', 'logo', 'infographic', 'ppt-report', 'state-owned-ppt', 'general'].includes(String(raw.task_type))
       ? raw.task_type as PromptTaskType
       : taskType ?? compilePromptIntent(originalPrompt).taskType,
@@ -86,11 +91,16 @@ export async function enhancePrompt(opts: {
   prompt: string
   level: PromptEnhancementLevel
   taskType?: PromptTaskType
+  /** 当前输入框附带的参考图；仅在用户点击增强时发送给视觉文本模型。 */
+  referenceImages?: InputImage[]
   signal?: AbortSignal
 }): Promise<PromptEnhancementResult> {
-  const { profile, prompt, level, taskType: requestedTaskType, signal } = opts
+  const { profile, prompt, level, taskType: requestedTaskType, referenceImages: requestedReferenceImages, signal } = opts
   const intent = compilePromptIntent(prompt, requestedTaskType)
   const taskType = intent.taskType
+  const referenceImages = (requestedReferenceImages ?? [])
+    .filter((image) => Boolean(image?.dataUrl))
+    .slice(0, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES)
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const endpoint = buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy)
@@ -100,8 +110,16 @@ export async function enhancePrompt(opts: {
   if (signal?.aborted) controller.abort()
   signal?.addEventListener('abort', abortFromCaller, { once: true })
 
-  const levelInstruction = {
-    faithful: '忠实原意：只补齐必要的画面信息，不改变主题、事实、文字、数字或核心风格。',
+  const referenceGuidance = referenceImages.length > 0
+    ? [
+        `本次提供了 ${referenceImages.length} 张参考图。只分析版式、色彩、视觉风格、留白、层级和安全区，不改写用户业务事实、原文、数字或专有名词。`,
+        taskType === 'state-owned-ppt'
+          ? '针对国企汇报 PPT，重点识别标题、结论、数据、表格、页脚层级与安全区；只提取视觉规则，不臆测政策或经营数据。'
+          : '',
+      ]
+    : ['本次没有提供参考图；reference_notes 返回空字符串。']
+
+  const levelInstruction = {    faithful: '忠实原意：只补齐必要的画面信息，不改变主题、事实、文字、数字或核心风格。',
     balanced: '适度优化：在忠实原意基础上增强构图、光线、材质、色彩与商业可读性。',
     professional: '专业重写：整理为可直接交付专业图像模型的结构化提示词，强化设计语言与约束，但不得虚构业务事实。',
   }[level]
@@ -123,16 +141,25 @@ export async function enhancePrompt(opts: {
           taskType === 'state-owned-ppt'
             ? '针对国企汇报 PPT：采用 16:9 横版、正式克制的政企商务风格，突出结论、数据、举措和备注层级；不虚构数据，不改变政治表述。'
             : '',
-          levelInstruction,
-          '保留所有 @ 引用标记、专有名词、中文原文、数字、单位、比例和不可修改要求。',
+          ...referenceGuidance,
+          levelInstruction,          '保留所有 @ 引用标记、专有名词、中文原文、数字、单位、比例和不可修改要求。',
           '不要执行图像生成，不要回答用户任务，只优化提示词。',
           '仅输出 JSON，不要 Markdown。',
-          '格式：{"task_type":"任务类型值","enhanced_prompt":"完整增强提示词","summary":"本次增强摘要","sections":{"subject":"","scene":"","composition":"","lighting":"","material":"","color":"","constraints":""}}',
+          '格式：{\"task_type\":\"任务类型值\",\"enhanced_prompt\":\"完整增强提示词\",\"summary\":\"本次增强摘要\",\"reference_notes\":\"参考图视觉结构分析；无参考图时为空字符串\",\"sections\":{\"subject\":\"\",\"scene\":\"\",\"composition\":\"\",\"lighting\":\"\",\"material\":\"\",\"color\":\"\",\"constraints\":\"\"}}',
           '未涉及的结构字段可以为空字符串。',
         ].join('\n'),
         input: [{
           role: 'user',
-          content: [{ type: 'input_text', text: prompt }],
+          content: [
+            {
+              type: 'input_text',
+              text: `原始提示词：\n${prompt}\n\n请在 reference_notes 中仅总结参考图的视觉结构规则。`,
+            },
+            ...referenceImages.flatMap((image, index) => [
+              { type: 'input_text', text: `参考图 ${index + 1}：` },
+              { type: 'input_image', image_url: image.dataUrl },
+            ]),
+          ],
         }],
       }),
     })
