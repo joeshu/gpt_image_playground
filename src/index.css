@@ -417,8 +417,16 @@ input[type="number"] {
 }
 
 .safe-area-x {
+  box-sizing: border-box;
   padding-left: max(1rem, var(--safe-area-left));
   padding-right: max(1rem, var(--safe-area-right));
+}
+
+/* 独立工作台和 Agent 在手机上不能把长文本/固定按钮撑出视口。 */
+[data-creation-workbench],
+[data-agent-workspace] {
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 /* 长历史记录中只布局接近视口的卡片，保留占位高度避免滚动跳动。 */

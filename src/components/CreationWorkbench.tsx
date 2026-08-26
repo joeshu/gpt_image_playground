@@ -80,13 +80,13 @@ function ModuleCard({
   children: React.ReactNode
 }) {
   return (
-    <button type="button" onClick={onClick} className="group rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-white/[0.08] dark:bg-white/[0.04] dark:hover:border-blue-400/40">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+    <button type="button" onClick={onClick} className="group min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-white/[0.08] dark:bg-white/[0.04] dark:hover:border-blue-400/40">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-gray-900 dark:text-white">{title}</div>
-          <div className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{description}</div>
+          <div className="mt-1 break-words text-xs leading-relaxed text-gray-500 dark:text-gray-400">{description}</div>
         </div>
-        <span className="text-lg text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500">→</span>
+        <span className="shrink-0 text-lg text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500">→</span>
       </div>
       <div className="mt-3">{children}</div>
     </button>
@@ -316,8 +316,8 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
   }
 
   return (
-    <main data-creation-workbench aria-hidden={!visible} className={`${visible ? '' : 'hidden'} min-h-[100svh] bg-gray-50 pb-8 dark:bg-gray-950`}>
-      <div className="safe-area-x mx-auto max-w-7xl px-0 pt-24 sm:pt-28">
+    <main data-creation-workbench aria-hidden={!visible} className={`${visible ? '' : 'hidden'} min-h-[100svh] w-full min-w-0 overflow-x-clip bg-gray-50 pb-8 dark:bg-gray-950`}>
+      <div className="safe-area-x mx-auto w-full min-w-0 max-w-7xl px-0 pt-24 sm:pt-28">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <button type="button" onClick={requestClose} className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-gray-800 dark:hover:bg-white/[0.06] dark:hover:text-gray-200">
@@ -368,7 +368,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
             </div>
           </aside>
 
-          <section className="min-w-0">
+          <section className="min-w-0 w-full">
             <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm dark:border-blue-500/15 dark:from-blue-500/[0.1] dark:to-white/[0.03] sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="text-xs font-medium text-blue-600 dark:text-blue-300">当前项目</div>
@@ -415,12 +415,12 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
                   </ModuleCard>
                 </div>
                 <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <div className="text-sm font-semibold text-gray-900 dark:text-white">当前提示词联动</div>
-                      <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">应用时会保留现有提示词，把本项目规则追加到末尾，并写入提示词版本历史。</p>
+                      <p className="mt-1 break-words text-xs leading-relaxed text-gray-500 dark:text-gray-400">应用时会保留现有提示词，把本项目规则追加到末尾，并写入提示词版本历史。</p>
                     </div>
-                    <button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700">应用规则</button>
+                    <button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 w-full shrink-0 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:w-auto">应用规则</button>
                   </div>
                 </div>
               </div>

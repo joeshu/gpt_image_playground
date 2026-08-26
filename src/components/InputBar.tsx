@@ -1666,8 +1666,8 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
 
       <div
         data-input-bar
-        className={`fixed bottom-[var(--bottom-safe-space)] left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-3 sm:px-4 transition-all duration-300${promptExpanded ? ' flex flex-col' : ''}`}
-        style={promptExpanded ? { top: `${promptExpandedTop}px`, transitionProperty: 'none' } : undefined}
+        className={`fixed bottom-[var(--bottom-safe-space)] left-1/2 z-30 min-w-0 w-full max-w-4xl -translate-x-1/2 px-3 transition-all duration-300 sm:px-4${promptExpanded ? ' flex flex-col' : ''}`}
+        style={promptExpanded ? { top: `max(${promptExpandedTop}px, var(--safe-area-top))`, transitionProperty: 'none' } : undefined}
       >
         <InputBatchBars
           showFavoriteCollectionBatchBar={showFavoriteCollectionBatchBar}
@@ -1686,7 +1686,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
           onDownloadSelected={handleDownloadSelected}
           onDeleteSelected={handleDeleteSelected}
         />
-        <div ref={cardRef} className={`bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10${promptExpanded ? ' flex min-h-0 flex-1 flex-col' : ''}`}>
+        <div ref={cardRef} className={`min-w-0 overflow-hidden bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10${promptExpanded ? ' flex min-h-0 flex-1 flex-col' : ''}`}>
           {/* 移动端拖动条 */}
           <div
             ref={handleRef}

@@ -93,7 +93,7 @@ export default function InputParamsPanel({
   onOpenSizePicker: () => void
 }) {
   return (
-    <div className={`grid ${cols} gap-2 text-xs flex-1`}>
+    <div className={`grid ${cols} min-w-0 gap-2 text-xs flex-1`}>
       <label
         className="relative flex flex-col gap-0.5"
         onMouseEnter={sizeHint.show}
