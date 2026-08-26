@@ -5,6 +5,26 @@ export interface TaskLineage {
   children: TaskRecord[]
 }
 
+export interface TaskComparisonImageIds {
+  beforeImageId: string
+  afterImageId: string
+}
+
+export function getTaskComparisonImageIds(
+  task: TaskRecord,
+  parent: TaskRecord | null,
+  selectedOutputImageId = '',
+): TaskComparisonImageIds | null {
+  if (!parent) return null
+
+  const beforeImageId = parent.outputImages.find((id) => task.inputImageIds.includes(id))
+    ?? parent.outputImages[0]
+    ?? ''
+  const afterImageId = selectedOutputImageId || task.outputImages[0] || ''
+
+  return beforeImageId && afterImageId ? { beforeImageId, afterImageId } : null
+}
+
 export function getTaskLineage(task: TaskRecord, tasks: TaskRecord[]): TaskLineage {
   const inputIds = new Set(task.inputImageIds)
   const parent = tasks
