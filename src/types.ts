@@ -177,6 +177,18 @@ export interface TextVerificationChange {
   actual: string
 }
 
+export interface TextVerificationRegion {
+  type: 'missing' | 'changed' | 'numeric'
+  label: string
+  expected: string
+  actual: string
+  /** 结果图上的百分比坐标，范围 0-100 */
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface TextVerificationReport {
   sourceImageId: string
   resultImageId: string
@@ -188,6 +200,7 @@ export interface TextVerificationReport {
   missingTexts: string[]
   changedTexts: TextVerificationChange[]
   numericChanges: TextVerificationChange[]
+  regions?: TextVerificationRegion[]
   summary: string
 }
 
