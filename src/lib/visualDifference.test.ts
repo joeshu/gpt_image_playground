@@ -3,17 +3,20 @@ import { parseVisualDifferenceResponse } from './visualDifference'
 
 describe('visual difference response', () => {
   it('normalizes severity regions and clips percentage bounds', () => {
-    const report = parseVisualDifferenceResponse(`\`\`json
-{
-  "fidelity_score": 81.6,
-  "summary": "布局与主色存在变化",
-  "changes": ["顶部标题区域下移", "品牌红偏橙"],
-  "regions": [
-    {"category": "layout", "severity": "high", "label": "标题位移", "description": "标题下移", "bbox": [10, 20, 40, 12]},
-    {"category": "color", "severity": "medium", "label": "主色变化", "description": "红色偏橙", "bbox": [0.8, 0.9, 0.4, 0.3]}
-  ]
-}
-\`\`\``, 'source', 'result', 123)
+    const report = parseVisualDifferenceResponse(
+      '```json\n' + JSON.stringify({
+        fidelity_score: 81.6,
+        summary: '布局与主色存在变化',
+        changes: ['顶部标题区域下移', '品牌红偏橙'],
+        regions: [
+          { category: 'layout', severity: 'high', label: '标题位移', description: '标题下移', bbox: [10, 20, 40, 12] },
+          { category: 'color', severity: 'medium', label: '主色变化', description: '红色偏橙', bbox: [0.8, 0.9, 0.4, 0.3] },
+        ],
+      }) + '\n```',
+      'source',
+      'result',
+      123,
+    )
 
     expect(report).toMatchObject({
       sourceImageId: 'source',
