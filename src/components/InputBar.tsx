@@ -378,6 +378,10 @@ export default function InputBar() {
   const [menuLeft, setMenuLeft] = useState(0)
   const showPromptExpand = promptExpanded || promptCanExpand
 
+  useEffect(() => {
+    if (isMobile && appMode === 'agent') setMobileCollapsed(true)
+  }, [appMode, isMobile])
+
   const updateInputBarClearance = useCallback(() => {
     const bar = cardRef.current?.closest<HTMLElement>('[data-input-bar]')
     if (!bar) return
