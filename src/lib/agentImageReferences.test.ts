@@ -4,6 +4,7 @@ import { DEFAULT_PARAMS } from '../types'
 import { getSelectedImageMentionLabel, getSelectedTextMentionLabel } from './promptImageMentions'
 import { extractAgentReferenceIds, replaceAgentPromptImageReferencesForApi, resolveAgentPromptImageReferenceEntries, resolveAgentPromptImageReferences } from './agentImageReferences'
 
+// Keep historical @ references covered before the iOS delivery gate.
 const round = (patch: Partial<AgentRound>): AgentRound => ({
   id: patch.id ?? `round-${patch.index ?? 1}`,
   index: patch.index ?? 1,
