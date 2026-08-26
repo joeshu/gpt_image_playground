@@ -6,6 +6,10 @@ export type BrowserNotificationPermissionResult =
   | { ok: true }
   | { ok: false; reason: 'unsupported' | 'insecure' | 'denied' | 'default' | 'error'; error?: unknown }
 export type NotificationTarget = { actionId?: string; taskId?: string; conversationId?: string }
+
+export function hasNotificationDestination(target: NotificationTarget) {
+  return Boolean(target.taskId || target.conversationId)
+}
 export type BrowserNotificationReadiness =
   | { ok: true }
   | { ok: false; reason: 'unsupported' | 'insecure' | 'denied' | 'default' }
@@ -74,7 +78,7 @@ export async function subscribeNotificationActions(listener: (target: Notificati
 
   let lastActionId = ''
   const handleAction = (target: NotificationTarget) => {
-    if (!target.taskId && !target.conversationId) return
+    if (!hasNotificationDestination(target)) return
     if (target.actionId && target.actionId === lastActionId) return
     lastActionId = target.actionId ?? ''
     void Promise.resolve(listener(target)).then(() => NativeNotifications.clearPendingAction()).catch((error) => {
