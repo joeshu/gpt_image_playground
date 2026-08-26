@@ -1867,6 +1867,7 @@ export default function InputBar() {
                         : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed'
                     }`}
                     aria-label={submitButtonAriaLabel}
+                    data-haptic={activeAgentIsRunning ? 'warning' : 'medium'}
                   >
                     {activeAgentIsRunning ? (
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
