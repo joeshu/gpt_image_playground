@@ -22,6 +22,7 @@ const SOURCE_LABEL: Record<PromptVersion['source'], string> = {
   enhanced: '增强',
   generated: '生成',
   restored: '回退',
+  template: '模板',
 }
 
 export default function PromptVersionHistoryModal({ open, onClose, onRestore }: PromptVersionHistoryModalProps) {
