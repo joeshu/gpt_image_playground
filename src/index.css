@@ -628,6 +628,10 @@ input[type="number"] {
     object-fit: contain;
   }
 
+  [data-task-card-media-meta] {
+    display: none;
+  }
+
   [data-task-card-actions] {
     width: 100%;
     justify-content: flex-end;
