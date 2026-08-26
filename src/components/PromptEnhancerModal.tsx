@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ApiProfile } from '../types'
-import { enhancePrompt, type PromptEnhancementLevel, type PromptEnhancementResult } from '../lib/promptEnhancer'
+import type { ApiProfile, InputImage } from '../types'
+import { enhancePrompt, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES, type PromptEnhancementLevel, type PromptEnhancementResult } from '../lib/promptEnhancer'
 import { savePromptVersion } from '../lib/promptVersionHistory'
 import { compilePromptIntent, getPromptTaskTypeLabel, PROMPT_TASK_TYPE_OPTIONS, type PromptTaskType } from '../lib/promptCompiler'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
@@ -10,6 +10,7 @@ interface PromptEnhancerModalProps {
   open: boolean
   prompt: string
   profile: ApiProfile | null
+  referenceImages?: InputImage[]
   onClose: () => void
   onApply: (prompt: string) => void
 }
@@ -30,7 +31,7 @@ const SECTION_LABELS: Array<[keyof PromptEnhancementResult['sections'], string]>
   ['constraints', '约束'],
 ]
 
-export default function PromptEnhancerModal({ open, prompt, profile, onClose, onApply }: PromptEnhancerModalProps) {
+export default function PromptEnhancerModal({ open, prompt, profile, referenceImages = [], onClose, onApply }: PromptEnhancerModalProps) {
   const [level, setLevel] = useState<PromptEnhancementLevel>('balanced')
   const [taskTypeOverride, setTaskTypeOverride] = useState<PromptTaskType | null>(null)
   const [result, setResult] = useState<PromptEnhancementResult | null>(null)
@@ -38,6 +39,7 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
   const [error, setError] = useState('')
   const detectedIntent = useMemo(() => compilePromptIntent(prompt), [prompt])
   const activeTaskType = taskTypeOverride ?? detectedIntent.taskType
+  const referenceImageCount = Math.min(referenceImages.length, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES)
 
   useCloseOnEscape(open && !isLoading, onClose)
   usePreventBackgroundScroll(open)
@@ -61,7 +63,7 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
     setError('')
     try {
       savePromptVersion({ prompt, source: 'original' })
-      const enhanced = await enhancePrompt({ profile, prompt, level, taskType: activeTaskType })
+      const enhanced = await enhancePrompt({ profile, prompt, level, taskType: activeTaskType, referenceImages })
       savePromptVersion({ prompt: enhanced.enhancedPrompt, source: 'enhanced', enhancementLevel: level })
       setResult(enhanced)
     } catch (reason) {
@@ -139,6 +141,11 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
             </div>
           )}
 
+          <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-600 dark:bg-white/[0.04] dark:text-gray-300">
+            {referenceImageCount > 0
+              ? `本次将分析 ${referenceImageCount} 张参考图的版式、色彩、层级、留白与风格；不会自动改写当前业务事实。`
+              : '未附带参考图；上传或 @ 引用图片后，增强器可感知其版式和风格。'}
+          </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
               <div className="text-xs font-medium text-gray-500 dark:text-gray-400">增强前</div>
@@ -160,6 +167,12 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
             </div>
           )}
 
+          {result?.referenceNotes && (
+            <div className="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+              <div className="font-medium">参考图分析</div>
+              <div className="mt-1 leading-relaxed">{result.referenceNotes}</div>
+            </div>
+          )}
           {result && (
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {SECTION_LABELS.flatMap(([key, label]) => result.sections[key] ? [(
