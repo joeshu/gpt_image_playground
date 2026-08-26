@@ -1,4 +1,4 @@
-export type PromptVersionSource = 'original' | 'enhanced' | 'generated' | 'restored'
+export type PromptVersionSource = 'original' | 'enhanced' | 'generated' | 'restored' | 'template'
 
 export interface PromptVersion {
   id: string
@@ -29,7 +29,7 @@ export function normalizePromptVersions(value: unknown): PromptVersion[] {
     if (!item || typeof item !== 'object') return []
     const record = item as Record<string, unknown>
     const prompt = typeof record.prompt === 'string' ? record.prompt.trim() : ''
-    const source = ['original', 'enhanced', 'generated', 'restored'].includes(String(record.source))
+    const source = ['original', 'enhanced', 'generated', 'restored', 'template'].includes(String(record.source))
       ? record.source as PromptVersionSource
       : null
     if (!prompt || !source) return []
