@@ -1,4 +1,5 @@
 import type { ApiProfile } from '../types'
+import { compilePromptIntent, getPromptTaskTypeLabel, type PromptTaskType } from './promptCompiler'
 import { buildApiUrl, readClientDevProxyConfig, shouldUseApiProxy } from './devProxy'
 import { getApiErrorMessage } from './imageApiShared'
 
@@ -8,6 +9,7 @@ export interface PromptEnhancementResult {
   originalPrompt: string
   enhancedPrompt: string
   summary: string
+  taskType: PromptTaskType
   sections: {
     subject: string
     scene: string
@@ -51,7 +53,7 @@ function stringValue(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-export function parsePromptEnhancementResponse(responseText: string, originalPrompt: string): PromptEnhancementResult {
+export function parsePromptEnhancementResponse(responseText: string, originalPrompt: string, taskType?: PromptTaskType): PromptEnhancementResult {
   const jsonText = responseText.trim().replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '')
   let raw: Record<string, unknown>
   try {
@@ -80,9 +82,12 @@ export async function enhancePrompt(opts: {
   profile: ApiProfile
   prompt: string
   level: PromptEnhancementLevel
+  taskType?: PromptTaskType
   signal?: AbortSignal
 }): Promise<PromptEnhancementResult> {
-  const { profile, prompt, level, signal } = opts
+  const { profile, prompt, level, taskType: requestedTaskType, signal } = opts
+  const intent = compilePromptIntent(prompt, requestedTaskType)
+  const taskType = intent.taskType
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const endpoint = buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy)
@@ -111,11 +116,15 @@ export async function enhancePrompt(opts: {
         model: profile.model,
         instructions: [
           '你是专业图像生成提示词编辑器。',
+          `当前任务类型：${getPromptTaskTypeLabel(taskType)}。`,
+          taskType === 'state-owned-ppt'
+            ? '针对国企汇报 PPT：采用 16:9 横版、正式克制的政企商务风格，突出结论、数据、举措和备注层级；不虚构数据，不改变政治表述。'
+            : '',
           levelInstruction,
           '保留所有 @ 引用标记、专有名词、中文原文、数字、单位、比例和不可修改要求。',
           '不要执行图像生成，不要回答用户任务，只优化提示词。',
           '仅输出 JSON，不要 Markdown。',
-          '格式：{"enhanced_prompt":"完整增强提示词","summary":"本次增强摘要","sections":{"subject":"","scene":"","composition":"","lighting":"","material":"","color":"","constraints":""}}',
+          '格式：{"task_type":"任务类型值","enhanced_prompt":"完整增强提示词","summary":"本次增强摘要","sections":{"subject":"","scene":"","composition":"","lighting":"","material":"","color":"","constraints":""}}',
           '未涉及的结构字段可以为空字符串。',
         ].join('\n'),
         input: [{
@@ -131,7 +140,7 @@ export async function enhancePrompt(opts: {
     const payload = await response.json() as unknown
     const responseText = extractResponseText(payload)
     if (!responseText) throw new Error('提示词增强未返回内容')
-    return parsePromptEnhancementResponse(responseText, prompt)
+    return parsePromptEnhancementResponse(responseText, prompt, taskType)
   } finally {
     window.clearTimeout(timeoutId)
     signal?.removeEventListener('abort', abortFromCaller)
