@@ -27,12 +27,14 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install and verify web app
-        run: |
-          set -euo pipefail
-          npm ci
-          npm test
-          npm run build
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Run web tests
+        run: npm test
+
+      - name: Build production web app
+        run: npm run build
 
       - name: Generate and sync Capacitor iOS project
         run: |
