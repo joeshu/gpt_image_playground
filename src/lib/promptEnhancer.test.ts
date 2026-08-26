@@ -6,6 +6,8 @@ describe('parsePromptEnhancementResponse', () => {
     const result = parsePromptEnhancementResponse(JSON.stringify({
       enhanced_prompt: '联通红商业信息图，16:9 横版',
       summary: '强化信息层级',
+      task_type: 'infographic',
+      reference_notes: '沿用红白主色、三栏层级与底部数据卡片留白',
       sections: {
         subject: '积分明白卡',
         composition: '三栏布局',
@@ -15,6 +17,8 @@ describe('parsePromptEnhancementResponse', () => {
 
     expect(result.originalPrompt).toBe('优化积分明白卡')
     expect(result.enhancedPrompt).toContain('16:9')
+    expect(result.taskType).toBe('infographic')
+    expect(result.referenceNotes).toContain('红白主色')
     expect(result.sections.subject).toBe('积分明白卡')
     expect(result.sections.lighting).toBe('')
   })
@@ -27,6 +31,7 @@ describe('parsePromptEnhancementResponse', () => {
       '商品图',
     )
     expect(result.enhancedPrompt).toBe('高端商品图')
+    expect(result.referenceNotes).toBe('')
   })
 
   it('rejects invalid or empty enhanced prompts', () => {
