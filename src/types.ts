@@ -172,6 +172,29 @@ export interface AgentInputDraft {
 
 export type TaskStatus = 'running' | 'done' | 'error'
 
+export interface VisualDifferenceRegion {
+  category: 'layout' | 'color' | 'element' | 'crop' | 'style'
+  severity: 'low' | 'medium' | 'high'
+  label: string
+  description: string
+  /** 结果图上的百分比坐标，范围 0-100 */
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface VisualDifferenceReport {
+  sourceImageId: string
+  resultImageId: string
+  checkedAt: number
+  fidelityScore: number
+  status: 'passed' | 'warning'
+  summary: string
+  changes: string[]
+  regions: VisualDifferenceRegion[]
+}
+
 export interface TextVerificationChange {
   expected: string
   actual: string
@@ -234,6 +257,8 @@ export interface TaskRecord {
   actualParamsByImage?: Record<string, Partial<TaskParams>>
   /** 输出图片对应的 API 改写提示词，key 为 outputImages 中的图片 id */
   revisedPromptByImage?: Record<string, string>
+  /** 输出图片对应的视觉差异报告，key 为 outputImages 中的图片 id */
+  visualDifferenceByImage?: Record<string, VisualDifferenceReport>
   /** 输出图片对应的文字核验报告，key 为 outputImages 中的图片 id */
   textVerificationByImage?: Record<string, TextVerificationReport>
   /** 输出图片对应的不可修改文字清单，key 为 outputImages 中的图片 id */
