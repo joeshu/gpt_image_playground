@@ -1,4 +1,4 @@
-import type { ApiProfile, TextVerificationChange, TextVerificationReport } from '../types'
+import type { ApiProfile, TextVerificationChange, TextVerificationRegion, TextVerificationReport } from '../types'
 import { buildApiUrl, readClientDevProxyConfig, shouldUseApiProxy } from './devProxy'
 import { getApiErrorMessage } from './imageApiShared'
 
@@ -9,6 +9,7 @@ interface RawVerificationReport {
   missing_texts?: unknown
   changed_texts?: unknown
   numeric_changes?: unknown
+  result_regions?: unknown
   summary?: unknown
 }
 
@@ -26,6 +27,42 @@ function changeList(value: unknown): TextVerificationChange[] {
     const expected = typeof record.expected === 'string' ? record.expected.trim() : ''
     const actual = typeof record.actual === 'string' ? record.actual.trim() : ''
     return expected || actual ? [{ expected, actual }] : []
+  })
+}
+
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, value))
+}
+
+function regionList(value: unknown): TextVerificationRegion[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const record = item as Record<string, unknown>
+    const type = record.type === 'missing' || record.type === 'changed' || record.type === 'numeric'
+      ? record.type
+      : null
+    const bbox = Array.isArray(record.bbox) ? record.bbox : []
+    if (!type || bbox.length !== 4 || !bbox.every((part) => typeof part === 'number' && Number.isFinite(part))) return []
+
+    const rawBox = bbox as number[]
+    const multiplier = rawBox.every((part) => part >= 0 && part <= 1) ? 100 : 1
+    const x = clampPercent(rawBox[0] * multiplier)
+    const y = clampPercent(rawBox[1] * multiplier)
+    const width = Math.min(100 - x, Math.max(1, rawBox[2] * multiplier))
+    const height = Math.min(100 - y, Math.max(1, rawBox[3] * multiplier))
+    if (width <= 0 || height <= 0) return []
+
+    return [{
+      type,
+      label: typeof record.label === 'string' ? record.label.trim() : '',
+      expected: typeof record.expected === 'string' ? record.expected.trim() : '',
+      actual: typeof record.actual === 'string' ? record.actual.trim() : '',
+      x,
+      y,
+      width,
+      height,
+    }]
   })
 }
 
@@ -70,7 +107,8 @@ export function parseTextVerificationResponse(
   const missingTexts = stringList(raw.missing_texts)
   const changedTexts = changeList(raw.changed_texts)
   const numericChanges = changeList(raw.numeric_changes)
-  const hasDifferences = missingTexts.length > 0 || changedTexts.length > 0 || numericChanges.length > 0
+  const regions = regionList(raw.result_regions)
+  const hasDifferences = missingTexts.length > 0 || changedTexts.length > 0 || numericChanges.length > 0 || regions.length > 0
 
   return {
     sourceImageId,
@@ -83,6 +121,7 @@ export function parseTextVerificationResponse(
     missingTexts,
     changedTexts,
     numericChanges,
+    regions,
     summary: typeof raw.summary === 'string' ? raw.summary.trim() : '',
   }
 }
@@ -123,7 +162,9 @@ export async function verifyImageText(opts: {
           '逐字识别两张图中可见的中文、英文、数字、单位和标点，并核对结果图是否忠实。',
           '不要把纯版式变化判为文字错误；数字、金额、比例、年份和小数必须严格核对。',
           '仅输出一个 JSON 对象，不要 Markdown。',
-          '字段必须为 score(0-100)、source_texts(string[])、result_texts(string[])、missing_texts(string[])、changed_texts({expected,actual}[])、numeric_changes({expected,actual}[])、summary(string)。',
+          '字段必须为 score(0-100)、source_texts(string[])、result_texts(string[])、missing_texts(string[])、changed_texts({expected,actual}[])、numeric_changes({expected,actual}[])、result_regions、summary(string)。',
+          'result_regions 是结果图上的问题区域数组；每项为 {type,label,expected,actual,bbox}，type 仅 missing/changed/numeric，bbox 为 [x,y,width,height]，使用 0-100 百分比坐标。',
+          '只报告可合理定位的区域；缺失文字可标记其在结果版式中应出现的对应位置，不要为同一问题重复框选。',
         ].join('\n'),
         input: [{
           role: 'user',
