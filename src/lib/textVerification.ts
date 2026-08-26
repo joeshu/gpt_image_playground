@@ -1,25 +1,6 @@
-import type { ApiProfile } from '../types'
+import type { ApiProfile, TextVerificationChange, TextVerificationReport } from '../types'
 import { buildApiUrl, readClientDevProxyConfig, shouldUseApiProxy } from './devProxy'
 import { getApiErrorMessage } from './imageApiShared'
-
-export interface TextChange {
-  expected: string
-  actual: string
-}
-
-export interface TextVerificationReport {
-  sourceImageId: string
-  resultImageId: string
-  checkedAt: number
-  score: number
-  status: 'passed' | 'warning'
-  sourceTexts: string[]
-  resultTexts: string[]
-  missingTexts: string[]
-  changedTexts: TextChange[]
-  numericChanges: TextChange[]
-  summary: string
-}
 
 interface RawVerificationReport {
   score?: unknown
@@ -37,7 +18,7 @@ function stringList(value: unknown) {
     : []
 }
 
-function changeList(value: unknown): TextChange[] {
+function changeList(value: unknown): TextVerificationChange[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
     if (!item || typeof item !== 'object') return []
