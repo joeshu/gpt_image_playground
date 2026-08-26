@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parsePromptEnhancementResponse, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES } from './promptEnhancer'
 
+// Keep the mobile reference-image budget explicit in the test suite.
 describe('parsePromptEnhancementResponse', () => {
   it('limits reference analysis to a predictable mobile payload budget', () => {
     expect(PROMPT_ENHANCER_MAX_REFERENCE_IMAGES).toBe(4)
