@@ -11,6 +11,7 @@ export function TooltipButton({
   stopPropagation = false,
   onClick,
   onMouseDown,
+  agentDeleteAction = false,
   children,
 }: {
   tooltip: string
@@ -21,6 +22,7 @@ export function TooltipButton({
   stopPropagation?: boolean
   onClick?: (e: ReactMouseEvent<HTMLButtonElement>) => void
   onMouseDown?: (e: ReactMouseEvent<HTMLButtonElement>) => void
+  agentDeleteAction?: boolean
   children: ReactNode
 }) {
   const tooltipState = useTooltip()
@@ -29,6 +31,7 @@ export function TooltipButton({
     <span className={wrapperClassName} {...tooltipState.handlers}>
       <button
         type="button"
+        data-agent-delete-action={agentDeleteAction || undefined}
         className={className}
         aria-label={tooltip}
         aria-disabled={disabled}
