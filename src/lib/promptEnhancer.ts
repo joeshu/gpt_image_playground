@@ -93,14 +93,24 @@ export async function enhancePrompt(opts: {
   taskType?: PromptTaskType
   /** 当前输入框附带的参考图；仅在用户点击增强时发送给视觉文本模型。 */
   referenceImages?: InputImage[]
+  /**
+   * 与 referenceImages 一一对应的可追踪标签，例如 @图1、@第1轮图2。
+   * 仅用于让视觉模型知道原始提示词中的引用对应哪张图。
+   */
+  referenceImageLabels?: string[]
   signal?: AbortSignal
 }): Promise<PromptEnhancementResult> {
-  const { profile, prompt, level, taskType: requestedTaskType, referenceImages: requestedReferenceImages, signal } = opts
+  const { profile, prompt, level, taskType: requestedTaskType, referenceImages: requestedReferenceImages, referenceImageLabels, signal } = opts
   const intent = compilePromptIntent(prompt, requestedTaskType)
   const taskType = intent.taskType
-  const referenceImages = (requestedReferenceImages ?? [])
-    .filter((image) => Boolean(image?.dataUrl))
+  const referenceImageEntries = (requestedReferenceImages ?? [])
+    .map((image, index) => ({
+      image,
+      label: referenceImageLabels?.[index]?.trim() || `参考图 ${index + 1}`,
+    }))
+    .filter(({ image }) => Boolean(image?.dataUrl))
     .slice(0, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES)
+  const referenceImages = referenceImageEntries.map(({ image }) => image)
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const endpoint = buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy)
@@ -157,8 +167,8 @@ export async function enhancePrompt(opts: {
               type: 'input_text',
               text: `原始提示词：\n${prompt}\n\n请在 reference_notes 中仅总结参考图的视觉结构规则。`,
             },
-            ...referenceImages.flatMap((image, index) => [
-              { type: 'input_text', text: `参考图 ${index + 1}：` },
+            ...referenceImageEntries.flatMap(({ image, label }, index) => [
+              { type: 'input_text', text: `参考图 ${index + 1}（${label}）：` },
               { type: 'input_image', image_url: image.dataUrl },
             ]),
           ],
