@@ -236,6 +236,8 @@ export interface TaskRecord {
   revisedPromptByImage?: Record<string, string>
   /** 输出图片对应的文字核验报告，key 为 outputImages 中的图片 id */
   textVerificationByImage?: Record<string, TextVerificationReport>
+  /** 输出图片对应的不可修改文字清单，key 为 outputImages 中的图片 id */
+  protectedTextsByImage?: Record<string, string[]>
   /** 是否启用透明背景后处理 */
   transparentOutput?: boolean
   /** 实际发送给 API 的透明背景辅助提示词 */
