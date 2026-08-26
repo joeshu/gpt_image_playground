@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { parsePromptEnhancementResponse } from './promptEnhancer'
+import { parsePromptEnhancementResponse, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES } from './promptEnhancer'
 
 describe('parsePromptEnhancementResponse', () => {
+  it('limits reference analysis to a predictable mobile payload budget', () => {
+    expect(PROMPT_ENHANCER_MAX_REFERENCE_IMAGES).toBe(4)
+  })
+
   it('parses structured prompt enhancement output', () => {
     const result = parsePromptEnhancementResponse(JSON.stringify({
       enhanced_prompt: '联通红商业信息图，16:9 横版',
