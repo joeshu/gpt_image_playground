@@ -619,6 +619,15 @@ input[type="number"] {
 
 /* Mobile task cards prioritize the generated image and provide thumb-sized action targets. */
 @media (max-width: 639px) {
+  [data-task-card-media] {
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+
+  [data-task-card-media] > img {
+    object-fit: contain;
+  }
+
   [data-task-card-actions] {
     width: 100%;
     justify-content: flex-end;
@@ -756,6 +765,10 @@ input[type="number"] {
 
 /* Task detail keeps the output prominent while pinning primary actions above the Home Indicator. */
 @media (max-width: 767px) {
+  [data-detail-sheet] {
+    padding-bottom: 0;
+  }
+
   [data-detail-mobile-header] {
     min-height: 3.25rem;
     height: 3.25rem;
