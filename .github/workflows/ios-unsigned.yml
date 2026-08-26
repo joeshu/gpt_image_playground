@@ -36,6 +36,16 @@ jobs:
       - name: Build production web app
         run: npm run build
 
+      - name: Verify mobile layout contract
+        run: |
+          set -euo pipefail
+          grep -Fq "padding-bottom: calc(0.375rem + var(--safe-area-bottom))" src/index.css
+          grep -Fq "flex: 1 1 0%" src/index.css
+          grep -Fq "[data-detail-actions]" src/index.css
+          grep -Fq "@media (hover: none) and (pointer: coarse)" src/index.css
+          grep -Fq "mobile-composer-collapsed" src/components/InputBar.tsx
+          grep -Fq "bottom-[calc(var(--input-bar-clearance,12rem)+0.75rem)] right-4" src/components/AgentWorkspace.tsx
+
       - name: Generate and sync Capacitor iOS project
         run: |
           set -euo pipefail
