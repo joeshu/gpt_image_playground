@@ -128,7 +128,7 @@ export default function StateOwnedPptBriefModal({ open, currentPrompt, onClose, 
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-200">画面比例</span>
-                <select value={brief.aspectRatio} onChange={(event) => updateField('aspectRatio', event.target.value as StateOwnedPptBrief['aspectRatio']) className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-400 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-100">
+                <select value={brief.aspectRatio} onChange={(event) => updateField('aspectRatio', event.target.value as StateOwnedPptBrief['aspectRatio'])} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-400 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-100">
                   <option value="16:9">16:9 横版</option>
                   <option value="4:3">4:3 横版</option>
                 </select>
