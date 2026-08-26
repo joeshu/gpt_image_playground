@@ -14,6 +14,7 @@ import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { replaceImageMentionsForApi } from '../lib/promptImageMentions'
 import { getAgentTextApiProfile, getApiProviderLabel, isAgentTextApiProfile } from '../lib/apiProfiles'
 import { getTaskComparisonImageIds, getTaskLineage } from '../lib/taskLineage'
+import { buildProtectedTextPrompt, getProtectableTexts, normalizeProtectedTexts } from '../lib/protectedText'
 import { verifyImageText } from '../lib/textVerification'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
@@ -204,6 +205,10 @@ export default function DetailModal() {
   const textVerificationReport = currentOutputImageId
     ? task?.textVerificationByImage?.[currentOutputImageId]
     : undefined
+  const protectedTextCandidates = textVerificationReport ? getProtectableTexts(textVerificationReport) : []
+  const protectedTexts = currentOutputImageId
+    ? task?.protectedTextsByImage?.[currentOutputImageId] ?? []
+    : []
 
   useEffect(() => {
     const outputImageIds = task?.outputImages ?? []
@@ -474,6 +479,33 @@ export default function DetailModal() {
     window.requestAnimationFrame(() => {
       modalRef.current?.querySelector<HTMLElement>('[data-detail-info]')?.scrollTo({ top: 0, behavior: 'smooth' })
     })
+  }
+
+  const saveProtectedTexts = (values: string[]) => {
+    if (!task || !currentOutputImageId) return
+    const normalized = normalizeProtectedTexts(values)
+    updateTaskInStore(task.id, {
+      protectedTextsByImage: {
+        ...(task.protectedTextsByImage ?? {}),
+        [currentOutputImageId]: normalized,
+      },
+    })
+  }
+
+  const toggleProtectedText = (text: string) => {
+    saveProtectedTexts(
+      protectedTexts.includes(text)
+        ? protectedTexts.filter((item) => item !== text)
+        : [...protectedTexts, text],
+    )
+  }
+
+  const handleProtectedRework = async () => {
+    if (!task || !currentOutputImageId || protectedTexts.length === 0) return
+    await editOutputs({ ...task, outputImages: [currentOutputImageId] })
+    useStore.getState().setPrompt(buildProtectedTextPrompt(task.prompt, protectedTexts))
+    setDetailTaskId(null)
+    showToast(`已带入结果图并锁定 ${protectedTexts.length} 条文字`, 'success')
   }
 
   const handleVerifyText = async () => {
@@ -1140,6 +1172,65 @@ export default function DetailModal() {
                           ))}
                         </div>
                       </div>
+                    )}
+
+                    {protectedTextCandidates.length > 0 && (
+                      <details className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
+                        <summary className="cursor-pointer font-medium text-blue-600 dark:text-blue-300">
+                          不可修改文字锁定 · 已选 {protectedTexts.length}/{protectedTextCandidates.length}
+                        </summary>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => saveProtectedTexts(protectedTextCandidates)}
+                            className="min-h-9 rounded-lg bg-white px-3 text-[11px] font-medium text-blue-600 shadow-sm dark:bg-white/[0.07] dark:text-blue-300"
+                          >
+                            全部锁定
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveProtectedTexts([])}
+                            disabled={protectedTexts.length === 0}
+                            className="min-h-9 rounded-lg bg-white px-3 text-[11px] text-gray-500 shadow-sm disabled:opacity-40 dark:bg-white/[0.07] dark:text-gray-300"
+                          >
+                            清空
+                          </button>
+                        </div>
+                        <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+                          {protectedTextCandidates.map((text, index) => {
+                            const selected = protectedTexts.includes(text)
+                            return (
+                              <button
+                                key={`${text}-${index}`}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => toggleProtectedText(text)}
+                                className={`flex min-h-11 w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition ${
+                                  selected
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white/85 text-gray-700 dark:bg-white/[0.05] dark:text-gray-200'
+                                }`}
+                              >
+                                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                                  selected ? 'border-white/70 bg-white/20' : 'border-gray-300 dark:border-gray-500'
+                                }`}>
+                                  {selected ? '✓' : ''}
+                                </span>
+                                <span className="min-w-0 break-words">{text}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {protectedTexts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleProtectedRework}
+                            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-medium text-white transition hover:bg-blue-700 active:scale-[0.99]"
+                          >
+                            带 {protectedTexts.length} 条锁定文字返工
+                          </button>
+                        )}
+                      </details>
                     )}
 
                     <details className="rounded-lg bg-white/70 px-3 py-2 text-xs dark:bg-white/[0.04]">
