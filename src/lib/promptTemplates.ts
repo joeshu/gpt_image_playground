@@ -1,4 +1,4 @@
-export type PromptTemplateCategory = 'poster' | 'ecommerce' | 'portrait' | 'logo' | 'infographic' | 'custom'
+export type PromptTemplateCategory = 'poster' | 'ecommerce' | 'portrait' | 'logo' | 'infographic' | 'ppt-report' | 'custom'
 
 export interface PromptTemplateVariable {
   key: string
@@ -88,6 +88,23 @@ export const BUILTIN_PROMPT_TEMPLATES: PromptTemplate[] = [
       { key: 'industry', label: '所属行业', placeholder: '例如：智能家居' },
       { key: 'style', label: '品牌气质', placeholder: '例如：科技、可靠、温暖' },
       { key: 'color', label: '主色', placeholder: '例如：深蓝与荧光绿' },
+    ],
+    builtin: true,
+  },
+  {
+    id: 'state-owned-report-ppt',
+    category: 'ppt-report',
+    title: '国企汇报 PPT',
+    description: '适合党委、经营分析、工作会和专题汇报材料',
+    tags: ['国企', '汇报', '16:9'],
+    template: '制作一页{{aspectRatio}}横版国企汇报 PPT 视觉稿，汇报主题为“{{topic}}”，汇报对象为{{audience}}，核心结论为“{{conclusion}}”。页面包含：{{sections}}。采用正式、克制、可信的政企商务风格，以{{brandColor}}为主色，建立标题、结论、数据、举措和备注的清晰层级。突出关键数字和结论，图表、表格与文字在投屏和手机预览中均清晰可读。必须忠实保留业务事实、原始文字、数字、单位和计算关系，不虚构数据，不改变政治表述，不使用娱乐化插画、乱码、水印或过度装饰；预留安全边距，输出可直接用于汇报排版的 16:9 画面。',
+    variables: [
+      { key: 'topic', label: '汇报主题', placeholder: '例如：2026 年存量经营提升工作' },
+      { key: 'audience', label: '汇报对象', placeholder: '例如：省公司领导和地市负责人' },
+      { key: 'conclusion', label: '核心结论', placeholder: '例如：收入稳步提升，重点业务保持增长' },
+      { key: 'sections', label: '页面模块', placeholder: '例如：现状、问题、目标、举措、数据图表' },
+      { key: 'brandColor', label: '主色', placeholder: '例如：中国联通红与深灰' },
+      { key: 'aspectRatio', label: '画面比例', placeholder: '例如：16:9', defaultValue: '16:9' },
     ],
     builtin: true,
   },
