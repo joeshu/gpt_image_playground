@@ -24,6 +24,8 @@ import InputParamsPanel from './input/inputParamsPanel'
 import PromptEnhancerModal from './PromptEnhancerModal'
 import PromptVersionHistoryModal from './PromptVersionHistoryModal'
 import PromptTemplateModal from './PromptTemplateModal'
+import PromptPreflightModal from './PromptPreflightModal'
+import { runPromptPreflight, type PromptPreflightResult } from '../lib/promptPreflight'
 import { savePromptVersion } from '../lib/promptVersionHistory'
 
 /** API 支持的最大参考图数量 */
@@ -362,6 +364,8 @@ export default function InputBar() {
   const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
   const [showPromptVersions, setShowPromptVersions] = useState(false)
   const [showPromptTemplates, setShowPromptTemplates] = useState(false)
+  const [showPromptPreflight, setShowPromptPreflight] = useState(false)
+  const [promptPreflightResult, setPromptPreflightResult] = useState<PromptPreflightResult | null>(null)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
   const [imageDragIndex, setImageDragIndex] = useState<number | null>(null)
@@ -484,7 +488,7 @@ export default function InputBar() {
   const promptPlaceholder = appMode === 'agent'
     ? '描述要完成的任务，可输入 @ 来引用图片...'
     : '描述你想生成的图片，可输入 @ 来指定参考图...'
-  const submitCurrentMode = useCallback(() => {
+  const executeSubmitCurrentMode = useCallback(() => {
     savePromptVersion({ prompt, source: 'generated' })
     if (appMode === 'agent') {
       void submitAgentMessage()
@@ -492,6 +496,21 @@ export default function InputBar() {
       void submitTask()
     }
   }, [appMode, prompt])
+
+  const submitCurrentMode = useCallback(() => {
+    const result = runPromptPreflight({
+      prompt,
+      inputImageCount: inputImages.length,
+      params,
+      provider: activeProfile.provider,
+    })
+    if (result.issues.length > 0) {
+      setPromptPreflightResult(result)
+      setShowPromptPreflight(true)
+      return
+    }
+    executeSubmitCurrentMode()
+  }, [activeProfile.provider, executeSubmitCurrentMode, inputImages.length, params, prompt])
   const stopActiveAgentResponse = useCallback(() => {
     stopAgentResponse(activeAgentConversationId)
   }, [activeAgentConversationId])
@@ -2056,6 +2075,16 @@ export default function InputBar() {
           />
         </div>
       </div>
+
+      <PromptPreflightModal
+        open={showPromptPreflight}
+        result={promptPreflightResult}
+        onCancel={() => setShowPromptPreflight(false)}
+        onConfirm={() => {
+          setShowPromptPreflight(false)
+          executeSubmitCurrentMode()
+        }}
+      />
 
       <PromptTemplateModal
         open={showPromptTemplates}
