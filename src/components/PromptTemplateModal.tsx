@@ -142,23 +142,25 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
                       ? 'border-blue-400 bg-blue-50 dark:bg-blue-500/10'
                       : 'border-gray-100 dark:border-white/[0.06]'
                   }`}>
-                    <button type="button" onClick={() => setSelectedId(template.id)} className="w-full text-left">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-gray-800 dark:text-gray-100">{template.title}</span>
-                        {template.builtin ? <span className="text-[10px] text-gray-400">内置</span> : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              deleteCustomPromptTemplate(template.id)
-                              refreshTemplates()
-                            }}
-                            className="text-[10px] text-red-500"
-                          >
-                            删除
-                          </button>
-                        )}
-                      </div>
-                      <p className="mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">{template.description}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <button type="button" onClick={() => setSelectedId(template.id)} className="min-w-0 text-left text-sm font-medium text-gray-800 dark:text-gray-100">
+                        {template.title}
+                      </button>
+                      {template.builtin ? <span className="text-[10px] text-gray-400">内置</span> : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            deleteCustomPromptTemplate(template.id)
+                            refreshTemplates()
+                          }}
+                          className="text-[10px] text-red-500"
+                        >
+                          删除
+                        </button>
+                      )}
+                    </div>
+                    <button type="button" onClick={() => setSelectedId(template.id)} className="mt-1.5 w-full text-left">
+                      <p className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">{template.description}</p>
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {template.tags.map((tag) => <span key={tag} className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-white/[0.07] dark:text-gray-400">{tag}</span>)}
                       </div>
