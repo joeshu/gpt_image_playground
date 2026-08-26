@@ -23,6 +23,7 @@ import InputBatchBars from './input/inputBatchBars'
 import InputParamsPanel from './input/inputParamsPanel'
 import PromptEnhancerModal from './PromptEnhancerModal'
 import PromptVersionHistoryModal from './PromptVersionHistoryModal'
+import PromptTemplateModal from './PromptTemplateModal'
 import { savePromptVersion } from '../lib/promptVersionHistory'
 
 /** API 支持的最大参考图数量 */
@@ -360,6 +361,7 @@ export default function InputBar() {
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
   const [showPromptVersions, setShowPromptVersions] = useState(false)
+  const [showPromptTemplates, setShowPromptTemplates] = useState(false)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
   const [imageDragIndex, setImageDragIndex] = useState<number | null>(null)
@@ -1839,7 +1841,15 @@ export default function InputBar() {
             )}
           </div>
 
-          <div className="mt-2 flex justify-end gap-2">
+          <div className="mt-2 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPromptTemplates(true)}
+              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-3 text-xs font-medium text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] dark:border-amber-500/20 dark:bg-amber-500/[0.08] dark:text-amber-300"
+            >
+              <span aria-hidden="true">▦</span>
+              模板
+            </button>
             <button
               type="button"
               onClick={() => setShowPromptVersions(true)}
@@ -2046,6 +2056,19 @@ export default function InputBar() {
           />
         </div>
       </div>
+
+      <PromptTemplateModal
+        open={showPromptTemplates}
+        currentPrompt={prompt}
+        onClose={() => setShowPromptTemplates(false)}
+        onApply={(templatePrompt) => {
+          savePromptVersion({ prompt: templatePrompt, source: 'template' })
+          setPrompt(templatePrompt)
+          setPromptExpanded(true)
+          setMobileCollapsed(false)
+          showToast('已套用提示词模板，可继续修改', 'success')
+        }}
+      />
 
       <PromptVersionHistoryModal
         open={showPromptVersions}
