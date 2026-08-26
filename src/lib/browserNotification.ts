@@ -1,10 +1,11 @@
-import { registerPlugin } from '@capacitor/core'
+import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 import { isNativeApp } from './platform'
 
 export type BrowserNotificationPermission = NotificationPermission | 'unsupported'
 export type BrowserNotificationPermissionResult =
   | { ok: true }
   | { ok: false; reason: 'unsupported' | 'insecure' | 'denied' | 'default' | 'error'; error?: unknown }
+export type NotificationTarget = { taskId?: string; conversationId?: string }
 export type BrowserNotificationReadiness =
   | { ok: true }
   | { ok: false; reason: 'unsupported' | 'insecure' | 'denied' | 'default' }
@@ -12,7 +13,8 @@ export type BrowserNotificationReadiness =
 interface NativeNotificationsPlugin {
   getPermission(): Promise<{ permission: 'granted' | 'denied' | 'default' }>
   requestPermission(): Promise<{ permission: 'granted' | 'denied' | 'default' }>
-  notify(options: { title: string; body: string }): Promise<void>
+  notify(options: { title: string; body: string; taskId?: string; conversationId?: string }): Promise<void>
+  addListener(eventName: 'notificationAction', listener: (target: NotificationTarget) => void): Promise<PluginListenerHandle>
 }
 
 const NativeNotifications = registerPlugin<NativeNotificationsPlugin>('NativeNotifications')
@@ -63,9 +65,15 @@ export async function requestBrowserNotificationPermission(): Promise<BrowserNot
   }
 }
 
-export function showBrowserNotification(title: string, options?: NotificationOptions) {
+export async function subscribeNotificationActions(listener: (target: NotificationTarget) => void) {
+  if (!isNativeApp()) return () => undefined
+  const handle = await NativeNotifications.addListener('notificationAction', listener)
+  return () => { void handle.remove() }
+}
+
+export function showBrowserNotification(title: string, options?: NotificationOptions, target: NotificationTarget = {}) {
   if (isNativeApp()) {
-    void NativeNotifications.notify({ title, body: options?.body ?? '' }).catch((error) => {
+    void NativeNotifications.notify({ title, body: options?.body ?? '', ...target }).catch((error) => {
       console.warn('Native task notification failed:', error)
     })
     return true
@@ -82,6 +90,7 @@ export function showBrowserNotification(title: string, options?: NotificationOpt
     })
     notification.onclick = () => {
       window.focus()
+      window.dispatchEvent(new CustomEvent('task-notification-action', { detail: target }))
       notification.close()
     }
     return true
