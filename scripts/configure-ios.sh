@@ -343,8 +343,11 @@ public class NativeNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, UNUserNotif
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getPermission", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestPermission", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "notify", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "notify", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPendingAction", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearPendingAction", returnType: CAPPluginReturnPromise)
     ]
+    private var pendingAction: [String: String]?
 
     override public func load() {
         UNUserNotificationCenter.current().delegate = self
@@ -400,16 +403,28 @@ public class NativeNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, UNUserNotif
         }
     }
 
+    @objc func getPendingAction(_ call: CAPPluginCall) {
+        call.resolve(pendingAction ?? [:])
+    }
+
+    @objc func clearPendingAction(_ call: CAPPluginCall) {
+        pendingAction = nil
+        call.resolve()
+    }
+
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
-        notifyListeners("notificationAction", data: [
+        let action = [
+            "actionId": UUID().uuidString,
             "taskId": userInfo["taskId"] as? String ?? "",
             "conversationId": userInfo["conversationId"] as? String ?? ""
-        ])
+        ]
+        pendingAction = action
+        notifyListeners("notificationAction", data: action)
         completionHandler()
     }
 
