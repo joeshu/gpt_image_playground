@@ -1,9 +1,8 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
-const inputBar = readFileSync(new URL('../components/InputBar.tsx', import.meta.url), 'utf8')
-const agentWorkspace = readFileSync(new URL('../components/AgentWorkspace.tsx', import.meta.url), 'utf8')
+import css from '../index.css?raw'
+import inputBar from '../components/InputBar.tsx?raw'
+import agentWorkspace from '../components/AgentWorkspace.tsx?raw'
 
 describe('mobile layout contract', () => {
   it('keeps the composer docked above the iOS safe area', () => {
