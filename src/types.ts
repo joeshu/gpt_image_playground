@@ -172,6 +172,25 @@ export interface AgentInputDraft {
 
 export type TaskStatus = 'running' | 'done' | 'error'
 
+export interface TextVerificationChange {
+  expected: string
+  actual: string
+}
+
+export interface TextVerificationReport {
+  sourceImageId: string
+  resultImageId: string
+  checkedAt: number
+  score: number
+  status: 'passed' | 'warning'
+  sourceTexts: string[]
+  resultTexts: string[]
+  missingTexts: string[]
+  changedTexts: TextVerificationChange[]
+  numericChanges: TextVerificationChange[]
+  summary: string
+}
+
 export interface TaskRecord {
   id: string
   prompt: string
@@ -202,6 +221,8 @@ export interface TaskRecord {
   actualParamsByImage?: Record<string, Partial<TaskParams>>
   /** 输出图片对应的 API 改写提示词，key 为 outputImages 中的图片 id */
   revisedPromptByImage?: Record<string, string>
+  /** 输出图片对应的文字核验报告，key 为 outputImages 中的图片 id */
+  textVerificationByImage?: Record<string, TextVerificationReport>
   /** 是否启用透明背景后处理 */
   transparentOutput?: boolean
   /** 实际发送给 API 的透明背景辅助提示词 */
