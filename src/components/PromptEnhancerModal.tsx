@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ApiProfile } from '../types'
 import { enhancePrompt, type PromptEnhancementLevel, type PromptEnhancementResult } from '../lib/promptEnhancer'
 import { savePromptVersion } from '../lib/promptVersionHistory'
+import { compilePromptIntent, getPromptTaskTypeLabel, PROMPT_TASK_TYPE_OPTIONS, type PromptTaskType } from '../lib/promptCompiler'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 
@@ -31,9 +32,12 @@ const SECTION_LABELS: Array<[keyof PromptEnhancementResult['sections'], string]>
 
 export default function PromptEnhancerModal({ open, prompt, profile, onClose, onApply }: PromptEnhancerModalProps) {
   const [level, setLevel] = useState<PromptEnhancementLevel>('balanced')
+  const [taskTypeOverride, setTaskTypeOverride] = useState<PromptTaskType | null>(null)
   const [result, setResult] = useState<PromptEnhancementResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const detectedIntent = useMemo(() => compilePromptIntent(prompt), [prompt])
+  const activeTaskType = taskTypeOverride ?? detectedIntent.taskType
 
   useCloseOnEscape(open && !isLoading, onClose)
   usePreventBackgroundScroll(open)
@@ -43,6 +47,7 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
     setResult(null)
     setError('')
     setLevel('balanced')
+    setTaskTypeOverride(null)
   }, [open, prompt])
 
   if (!open) return null
@@ -56,7 +61,7 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
     setError('')
     try {
       savePromptVersion({ prompt, source: 'original' })
-      const enhanced = await enhancePrompt({ profile, prompt, level })
+      const enhanced = await enhancePrompt({ profile, prompt, level, taskType: activeTaskType })
       savePromptVersion({ prompt: enhanced.enhancedPrompt, source: 'enhanced', enhancementLevel: level })
       setResult(enhanced)
     } catch (reason) {
@@ -65,6 +70,8 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
       setIsLoading(false)
     }
   }
+
+  const activeTaskTypeOption = PROMPT_TASK_TYPE_OPTIONS.find((option) => option.value === activeTaskType)
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 sm:items-center sm:p-4" onClick={onClose}>
@@ -105,13 +112,40 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
             ))}
           </div>
 
+          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-medium text-blue-700 dark:text-blue-300">任务类型</div>
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  自动识别为「{getPromptTaskTypeLabel(detectedIntent.taskType)}」 · 置信度 {Math.round(detectedIntent.confidence * 100)}%
+                </p>
+              </div>
+              <select
+                value={activeTaskType}
+                onChange={(event) => setTaskTypeOverride(event.target.value as PromptTaskType)}
+                disabled={isLoading}
+                className="min-h-10 max-w-[9rem] rounded-lg border border-blue-200 bg-white px-2 text-xs font-medium text-blue-700 outline-none dark:border-blue-500/25 dark:bg-white/[0.06] dark:text-blue-200"
+                aria-label="选择任务类型"
+              >
+                {PROMPT_TASK_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-gray-600 dark:text-gray-300">{activeTaskTypeOption?.description}</p>
+          </div>
+
+          {activeTaskType === 'state-owned-ppt' && (
+            <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:bg-red-500/10 dark:text-red-300">
+              国企汇报 PPT 将优先采用 16:9 横版、正式克制的政企商务风格，并保护政治表述、业务事实和关键数据。
+            </div>
+          )}
+
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
               <div className="text-xs font-medium text-gray-500 dark:text-gray-400">增强前</div>
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-800 dark:text-gray-200">{prompt}</p>
             </div>
             <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-500/20 dark:bg-blue-500/[0.06]">
-              <div className="text-xs font-medium text-blue-600 dark:text-blue-300">增强后</div>
+              <div className="text-xs font-medium text-blue-600 dark:text-blue-300">增强后 · {result?.taskType ? getPromptTaskTypeLabel(result.taskType) : activeTaskTypeOption?.label}</div>
               {result ? (
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-800 dark:text-gray-100">{result.enhancedPrompt}</p>
               ) : (
