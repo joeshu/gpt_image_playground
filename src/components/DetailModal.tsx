@@ -18,6 +18,7 @@ import { verifyImageText } from '../lib/textVerification'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
 import ImageCompareModal from './ImageCompareModal'
+import TextVerificationOverlayModal from './TextVerificationOverlayModal'
 import ViewportTooltip from './ViewportTooltip'
 
 export default function DetailModal() {
@@ -43,6 +44,7 @@ export default function DetailModal() {
   const [showRawUrlsModal, setShowRawUrlsModal] = useState(false)
   const [showRawResponseModal, setShowRawResponseModal] = useState(false)
   const [showImageComparison, setShowImageComparison] = useState(false)
+  const [showTextVerificationOverlay, setShowTextVerificationOverlay] = useState(false)
   const [isVerifyingText, setIsVerifyingText] = useState(false)
   const [textVerificationError, setTextVerificationError] = useState('')
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
@@ -115,6 +117,7 @@ export default function DetailModal() {
   useEffect(() => {
     setImageIndex(0)
     setShowImageComparison(false)
+    setShowTextVerificationOverlay(false)
     setIsVerifyingText(false)
     setTextVerificationError('')
   }, [detailTaskId])
@@ -1097,7 +1100,7 @@ export default function DetailModal() {
 
                 {textVerificationReport && (
                   <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                         textVerificationReport.status === 'passed'
                           ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
@@ -1105,7 +1108,16 @@ export default function DetailModal() {
                       }`}>
                         {textVerificationReport.status === 'passed' ? '通过' : '需检查'} · {textVerificationReport.score} 分
                       </span>
-                      <span className="truncate text-[11px] text-gray-500 dark:text-gray-400">{textVerificationReport.summary || '核验完成'}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-gray-500 dark:text-gray-400">{textVerificationReport.summary || '核验完成'}</span>
+                      {(textVerificationReport.regions?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTextVerificationOverlay(true)}
+                          className="flex h-9 shrink-0 items-center rounded-lg border border-violet-200 bg-white/90 px-3 text-xs font-medium text-violet-600 transition active:scale-[0.98] dark:border-violet-500/25 dark:bg-white/[0.06] dark:text-violet-300"
+                        >
+                          图上定位 {textVerificationReport.regions!.length} 处
+                        </button>
+                      )}
                     </div>
 
                     {textVerificationReport.missingTexts.length > 0 && (
@@ -1412,6 +1424,14 @@ export default function DetailModal() {
           beforeImageId={comparisonImageIds.beforeImageId}
           afterImageId={comparisonImageIds.afterImageId}
           onClose={() => setShowImageComparison(false)}
+        />
+      )}
+
+      {showTextVerificationOverlay && currentOutputImageId && textVerificationReport && (textVerificationReport.regions?.length ?? 0) > 0 && (
+        <TextVerificationOverlayModal
+          imageId={currentOutputImageId}
+          report={textVerificationReport}
+          onClose={() => setShowTextVerificationOverlay(false)}
         />
       )}
     </div>
