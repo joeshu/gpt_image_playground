@@ -18,6 +18,7 @@ import { buildProtectedTextPrompt, getProtectableTexts, normalizeProtectedTexts 
 import { buildTextRepairPrompt } from '../lib/textRepair'
 import { verifyImageText } from '../lib/textVerification'
 import { analyzeVisualDifference } from '../lib/visualDifference'
+import { getCommercialDeliveryCheck } from '../lib/commercialDeliveryCheck'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
 import ImageCompareModal from './ImageCompareModal'
@@ -51,6 +52,7 @@ export default function DetailModal() {
   const [showTextVerificationOverlay, setShowTextVerificationOverlay] = useState(false)
   const [showVisualDifferenceOverlay, setShowVisualDifferenceOverlay] = useState(false)
   const [isAnalyzingVisualDifference, setIsAnalyzingVisualDifference] = useState(false)
+  const [isRunningCommercialCheck, setIsRunningCommercialCheck] = useState(false)
   const [visualDifferenceError, setVisualDifferenceError] = useState('')
   const [isVerifyingText, setIsVerifyingText] = useState(false)
   const [isStartingTextRepair, setIsStartingTextRepair] = useState(false)
@@ -128,6 +130,7 @@ export default function DetailModal() {
     setShowTextVerificationOverlay(false)
     setShowVisualDifferenceOverlay(false)
     setIsAnalyzingVisualDifference(false)
+    setIsRunningCommercialCheck(false)
     setVisualDifferenceError('')
     setIsVerifyingText(false)
     setIsStartingTextRepair(false)
@@ -219,6 +222,7 @@ export default function DetailModal() {
   const visualDifferenceReport = currentOutputImageId
     ? task?.visualDifferenceByImage?.[currentOutputImageId]
     : undefined
+  const commercialDeliveryCheck = getCommercialDeliveryCheck(textVerificationReport, visualDifferenceReport)
   const protectedTextCandidates = textVerificationReport ? getProtectableTexts(textVerificationReport) : []
   const protectedTexts = currentOutputImageId
     ? task?.protectedTextsByImage?.[currentOutputImageId] ?? []
@@ -623,6 +627,18 @@ export default function DetailModal() {
       showToast(message, 'error')
     } finally {
       setIsVerifyingText(false)
+    }
+  }
+
+  const handleRunCommercialCheck = async () => {
+    if (!task || !canVerifyText || !currentOutputImageId) return
+    setIsRunningCommercialCheck(true)
+    try {
+      const rerunAll = Boolean(textVerificationReport && visualDifferenceReport)
+      if (rerunAll || !textVerificationReport) await handleVerifyText()
+      if (rerunAll || !visualDifferenceReport) await handleAnalyzeVisualDifference()
+    } finally {
+      setIsRunningCommercialCheck(false)
     }
   }
 
@@ -1182,6 +1198,114 @@ export default function DetailModal() {
                       <span className="min-w-0 truncate text-xs text-gray-600 dark:text-gray-300">{child.prompt || '(无提示词)'}</span>
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {canVerifyText && (
+              <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-500/15 dark:bg-emerald-500/[0.06]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">商业交付检查</h3>
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">汇总文字准确性与视觉忠实度</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRunCommercialCheck}
+                    disabled={isRunningCommercialCheck || isVerifyingText || isAnalyzingVisualDifference}
+                    className="flex min-h-9 shrink-0 items-center rounded-lg bg-emerald-700 px-3 text-xs font-medium text-white transition hover:bg-emerald-800 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isRunningCommercialCheck
+                      ? '检查中…'
+                      : commercialDeliveryCheck.completedChecks === 2
+                        ? '重新完整检查'
+                        : '一键完整检查'}
+                  </button>
+                </div>
+
+                <div className="mt-3 rounded-xl bg-white/80 p-3 dark:bg-white/[0.05]">
+                  {commercialDeliveryCheck.score === null ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                          已完成 {commercialDeliveryCheck.completedChecks}/{commercialDeliveryCheck.totalChecks} 项
+                        </div>
+                        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                          {!textVerificationReport && !visualDifferenceReport
+                            ? '运行完整检查后生成综合评分'
+                            : !textVerificationReport
+                              ? '还需完成文字准确性检查'
+                              : '还需完成视觉忠实度检查'}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500 dark:bg-white/[0.07] dark:text-gray-300">
+                        {commercialDeliveryCheck.status === 'pending' ? '待检查' : '检查未完整'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-end gap-1">
+                          <span className="text-3xl font-semibold tabular-nums text-gray-900 dark:text-white">{commercialDeliveryCheck.score}</span>
+                          <span className="pb-1 text-xs text-gray-400">/ 100</span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">文字 60% · 视觉 40%</p>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        commercialDeliveryCheck.status === 'passed'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                      }`}>
+                        {commercialDeliveryCheck.status === 'passed' ? '可交付' : '建议复核'}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-violet-50 px-3 py-2 dark:bg-violet-500/[0.08]">
+                      <div className="text-[11px] text-violet-500 dark:text-violet-300">文字准确性</div>
+                      <div className="mt-0.5 text-lg font-semibold tabular-nums text-violet-700 dark:text-violet-200">
+                        {commercialDeliveryCheck.textScore ?? '待检查'}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-cyan-50 px-3 py-2 dark:bg-cyan-500/[0.08]">
+                      <div className="text-[11px] text-cyan-600 dark:text-cyan-300">视觉忠实度</div>
+                      <div className="mt-0.5 text-lg font-semibold tabular-nums text-cyan-700 dark:text-cyan-200">
+                        {commercialDeliveryCheck.visualScore ?? '待检查'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {commercialDeliveryCheck.completedChecks === 2 && commercialDeliveryCheck.issues.length === 0 && (
+                    <div className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-500/10 dark:text-green-300">
+                      未发现需要修复的文字或视觉问题
+                    </div>
+                  )}
+                  {commercialDeliveryCheck.issues.length > 0 && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                        <span>待修复清单</span>
+                        <span>{commercialDeliveryCheck.issues.length} 项</span>
+                      </div>
+                      <div className="mt-1.5 space-y-1.5">
+                        {commercialDeliveryCheck.issues.slice(0, 6).map((issue, index) => (
+                          <div key={`${issue.category}-${issue.label}-${index}`} className="flex items-start gap-2 rounded-lg bg-white/80 px-2.5 py-2 text-xs dark:bg-white/[0.05]">
+                            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                              issue.category === 'text'
+                                ? 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300'
+                                : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300'
+                            }`}>
+                              {issue.category === 'text' ? '文字' : '视觉'}
+                            </span>
+                            <span className="min-w-0 break-words text-gray-700 dark:text-gray-200">{issue.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {commercialDeliveryCheck.issues.length > 6 && (
+                        <p className="mt-1.5 text-[11px] text-gray-400">另有 {commercialDeliveryCheck.issues.length - 6} 项，请查看下方分项报告</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
