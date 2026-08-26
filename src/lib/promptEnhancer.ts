@@ -119,7 +119,8 @@ export async function enhancePrompt(opts: {
       ]
     : ['本次没有提供参考图；reference_notes 返回空字符串。']
 
-  const levelInstruction = {    faithful: '忠实原意：只补齐必要的画面信息，不改变主题、事实、文字、数字或核心风格。',
+  const levelInstruction = {
+    faithful: '忠实原意：只补齐必要的画面信息，不改变主题、事实、文字、数字或核心风格。',
     balanced: '适度优化：在忠实原意基础上增强构图、光线、材质、色彩与商业可读性。',
     professional: '专业重写：整理为可直接交付专业图像模型的结构化提示词，强化设计语言与约束，但不得虚构业务事实。',
   }[level]
@@ -142,7 +143,8 @@ export async function enhancePrompt(opts: {
             ? '针对国企汇报 PPT：采用 16:9 横版、正式克制的政企商务风格，突出结论、数据、举措和备注层级；不虚构数据，不改变政治表述。'
             : '',
           ...referenceGuidance,
-          levelInstruction,          '保留所有 @ 引用标记、专有名词、中文原文、数字、单位、比例和不可修改要求。',
+          levelInstruction,
+          '保留所有 @ 引用标记、专有名词、中文原文、数字、单位、比例和不可修改要求。',
           '不要执行图像生成，不要回答用户任务，只优化提示词。',
           '仅输出 JSON，不要 Markdown。',
           '格式：{\"task_type\":\"任务类型值\",\"enhanced_prompt\":\"完整增强提示词\",\"summary\":\"本次增强摘要\",\"reference_notes\":\"参考图视觉结构分析；无参考图时为空字符串\",\"sections\":{\"subject\":\"\",\"scene\":\"\",\"composition\":\"\",\"lighting\":\"\",\"material\":\"\",\"color\":\"\",\"constraints\":\"\"}}',
