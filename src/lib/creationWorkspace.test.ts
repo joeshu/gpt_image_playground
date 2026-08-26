@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCreationPrompt,
   createCreationProject,
+  exportCreationProject,
   getCreationBatchCombinationCount,
   getCreationProjectCompletion,
   loadCreationWorkspace,
   normalizeCreationWorkspace,
+  parseCreationProjectExport,
   removeCreationProject,
   saveCreationWorkspace,
 } from './creationWorkspace'
@@ -97,5 +99,18 @@ describe('creation workspace', () => {
 
     const workspace = { projects: [project], activeProjectId: project.id }
     expect(removeCreationProject(workspace, project.id)).toBe(workspace)
+  })
+
+  it('exports and restores a normalized project configuration', () => {
+    const project = createCreationProject('可复现项目', 400)
+    project.brand.name = '中国联通'
+    project.series.aspectRatio = '16:9'
+
+    const restored = parseCreationProjectExport(exportCreationProject(project, 401), 500)
+
+    expect(restored?.name).toBe('可复现项目')
+    expect(restored?.brand.name).toBe('中国联通')
+    expect(restored?.series.aspectRatio).toBe('16:9')
+    expect(restored?.updatedAt).toBe(400)
   })
 })

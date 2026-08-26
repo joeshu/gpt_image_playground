@@ -235,7 +235,27 @@ export function removeCreationProject(state: CreationWorkspaceState, projectId: 
   }
 }
 
-export function buildCreationPrompt(project: CreationProject, currentPrompt = '') {
+export function exportCreationProject(project: CreationProject, exportedAt = Date.now()) {
+  return JSON.stringify({
+    kind: 'gpt-image-playground.creation-project',
+    version: 1,
+    exportedAt,
+    project: normalizeCreationProject(project, 0, exportedAt),
+  }, null, 2)
+}
+
+export function parseCreationProjectExport(raw: string, now = Date.now()) {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed)) return null
+    const project = isRecord(parsed.project) ? parsed.project : parsed
+    return normalizeCreationProject(project, 0, now)
+  } catch {
+    return null
+  }
+}
+
+export function buildCreationPrompt(project: CreationProject, currentPrompt = '', selectedVariableValues?: Record<string, string>) {
   const lines = ['【创作工作台规则】', `项目：${project.name}`]
   if (project.description) lines.push(`项目说明：${project.description}`)
 
@@ -268,10 +288,15 @@ export function buildCreationPrompt(project: CreationProject, currentPrompt = ''
   ].filter((line): line is string => Boolean(line))
   if (seriesLines.length > 0) lines.push('系列一致性：', ...seriesLines)
 
+  const hasSelectedVariables = selectedVariableValues != null
   const variableLines = project.series.variables
     .filter((variable) => variable.name || variable.values.length > 0)
-    .map((variable) => `- ${variable.name}：${variable.values.join('、') || '待填写'}`)
-  if (variableLines.length > 0) lines.push('批量变量（仅使用已填写值）：', ...variableLines)
+    .map((variable) => {
+      const hasSelectedValue = hasSelectedVariables && Object.prototype.hasOwnProperty.call(selectedVariableValues, variable.id)
+      const value = hasSelectedValue ? selectedVariableValues[variable.id] : variable.values.join('、')
+      return `- ${variable.name}：${value || '待填写'}`
+    })
+  if (variableLines.length > 0) lines.push(hasSelectedVariables ? '本次批量变量组合：' : '批量变量（仅使用已填写值）：', ...variableLines)
 
   lines.push('执行约束：不得虚构或修改用户提供的业务事实、中文原文、数字、单位和政治表述；如信息缺失，保留待补位置。')
   const base = currentPrompt.trim()

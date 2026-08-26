@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getImage } from '../lib/db'
 import {
   CREATION_ASPECT_RATIOS,
@@ -6,10 +6,12 @@ import {
   MAX_CREATION_VARIABLES,
   buildCreationPrompt,
   createCreationProject,
+  exportCreationProject,
   getActiveCreationProject,
   getCreationBatchCombinationCount,
   getCreationProjectCompletion,
   loadCreationWorkspace,
+  parseCreationProjectExport,
   removeCreationProject,
   saveCreationWorkspace,
 } from '../lib/creationWorkspace'
@@ -17,6 +19,7 @@ import { savePromptVersion } from '../lib/promptVersionHistory'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useStore } from '../store'
 import type { CreationProject, CreationWorkspaceModule, CreationVariable } from '../types'
+import CreationBatchPanel from './CreationBatchPanel'
 import { PlusIcon } from './icons'
 
 const MODULES: Array<{ value: CreationWorkspaceModule; label: string; description: string }> = [
@@ -101,10 +104,20 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
   const setConfirmDialog = useStore((state) => state.setConfirmDialog)
   const [workspace, setWorkspace] = useState(() => loadCreationWorkspace())
   const [activeModule, setActiveModule] = useState<CreationWorkspaceModule>('overview')
+  const [batchBusy, setBatchBusy] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
   const activeProject = useMemo(() => getActiveCreationProject(workspace), [workspace])
   const activeModuleInfo = getModule(activeModule)
 
-  useCloseOnEscape(true, onClose)
+  const requestClose = () => {
+    if (batchBusy) {
+      showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
+      return
+    }
+    onClose()
+  }
+
+  useCloseOnEscape(true, requestClose)
 
   useEffect(() => {
     saveCreationWorkspace(workspace)
@@ -166,6 +179,46 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
     setActiveModule('overview')
   }
 
+  const handleExportProject = () => {
+    const blob = new Blob([exportCreationProject(activeProject)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${activeProject.name || '创作项目'}-工作台配置.json`
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    showToast('项目配置已导出', 'success')
+  }
+
+  const handleImportProject = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (workspace.projects.length >= MAX_CREATION_PROJECTS) {
+      showToast(`最多保存 ${MAX_CREATION_PROJECTS} 个创作项目，请先删除一个项目`, 'info')
+      return
+    }
+    try {
+      const imported = parseCreationProjectExport(await file.text())
+      if (!imported) {
+        showToast('项目配置文件无效或已损坏', 'error')
+        return
+      }
+      const now = Date.now()
+      const shell = createCreationProject(imported.name || '导入项目', now)
+      const project = { ...imported, id: shell.id, createdAt: now, updatedAt: now }
+      setWorkspace((current) => ({
+        projects: [project, ...current.projects].slice(0, MAX_CREATION_PROJECTS),
+        activeProjectId: project.id,
+      }))
+      setActiveModule('overview')
+      showToast(`已导入项目「${project.name}」`, 'success')
+    } catch (error) {
+      console.warn('Failed to import creation project:', error)
+      showToast('项目配置文件读取失败', 'error')
+    }
+  }
+
   const handleDeleteProject = () => {
     if (workspace.projects.length <= 1) {
       showToast('至少保留一个创作项目', 'info')
@@ -194,6 +247,10 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
   }
 
   const handleApplyToPrompt = async () => {
+    if (batchBusy) {
+      showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
+      return
+    }
     const missingIds = activeProject.brand.referenceImageIds.filter((id) => !useStore.getState().inputImages.some((image) => image.id === id))
     let additions: Array<{ id: string; dataUrl: string }> = []
     try {
@@ -215,7 +272,7 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
     const prompt = buildCreationPrompt(activeProject, currentPrompt)
     savePromptVersion({ prompt, source: 'template' })
     setPrompt(prompt)
-    onClose()
+    requestClose()
     showToast('已将创作规则应用到当前提示词', 'success')
   }
 
@@ -245,7 +302,7 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
       <div className="safe-area-x mx-auto max-w-7xl px-0 pt-24 sm:pt-28">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <button type="button" onClick={onClose} className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-gray-800 dark:hover:bg-white/[0.06] dark:hover:text-gray-200">
+            <button type="button" onClick={requestClose} className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-gray-800 dark:hover:bg-white/[0.06] dark:hover:text-gray-200">
               <span aria-hidden="true">←</span>
               返回生成
             </button>
@@ -270,6 +327,9 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
               <PlusIcon className="h-4 w-4" />
               新建项目
             </button>
+            <button type="button" onClick={handleExportProject} className="min-h-11 rounded-xl border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.06]">导出配置</button>
+            <button type="button" onClick={() => importInputRef.current?.click()} className="min-h-11 rounded-xl border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.06]">导入配置</button>
+            <input ref={importInputRef} type="file" accept="application/json,.json" onChange={(event) => void handleImportProject(event)} className="hidden" aria-label="导入创作项目配置" />
           </div>
         </div>
 
@@ -329,7 +389,7 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
                   <ModuleCard title="系列一致性" description="锁定主体、比例和跨图规则，减少系列素材漂移。" onClick={() => setActiveModule('series')}>
                     <div className="text-xs text-gray-600 dark:text-gray-300">{activeProject.series.name || '尚未命名系列'} · {activeProject.series.aspectRatio}</div>
                   </ModuleCard>
-                  <ModuleCard title="批量变量" description="先预览变量组合数量，后续接入任务队列批量生成。" onClick={() => setActiveModule('series')}>
+                  <ModuleCard title="批量变量" description="预览组合后手动启动队列，失败停在当前项并支持重试。" onClick={() => setActiveModule('series')}>
                     <div className="text-xs text-gray-600 dark:text-gray-300">{activeProject.series.variables.length} 个变量 · {getCreationBatchCombinationCount(activeProject)} 个组合</div>
                   </ModuleCard>
                 </div>
@@ -401,12 +461,21 @@ export default function CreationWorkbench({ onClose }: CreationWorkbenchProps) {
                 </div>
               </div>
             )}
+
+            <div className={activeModule === 'series' ? 'mt-4' : 'hidden'}>
+              <CreationBatchPanel
+                project={activeProject}
+                currentPrompt={currentPrompt}
+                inputImages={inputImages}
+                onBusyChange={setBatchBusy}
+              />
+            </div>
           </section>
         </div>
 
         <div className="sticky bottom-0 z-10 mt-6 flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-white/[0.08] dark:bg-gray-900/95 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">自动保存在本机 · 不新增 AI 调用 · 应用后仍可在输入栏继续修改</div>
-          <div className="flex gap-2"><button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl bg-gray-100 px-4 text-xs font-medium text-gray-700 dark:bg-white/[0.07] dark:text-gray-200 sm:flex-none">返回</button><button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:flex-none">应用到当前提示词</button></div>
+          <div className="flex gap-2"><button type="button" onClick={requestClose} className="min-h-11 flex-1 rounded-xl bg-gray-100 px-4 text-xs font-medium text-gray-700 dark:bg-white/[0.07] dark:text-gray-200 sm:flex-none">返回</button><button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:flex-none">应用到当前提示词</button></div>
         </div>
       </div>
     </main>

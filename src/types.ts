@@ -374,6 +374,40 @@ export interface CreationWorkspaceState {
   activeProjectId: string | null
 }
 
+export type CreationBatchItemStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled'
+export type CreationBatchJobStatus = 'draft' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+
+export interface CreationBatchItem {
+  id: string
+  variableValues: Record<string, string>
+  taskId: string | null
+  status: CreationBatchItemStatus
+  attempts: number
+  error: string | null
+  createdAt: number
+  startedAt: number | null
+  finishedAt: number | null
+}
+
+export interface CreationBatchJob {
+  id: string
+  projectId: string
+  /** 提交时的项目快照，保证项目后续修改不影响当前批次。 */
+  projectSnapshot: CreationProject
+  basePrompt: string
+  inputImageIds: string[]
+  params: TaskParams
+  items: CreationBatchItem[]
+  status: CreationBatchJobStatus
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CreationBatchState {
+  jobs: CreationBatchJob[]
+  activeJobId: string | null
+}
+
 // ===== Agent 模式 =====
 
 export type AgentMessageRole = 'user' | 'assistant'
