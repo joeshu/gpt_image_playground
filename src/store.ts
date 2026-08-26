@@ -148,10 +148,10 @@ function isAgentTask(task: TaskRecord) {
   return task.sourceMode === 'agent' || Boolean(task.agentConversationId || task.agentRoundId)
 }
 
-function showTaskCompletionNotification(title: string, body: string) {
+function showTaskCompletionNotification(title: string, body: string, target: { taskId?: string; conversationId?: string }) {
   const settings = normalizeSettings(useStore.getState().settings)
   if (!settings.taskCompletionNotification) return
-  showBrowserNotification(title, { body })
+  showBrowserNotification(title, { body }, target)
 }
 
 function countSuccessfulOutputImages(tasks: TaskRecord[]) {
@@ -1427,7 +1427,7 @@ async function completeRecoveredFalTask(task: TaskRecord, result: Awaited<Return
     falRecoverable: false,
   })
   useStore.getState().showToast(`fal.ai 任务已恢复，共 ${outputIds.length} 张图片`, 'success')
-  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `fal.ai 任务已恢复，共 ${outputIds.length} 张图片。`)
+  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `fal.ai 任务已恢复，共 ${outputIds.length} 张图片。`, { taskId: task.id })
   else void continueRecoveredAgentRound(task.id)
 }
 
@@ -3556,6 +3556,7 @@ async function executeAgentRound(
     showTaskCompletionNotification(
       outputIds.length > 0 ? 'Agent 已生成图片' : 'Agent 已回复',
       outputIds.length > 0 ? `Agent 回复已结束，共生成 ${outputIds.length} 张图片。` : 'Agent 回复已结束。',
+      { conversationId },
     )
   } catch (err) {
     if (controller.signal.aborted) {
@@ -3774,7 +3775,7 @@ async function executeTask(taskId: string) {
       ? `生成完成：成功 ${outputIds.length} 张，失败 ${failedCount} 张`
       : `生成完成，共 ${outputIds.length} 张图片`
     useStore.getState().showToast(completionMessage, failedCount > 0 ? 'error' : 'success')
-    if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `${completionMessage}。`)
+    if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `${completionMessage}。`, { taskId })
     const currentMask = useStore.getState().maskDraft
     if (
       maskDataUrl &&
@@ -4381,7 +4382,7 @@ async function completeRecoveredCustomTask(task: TaskRecord, result: Awaited<Ret
     customRecoverable: false,
   })
   useStore.getState().showToast(`自定义异步任务已恢复，共 ${outputIds.length} 张图片`, 'success')
-  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `自定义异步任务已恢复，共 ${outputIds.length} 张图片。`)
+  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `自定义异步任务已恢复，共 ${outputIds.length} 张图片。`, { taskId: task.id })
   else void continueRecoveredAgentRound(task.id)
 }
 
