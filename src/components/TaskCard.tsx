@@ -46,6 +46,7 @@ function TaskActionButton({
         type="button"
         onClick={onClick}
         className={className}
+        data-haptic="selection"
         disabled={disabled}
         aria-label={tooltip}
       >
