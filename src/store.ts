@@ -19,7 +19,7 @@ import type {
   StoredImageThumbnail,
 } from './types'
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_PARAMS } from './types'
-import { DEFAULT_SETTINGS, getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, getCustomProviderDefinition, mergeImportedSettings, mergePresetImportedSettings, normalizeSettings, validateApiProfile } from './lib/apiProfiles'
+import { DEFAULT_SETTINGS, getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, getCustomProviderDefinition, isAgentTextApiProfile, mergeImportedSettings, mergePresetImportedSettings, normalizeSettings, validateApiProfile } from './lib/apiProfiles'
 import { enforcePresetConfigPolicy, getPresetConfig, getPresetProfileIds, getPresetProviderIds, isPresetConfigDeletionPrevented, isPresetConfigOnlyEnabled, isPresetConfigParamsLocked, isPresetProfile, isPresetProviderDeletionPrevented } from './lib/presetConfig'
 import { dismissAllTooltips } from './lib/tooltipDismiss'
 import { remapImageMentionsForOrder, replaceImageMentionsForApi } from './lib/promptImageMentions'
@@ -71,6 +71,8 @@ import { stripInjectedCodexCliSizePrompt } from './lib/size'
 import { StorageQuotaError } from './lib/storage'
 import { getApiKeySignature, hydrateNativeApiKeys, markNativeSecretStorageReady, persistNativeApiKeys, redactSettingsApiKeys, shouldRedactPersistedApiKeys } from './lib/nativeSecretStorage'
 import { isNativeApp } from './lib/platform'
+import { isAutoTextRepairPrompt } from './lib/textRepair'
+import { verifyImageText } from './lib/textVerification'
 
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
@@ -3634,6 +3636,71 @@ async function executeAgentRound(
   }
 }
 
+async function runAutomaticTextVerification(opts: {
+  taskId: string
+  sourceImageId: string
+  sourceDataUrl: string
+  outputIds: string[]
+  outputDataUrls: string[]
+  prompt: string
+}) {
+  const { taskId, sourceImageId, sourceDataUrl, outputIds, outputDataUrls, prompt } = opts
+  updateTaskInStore(taskId, { autoTextVerificationStatus: 'running', autoTextVerificationError: undefined })
+
+  try {
+    const state = useStore.getState()
+    const profile = getAgentTextApiProfile(state.settings)
+    if (!profile || !isAgentTextApiProfile(profile) || !profile.apiKey) {
+      throw new Error('自动复核需要先配置支持图像理解的 Agent Responses API')
+    }
+
+    const reports = {}
+    for (let index = 0; index < outputIds.length; index += 1) {
+      const resultImageId = outputIds[index]
+      const resultDataUrl = outputDataUrls[index]
+      if (!resultImageId || !resultDataUrl) continue
+      reports[resultImageId] = await verifyImageText({
+        profile,
+        sourceImageId,
+        sourceDataUrl,
+        resultImageId,
+        resultDataUrl,
+        prompt,
+      })
+    }
+
+    const latestTask = useStore.getState().tasks.find((item) => item.id === taskId)
+    const sourceTask = useStore.getState().tasks.find((item) => item.outputImages.includes(sourceImageId))
+    const inheritedProtectedTexts = sourceTask?.protectedTextsByImage?.[sourceImageId] ?? []
+    const protectedTextsByImage = inheritedProtectedTexts.length > 0
+      ? Object.fromEntries(outputIds.map((imageId) => [imageId, inheritedProtectedTexts]))
+      : latestTask?.protectedTextsByImage
+    updateTaskInStore(taskId, {
+      textVerificationByImage: {
+        ...(latestTask?.textVerificationByImage ?? {}),
+        ...reports,
+      },
+      protectedTextsByImage,
+      autoTextVerificationStatus: 'done',
+      autoTextVerificationError: undefined,
+    })
+
+    const reportValues = Object.values(reports)
+    const warningCount = reportValues.filter((report) => report.status === 'warning').length
+    useStore.getState().showToast(
+      warningCount > 0 ? `自动文字复核完成：${warningCount} 张仍需检查` : '自动文字复核通过',
+      warningCount > 0 ? 'info' : 'success',
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '自动文字复核失败'
+    updateTaskInStore(taskId, {
+      autoTextVerificationStatus: 'error',
+      autoTextVerificationError: message,
+    })
+    useStore.getState().showToast(message, 'error')
+  }
+}
+
 async function executeTask(taskId: string) {
   const { settings } = useStore.getState()
   const task = useStore.getState().tasks.find((t) => t.id === taskId)
@@ -3746,6 +3813,7 @@ async function executeTask(taskId: string) {
     }
 
     // 更新任务
+    const shouldAutoVerifyText = isAutoTextRepairPrompt(task.prompt) && Boolean(task.inputImageIds[0] && inputDataUrls[0] && outputIds.length)
     const latestBeforeUpdate = useStore.getState().tasks.find((t) => t.id === taskId)
     if (!latestBeforeUpdate || latestBeforeUpdate.status !== 'running') {
       useStore.getState().setTaskStreamPreview(taskId)
@@ -3767,6 +3835,8 @@ async function executeTask(taskId: string) {
       ...createTaskDonePatch(task, Date.now()),
       falRecoverable: false,
       customRecoverable: false,
+      autoTextVerificationStatus: shouldAutoVerifyText ? 'pending' : undefined,
+      autoTextVerificationError: undefined,
     })
     void deleteUnreferencedImageIds(partialImageIdsToClean)
 
@@ -3776,6 +3846,16 @@ async function executeTask(taskId: string) {
       : `生成完成，共 ${outputIds.length} 张图片`
     useStore.getState().showToast(completionMessage, failedCount > 0 ? 'error' : 'success')
     if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `${completionMessage}。`, { taskId })
+    if (shouldAutoVerifyText) {
+      void runAutomaticTextVerification({
+        taskId,
+        sourceImageId: task.inputImageIds[0],
+        sourceDataUrl: inputDataUrls[0],
+        outputIds,
+        outputDataUrls,
+        prompt: task.prompt,
+      })
+    }
     const currentMask = useStore.getState().maskDraft
     if (
       maskDataUrl &&
