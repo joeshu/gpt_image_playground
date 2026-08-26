@@ -11,6 +11,10 @@ describe('text verification response', () => {
   "missing_texts": ["营业员积分明白卡"],
   "changed_texts": [{"expected": "工作积分规则", "actual": "工作积份规则"}],
   "numeric_changes": [{"expected": "210.6", "actual": "210.8"}],
+  "result_regions": [
+    {"type": "changed", "label": "错字", "expected": "工作积分规则", "actual": "工作积份规则", "bbox": [10, 20, 30, 8]},
+    {"type": "numeric", "label": "数字变化", "expected": "210.6", "actual": "210.8", "bbox": [0.7, 0.8, 0.4, 0.3]}
+  ],
   "summary": "存在文字与数字变化"
 }
 \`\`\``, 'source', 'result', 123)
@@ -24,6 +28,10 @@ describe('text verification response', () => {
       missingTexts: ['营业员积分明白卡'],
       changedTexts: [{ expected: '工作积分规则', actual: '工作积份规则' }],
       numericChanges: [{ expected: '210.6', actual: '210.8' }],
+      regions: [
+        { type: 'changed', label: '错字', expected: '工作积分规则', actual: '工作积份规则', x: 10, y: 20, width: 30, height: 8 },
+        { type: 'numeric', label: '数字变化', expected: '210.6', actual: '210.8', x: 70, y: 80, width: 30, height: 20 },
+      ],
     })
   })
 
@@ -35,6 +43,7 @@ describe('text verification response', () => {
       missing_texts: [],
       changed_texts: [],
       numeric_changes: [],
+      result_regions: [],
       summary: '文字一致',
     }), 'source', 'result')
 
