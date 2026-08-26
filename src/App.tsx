@@ -26,6 +26,8 @@ import { clearImageCaches } from './lib/imageCache'
 import { subscribeNotificationActions } from './lib/browserNotification'
 
 let defaultConfigImportStarted = false
+let resolveStoreReady: (() => void) | null = null
+const storeReady = new Promise<void>((resolve) => { resolveStoreReady = resolve })
 
 export default function App() {
   const appMode = useStore((s) => s.appMode)
@@ -98,7 +100,8 @@ export default function App() {
     let disposed = false
     let removeNotificationActions: (() => void) | null = null
 
-    void subscribeNotificationActions((target) => {
+    void subscribeNotificationActions(async (target) => {
+      await storeReady
       const state = useStore.getState()
       if (target.conversationId) {
         state.setActiveAgentConversationId(target.conversationId)
@@ -152,6 +155,8 @@ export default function App() {
 
     void initStore()
       .then(async () => {
+        resolveStoreReady?.()
+        resolveStoreReady = null
         const importedSettings = embeddedDefaultConfig || customProviderConfigUrl
           ? await loadDefaultConfig()
           : hasDefaultPresetConfig()
@@ -200,6 +205,8 @@ export default function App() {
         clearAppliedUrlSettings()
       })
       .catch((error) => {
+        resolveStoreReady?.()
+        resolveStoreReady = null
         console.warn('Failed to import preset config:', error)
         setPresetConfig(null)
         const state = useStore.getState()
