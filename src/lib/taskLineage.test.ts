@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskRecord } from '../types'
-import { getTaskLineage } from './taskLineage'
+import { getTaskComparisonImageIds, getTaskLineage } from './taskLineage'
 
 function task(id: string, createdAt: number, inputImageIds: string[], outputImages: string[]) {
   return { id, createdAt, inputImageIds, outputImages } as TaskRecord
@@ -26,5 +26,23 @@ describe('task image lineage', () => {
     const unrelated = task('unrelated', 4, ['other'], [])
 
     expect(getTaskLineage(current, [older, unrelated]).children).toEqual([])
+  })
+
+  it('selects the exact referenced parent output and active current result', () => {
+    const source = task('source', 1, [], ['source-a', 'source-b'])
+    const current = task('current', 2, ['source-b'], ['result-a', 'result-b'])
+
+    expect(getTaskComparisonImageIds(current, source, 'result-b')).toEqual({
+      beforeImageId: 'source-b',
+      afterImageId: 'result-b',
+    })
+  })
+
+  it('does not offer comparison when either side has no image', () => {
+    const source = task('source', 1, [], [])
+    const current = task('current', 2, [], ['result'])
+
+    expect(getTaskComparisonImageIds(current, source)).toBeNull()
+    expect(getTaskComparisonImageIds(current, null)).toBeNull()
   })
 })
