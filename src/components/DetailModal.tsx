@@ -13,6 +13,7 @@ import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from 
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { replaceImageMentionsForApi } from '../lib/promptImageMentions'
 import { getApiProviderLabel } from '../lib/apiProfiles'
+import { getTaskLineage } from '../lib/taskLineage'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
 import ViewportTooltip from './ViewportTooltip'
@@ -64,6 +65,10 @@ export default function DetailModal() {
   const task = useMemo(
     () => tasks.find((t) => t.id === detailTaskId) ?? null,
     [tasks, detailTaskId],
+  )
+  const lineage = useMemo(
+    () => task ? getTaskLineage(task, tasks) : { parent: null, children: [] },
+    [task, tasks],
   )
   const streamPreviewItems = useMemo(() => {
     const slotEntries = streamPreviewSlots
@@ -443,6 +448,13 @@ export default function DetailModal() {
   const handleRetry = () => {
     retryTask(task)
     setDetailTaskId(null)
+  }
+
+  const handleOpenRelatedTask = (taskId: string) => {
+    setDetailTaskId(taskId)
+    window.requestAnimationFrame(() => {
+      modalRef.current?.querySelector<HTMLElement>('[data-detail-info]')?.scrollTo({ top: 0, behavior: 'smooth' })
+    })
   }
 
   return (
@@ -959,6 +971,38 @@ export default function DetailModal() {
                     {allInputImageIds.length > 0 ? '由模型自主选择，可能包含其他图片' : '由模型自主选择'}
                   </div>
                 )}
+              </div>
+            )}
+
+            {(lineage.parent || lineage.children.length > 0) && (
+              <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <LinkIcon className="h-4 w-4 text-blue-500" />
+                  <h3 className="text-xs font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">版本链</h3>
+                </div>
+                <div className="space-y-2">
+                  {lineage.parent && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRelatedTask(lineage.parent!.id)}
+                      className="flex w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-left transition hover:bg-white dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+                    >
+                      <span className="shrink-0 rounded-md bg-blue-100 px-2 py-1 text-[10px] font-medium text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">上一版本</span>
+                      <span className="min-w-0 truncate text-xs text-gray-600 dark:text-gray-300">{lineage.parent.prompt || '(无提示词)'}</span>
+                    </button>
+                  )}
+                  {lineage.children.map((child, index) => (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => handleOpenRelatedTask(child.id)}
+                      className="flex w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-left transition hover:bg-white dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+                    >
+                      <span className="shrink-0 rounded-md bg-green-100 px-2 py-1 text-[10px] font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">后续 {index + 1}</span>
+                      <span className="min-w-0 truncate text-xs text-gray-600 dark:text-gray-300">{child.prompt || '(无提示词)'}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
