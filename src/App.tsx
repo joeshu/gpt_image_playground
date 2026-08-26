@@ -23,6 +23,7 @@ import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectio
 import { useGlobalClickSuppression } from './lib/clickSuppression'
 import { subscribeNativeLifecycle } from './lib/nativeLifecycle'
 import { clearImageCaches } from './lib/imageCache'
+import { subscribeNotificationActions } from './lib/browserNotification'
 
 let defaultConfigImportStarted = false
 
@@ -92,6 +93,30 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [showToast])
+
+  useEffect(() => {
+    let disposed = false
+    let removeNotificationActions: (() => void) | null = null
+
+    void subscribeNotificationActions((target) => {
+      const state = useStore.getState()
+      if (target.conversationId) {
+        state.setActiveAgentConversationId(target.conversationId)
+        state.setAppMode('agent')
+        window.requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight }))
+        return
+      }
+      if (target.taskId) state.setDetailTaskId(target.taskId)
+    }).then((remove) => {
+      if (disposed) remove()
+      else removeNotificationActions = remove
+    }).catch((error) => console.warn('Failed to subscribe to notification actions:', error))
+
+    return () => {
+      disposed = true
+      removeNotificationActions?.()
+    }
+  }, [])
 
   useEffect(() => {
     if (defaultConfigImportStarted) return
