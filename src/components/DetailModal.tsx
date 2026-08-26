@@ -456,6 +456,7 @@ export default function DetailModal() {
       <div
         ref={modalRef}
         data-ios-sheet
+        data-detail-sheet
         className="relative bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/50 dark:border-white/[0.08] rounded-3xl shadow-[0_8px_40px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_40px_rgb(0,0,0,0.4)] max-w-4xl w-full ios-modal-height-tall overflow-hidden flex flex-col md:flex-row z-10 ring-1 ring-black/5 dark:ring-white/10 animate-modal-in ios-safe-bottom"
         onClick={(e) => e.stopPropagation()}
       >
