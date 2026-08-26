@@ -23,6 +23,7 @@ function requestedRatio(prompt: string) {
   if (/(?:竖版|竖屏|长图|人像|手机海报|9[:：]16|4[:：]5)/i.test(prompt)) return 'portrait'
   if (/(?:横版|横屏|宽幅|宽屏|16[:：]9|3[:：]2)/i.test(prompt)) return 'landscape'
   if (/(?:正方形|方图|1[:：]1)/i.test(prompt)) return 'square'
+  if (/(?:ppt|幻灯片|演示稿|汇报材料|工作会|经营分析)/i.test(prompt)) return 'landscape'
   return null
 }
 
