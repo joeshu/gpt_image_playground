@@ -1,0 +1,31 @@
+import { readFileSync } from 'node:fs'
+
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+const fail = (message) => {
+  console.error(`Mobile surface layout contract failed: ${message}`)
+  process.exitCode = 1
+}
+
+const agent = read('src/components/AgentWorkspace.tsx')
+const workbench = read('src/components/CreationWorkbench.tsx')
+const results = read('src/components/ResultsCenter.tsx')
+const app = read('src/App.tsx')
+
+const agentListClass = agent.match(/data-agent-message-list[\s\S]{0,180}?className="([^"]+)"/)?.[1]
+if (!agentListClass) fail('Agent message list marker or class is missing')
+else if (agentListClass.split(/\s+/).includes('flex')) fail('Agent message list must remain a vertical block, not a horizontal flex row')
+
+for (const [name, source, marker] of [
+  ['Creation Workbench', workbench, 'data-creation-content'],
+  ['Results Center', results, 'data-results-content'],
+]) {
+  const className = source.match(new RegExp(`${marker}[\\s\\S]{0,180}?className="([^"]+)"`))?.[1]
+  if (!className) fail(`${name} content marker or class is missing`)
+  else if (/\bpt-(?:20|24|28|32)\b/.test(className)) fail(`${name} duplicates the fixed header spacer with excessive top padding`)
+}
+
+if (!app.includes("navigateToSurface('creation')") || !app.includes("navigateToSurface('results')")) {
+  fail('surface switches must reset stale document scroll')
+}
+
+if (!process.exitCode) console.log('Mobile surface layout contract passed')

@@ -27,6 +27,7 @@ import { useGlobalClickSuppression } from './lib/clickSuppression'
 import { subscribeNativeLifecycle } from './lib/nativeLifecycle'
 import { clearImageCaches } from './lib/imageCache'
 import { subscribeNotificationActions } from './lib/browserNotification'
+import { resetSurfaceScroll } from './lib/surfaceNavigation'
 
 let defaultConfigImportStarted = false
 let resolveStoreReady: (() => void) | null = null
@@ -52,6 +53,11 @@ export default function App() {
       return false
     }
     return true
+  }
+
+  const navigateToSurface = (surface: AppSurface) => {
+    setActiveSurface(surface)
+    resetSurfaceScroll()
   }
 
   useEffect(() => {
@@ -252,17 +258,17 @@ export default function App() {
         onOpenHome={(mode) => {
           if (!canNavigateToSurface('home')) return
           setPromptStudioOpen(false)
-          setActiveSurface('home')
+          navigateToSurface('home')
           useStore.getState().setAppMode(mode)
         }}
         onOpenCreationWorkbench={() => {
           setPromptStudioOpen(false)
-          setActiveSurface('creation')
+          navigateToSurface('creation')
         }}
         onOpenResultsCenter={() => {
           if (!canNavigateToSurface('results')) return
           setPromptStudioOpen(false)
-          setActiveSurface('results')
+          navigateToSurface('results')
         }}
         onOpenSettings={() => {
           if (creationBatchBusy) {
@@ -276,11 +282,11 @@ export default function App() {
         <ResultsCenter
           onClose={() => {
             if (!canNavigateToSurface('home')) return
-            setActiveSurface('home')
+            navigateToSurface('home')
           }}
           onOpenCreationWorkbench={() => {
             setPromptStudioOpen(false)
-            setActiveSurface('creation')
+            navigateToSurface('creation')
           }}
         />
       ) : activeSurface === 'home' && appMode === 'agent' ? (
@@ -298,7 +304,7 @@ export default function App() {
         onBatchBusyChange={setCreationBatchBusy}
         onClose={() => {
           setPromptStudioOpen(false)
-          setActiveSurface('home')
+          navigateToSurface('home')
         }}
         onOpenPromptStudio={() => setPromptStudioOpen(true)}
       />

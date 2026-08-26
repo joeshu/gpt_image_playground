@@ -40,6 +40,7 @@ jobs:
       - name: Verify mobile layout contract
         run: |
           set -euo pipefail
+          node scripts/check-mobile-surface-layout.mjs
           grep -Fq "padding-bottom: calc(0.375rem + var(--safe-area-bottom))" src/index.css
           grep -Fq "flex: 1 1 0%" src/index.css
           grep -Fq "[data-detail-actions]" src/index.css

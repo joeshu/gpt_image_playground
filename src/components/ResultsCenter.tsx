@@ -186,7 +186,7 @@ export default function ResultsCenter({ onClose, onOpenCreationWorkbench }: { on
 
   return (
     <main data-results-center className="min-h-[100svh] bg-gray-50 pb-8 dark:bg-gray-950">
-      <div className="safe-area-x mx-auto max-w-7xl px-0 pt-24 sm:pt-28">
+      <div data-results-content className="safe-area-x mx-auto w-full min-w-0 max-w-7xl px-0 pt-4 sm:pt-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <button type="button" onClick={onClose} className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-gray-800 dark:hover:bg-white/[0.06] dark:hover:text-gray-200">← 返回创作</button>

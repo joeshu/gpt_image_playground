@@ -756,7 +756,8 @@ export default function AgentWorkspace() {
 
         <div 
           ref={scrollContainerRef}
-          className="flex min-w-0 w-full max-w-full flex-1 space-y-4 overflow-visible pb-[calc(var(--input-bar-clearance,12rem)+1.5rem)] px-1 lg:px-4 lg:pt-14"
+          data-agent-message-list
+          className="min-w-0 w-full max-w-full flex-1 space-y-4 overflow-visible pb-[calc(var(--input-bar-clearance,12rem)+1.5rem)] px-1 lg:px-4 lg:pt-14"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
