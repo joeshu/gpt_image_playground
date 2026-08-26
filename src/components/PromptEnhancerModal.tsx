@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ApiProfile } from '../types'
 import { enhancePrompt, type PromptEnhancementLevel, type PromptEnhancementResult } from '../lib/promptEnhancer'
+import { savePromptVersion } from '../lib/promptVersionHistory'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 
@@ -54,7 +55,10 @@ export default function PromptEnhancerModal({ open, prompt, profile, onClose, on
     setIsLoading(true)
     setError('')
     try {
-      setResult(await enhancePrompt({ profile, prompt, level }))
+      savePromptVersion({ prompt, source: 'original' })
+      const enhanced = await enhancePrompt({ profile, prompt, level })
+      savePromptVersion({ prompt: enhanced.enhancedPrompt, source: 'enhanced', enhancementLevel: level })
+      setResult(enhanced)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '提示词增强失败')
     } finally {
