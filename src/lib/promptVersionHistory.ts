@@ -65,18 +65,18 @@ export function savePromptVersion(input: Omit<PromptVersion, 'id' | 'createdAt'>
     createdAt: Date.now(),
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify([version, ...versions].slice(0, MAX_VERSIONS)))
-  window.dispatchEvent(new CustomEvent(PROMPT_VERSIONS_CHANGED_EVENT))
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(PROMPT_VERSIONS_CHANGED_EVENT))
   return version
 }
 
 export function removePromptVersion(id: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(loadPromptVersions().filter((version) => version.id !== id)))
-  window.dispatchEvent(new CustomEvent(PROMPT_VERSIONS_CHANGED_EVENT))
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(PROMPT_VERSIONS_CHANGED_EVENT))
 }
 
 export function clearPromptVersions() {
   localStorage.removeItem(STORAGE_KEY)
-  window.dispatchEvent(new CustomEvent(PROMPT_VERSIONS_CHANGED_EVENT))
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(PROMPT_VERSIONS_CHANGED_EVENT))
 }
 
 export function getPromptVersionDiff(before: string, after: string): PromptVersionDiff {
