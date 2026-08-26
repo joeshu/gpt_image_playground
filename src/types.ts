@@ -399,6 +399,8 @@ export interface CreationBatchJob {
   params: TaskParams
   items: CreationBatchItem[]
   status: CreationBatchJobStatus
+  /** 仅标记批次已归档，不删除任务、图片或检查报告。 */
+  archivedAt: number | null
   createdAt: number
   updatedAt: number
 }

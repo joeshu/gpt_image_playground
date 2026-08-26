@@ -6,9 +6,11 @@ import type {
   CreationBatchState,
   CreationProject,
   TaskParams,
+  TaskRecord,
 } from '../types'
 import { DEFAULT_PARAMS } from '../types'
 import { buildCreationPrompt, normalizeCreationProject } from './creationWorkspace'
+import { getCommercialDeliveryCheck, type CommercialDeliveryStatus } from './commercialDeliveryCheck'
 
 export const CREATION_BATCH_STORAGE_KEY = 'gpt-image-playground.creation-batches'
 export const MAX_CREATION_BATCH_JOBS = 10
@@ -34,6 +36,10 @@ function createId(prefix: string, now: number, suffix = '') {
 
 function normalizeTimestamp(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function normalizeArchivedAt(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
 function normalizeStringArray(value: unknown, maxLength: number) {
@@ -112,6 +118,7 @@ function normalizeJob(value: unknown, index: number, now: number): CreationBatch
     params: normalizeParams(source.params),
     items,
     status,
+    archivedAt: normalizeArchivedAt(source.archivedAt),
     createdAt: normalizeTimestamp(source.createdAt, now),
     updatedAt: normalizeTimestamp(source.updatedAt, now),
   }
@@ -165,6 +172,7 @@ export function createCreationBatchJob(
       finishedAt: null,
     })),
     status: 'draft',
+    archivedAt: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -245,6 +253,142 @@ export function getCreationBatchProgress(job: CreationBatchJob) {
     running,
     cancelled,
     percent: total > 0 ? Math.round((finished / total) * 100) : 0,
+  }
+}
+
+export interface CreationBatchItemDeliverySummary {
+  status: CommercialDeliveryStatus
+  outputCount: number
+  completeOutputCount: number
+  partialOutputCount: number
+  pendingOutputCount: number
+  passedOutputCount: number
+  warningOutputCount: number
+  averageScore: number | null
+  issueCount: number
+  issueLabels: string[]
+}
+
+export interface CreationBatchDeliverySummary extends CreationBatchItemDeliverySummary {}
+
+function getDeliveryStatus(summary: Pick<CreationBatchItemDeliverySummary, 'outputCount' | 'completeOutputCount' | 'partialOutputCount' | 'pendingOutputCount' | 'warningOutputCount'>): CommercialDeliveryStatus {
+  if (summary.outputCount === 0 || (summary.pendingOutputCount === summary.outputCount && summary.partialOutputCount === 0)) return 'pending'
+  if (summary.pendingOutputCount > 0 || summary.partialOutputCount > 0) return 'partial'
+  return summary.warningOutputCount > 0 ? 'warning' : 'passed'
+}
+
+function summarizeDeliveryChecks(checks: ReturnType<typeof getCommercialDeliveryCheck>[]): CreationBatchItemDeliverySummary {
+  const completeOutputCount = checks.filter((check) => check.completedChecks === check.totalChecks).length
+  const partialOutputCount = checks.filter((check) => check.completedChecks > 0 && check.completedChecks < check.totalChecks).length
+  const pendingOutputCount = checks.filter((check) => check.completedChecks === 0).length
+  const passedOutputCount = checks.filter((check) => check.status === 'passed').length
+  const warningOutputCount = checks.filter((check) => check.status === 'warning').length
+  const scores = checks
+    .map((check) => check.score)
+    .filter((score): score is number => score !== null)
+  const issueLabels = [...new Set(checks.flatMap((check) => check.issues.map((issue) => issue.label)))]
+
+  return {
+    status: getDeliveryStatus({
+      outputCount: checks.length,
+      completeOutputCount,
+      partialOutputCount,
+      pendingOutputCount,
+      warningOutputCount,
+    }),
+    outputCount: checks.length,
+    completeOutputCount,
+    partialOutputCount,
+    pendingOutputCount,
+    passedOutputCount,
+    warningOutputCount,
+    averageScore: scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null,
+    issueCount: checks.reduce((count, check) => count + check.issues.length, 0),
+    issueLabels,
+  }
+}
+
+export function getCreationBatchItemDeliverySummary(item: CreationBatchItem, task?: TaskRecord): CreationBatchItemDeliverySummary {
+  const outputImageIds = task?.outputImages ?? []
+  const checks = outputImageIds.map((imageId) => getCommercialDeliveryCheck(
+    task?.textVerificationByImage?.[imageId],
+    task?.visualDifferenceByImage?.[imageId],
+  ))
+  return summarizeDeliveryChecks(checks)
+}
+
+export function getCreationBatchDeliverySummary(job: CreationBatchJob, tasks: TaskRecord[]): CreationBatchDeliverySummary {
+  const tasksById = new Map(tasks.map((task) => [task.id, task]))
+  const summaries = job.items.map((item) => getCreationBatchItemDeliverySummary(item, item.taskId ? tasksById.get(item.taskId) : undefined))
+  const outputCount = summaries.reduce((count, summary) => count + summary.outputCount, 0)
+  const completeOutputCount = summaries.reduce((count, summary) => count + summary.completeOutputCount, 0)
+  const partialOutputCount = summaries.reduce((count, summary) => count + summary.partialOutputCount, 0)
+  const pendingOutputCount = summaries.reduce((count, summary) => count + summary.pendingOutputCount, 0)
+  const passedOutputCount = summaries.reduce((count, summary) => count + summary.passedOutputCount, 0)
+  const warningOutputCount = summaries.reduce((count, summary) => count + summary.warningOutputCount, 0)
+  const scoredSummaries = summaries.filter((summary) => summary.averageScore !== null)
+  const issueLabels = [...new Set(summaries.flatMap((summary) => summary.issueLabels))]
+
+  return {
+    status: getDeliveryStatus({ outputCount, completeOutputCount, partialOutputCount, pendingOutputCount, warningOutputCount }),
+    outputCount,
+    completeOutputCount,
+    partialOutputCount,
+    pendingOutputCount,
+    passedOutputCount,
+    warningOutputCount,
+    averageScore: scoredSummaries.length > 0
+      ? Math.round(scoredSummaries.reduce((sum, summary) => sum + (summary.averageScore ?? 0), 0) / scoredSummaries.length)
+      : null,
+    issueCount: summaries.reduce((count, summary) => count + summary.issueCount, 0),
+    issueLabels,
+  }
+}
+
+export interface CreationBatchReproductionManifest {
+  schemaVersion: 1
+  kind: 'gpt-image-playground.creation-batch'
+  batchId: string
+  projectId: string
+  projectSnapshot: CreationProject
+  basePrompt: string
+  inputImageIds: string[]
+  params: TaskParams
+  archivedAt: number | null
+  createdAt: number
+  updatedAt: number
+  items: Array<{
+    id: string
+    variableValues: Record<string, string>
+    taskId: string | null
+    outputImageIds: string[]
+    status: CreationBatchItemStatus
+    attempts: number
+  }>
+}
+
+export function createCreationBatchReproductionManifest(job: CreationBatchJob, tasks: TaskRecord[] = []): CreationBatchReproductionManifest {
+  const tasksById = new Map(tasks.map((task) => [task.id, task]))
+  return {
+    schemaVersion: 1,
+    kind: 'gpt-image-playground.creation-batch',
+    batchId: job.id,
+    projectId: job.projectId,
+    projectSnapshot: job.projectSnapshot,
+    basePrompt: job.basePrompt,
+    inputImageIds: [...job.inputImageIds],
+    params: { ...job.params },
+    archivedAt: job.archivedAt,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    items: job.items.map((item) => ({
+      id: item.id,
+      variableValues: { ...item.variableValues },
+      taskId: item.taskId,
+      outputImageIds: item.taskId ? [...(tasksById.get(item.taskId)?.outputImages ?? [])] : [],
+      status: item.status,
+      attempts: item.attempts,
+    })),
   }
 }
 
