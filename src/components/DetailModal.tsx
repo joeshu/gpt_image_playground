@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask } from '../store'
+import { useStore, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask, updateTaskInStore } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { useTooltip } from '../hooks/useTooltip'
@@ -12,8 +12,9 @@ import { dismissAllTooltips } from '../lib/tooltipDismiss'
 import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { replaceImageMentionsForApi } from '../lib/promptImageMentions'
-import { getApiProviderLabel } from '../lib/apiProfiles'
+import { getAgentTextApiProfile, getApiProviderLabel, isAgentTextApiProfile } from '../lib/apiProfiles'
 import { getTaskComparisonImageIds, getTaskLineage } from '../lib/taskLineage'
+import { verifyImageText } from '../lib/textVerification'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
 import ImageCompareModal from './ImageCompareModal'
@@ -42,6 +43,8 @@ export default function DetailModal() {
   const [showRawUrlsModal, setShowRawUrlsModal] = useState(false)
   const [showRawResponseModal, setShowRawResponseModal] = useState(false)
   const [showImageComparison, setShowImageComparison] = useState(false)
+  const [isVerifyingText, setIsVerifyingText] = useState(false)
+  const [textVerificationError, setTextVerificationError] = useState('')
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
   const rawUrlsModalRef = useRef<HTMLDivElement>(null)
@@ -112,6 +115,8 @@ export default function DetailModal() {
   useEffect(() => {
     setImageIndex(0)
     setShowImageComparison(false)
+    setIsVerifyingText(false)
+    setTextVerificationError('')
   }, [detailTaskId])
 
   useEffect(() => {
@@ -191,6 +196,11 @@ export default function DetailModal() {
   const comparisonImageIds = task
     ? getTaskComparisonImageIds(task, lineage.parent, currentOutputImageId)
     : null
+  const verificationSourceImageId = comparisonImageIds?.beforeImageId ?? task?.inputImageIds[0] ?? ''
+  const canVerifyText = Boolean(verificationSourceImageId && currentOutputImageId && verificationSourceImageId !== currentOutputImageId)
+  const textVerificationReport = currentOutputImageId
+    ? task?.textVerificationByImage?.[currentOutputImageId]
+    : undefined
 
   useEffect(() => {
     const outputImageIds = task?.outputImages ?? []
@@ -461,6 +471,47 @@ export default function DetailModal() {
     window.requestAnimationFrame(() => {
       modalRef.current?.querySelector<HTMLElement>('[data-detail-info]')?.scrollTo({ top: 0, behavior: 'smooth' })
     })
+  }
+
+  const handleVerifyText = async () => {
+    if (!task || !canVerifyText || !currentOutputImageId) return
+    const profile = getAgentTextApiProfile(settings)
+    if (!profile || !isAgentTextApiProfile(profile) || !profile.apiKey) {
+      showToast('请先在 Agent 配置中选择支持图像理解的 Responses API', 'error')
+      return
+    }
+
+    setIsVerifyingText(true)
+    setTextVerificationError('')
+    try {
+      const [sourceDataUrl, resultDataUrl] = await Promise.all([
+        ensureImageCached(verificationSourceImageId),
+        ensureImageCached(currentOutputImageId),
+      ])
+      if (!sourceDataUrl || !resultDataUrl) throw new Error('核验图片加载失败')
+
+      const report = await verifyImageText({
+        profile,
+        sourceImageId: verificationSourceImageId,
+        sourceDataUrl,
+        resultImageId: currentOutputImageId,
+        resultDataUrl,
+        prompt: task.prompt,
+      })
+      updateTaskInStore(task.id, {
+        textVerificationByImage: {
+          ...(task.textVerificationByImage ?? {}),
+          [currentOutputImageId]: report,
+        },
+      })
+      showToast(report.status === 'passed' ? '文字核验通过' : '文字核验完成，发现需检查项', report.status === 'passed' ? 'success' : 'info')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '文字核验失败'
+      setTextVerificationError(message)
+      showToast(message, 'error')
+    } finally {
+      setIsVerifyingText(false)
+    }
   }
 
   return (
@@ -1020,6 +1071,80 @@ export default function DetailModal() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {canVerifyText && (
+              <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/60 p-3 dark:border-violet-500/15 dark:bg-violet-500/[0.06]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">文字核验</h3>
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">对照来源图检查中文、数字和单位</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleVerifyText}
+                    disabled={isVerifyingText}
+                    className="flex h-9 shrink-0 items-center rounded-lg bg-violet-600 px-3 text-xs font-medium text-white transition hover:bg-violet-700 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isVerifyingText ? '核验中…' : textVerificationReport ? '重新核验' : '开始核验'}
+                  </button>
+                </div>
+
+                {textVerificationError && (
+                  <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{textVerificationError}</p>
+                )}
+
+                {textVerificationReport && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        textVerificationReport.status === 'passed'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                      }`}>
+                        {textVerificationReport.status === 'passed' ? '通过' : '需检查'} · {textVerificationReport.score} 分
+                      </span>
+                      <span className="truncate text-[11px] text-gray-500 dark:text-gray-400">{textVerificationReport.summary || '核验完成'}</span>
+                    </div>
+
+                    {textVerificationReport.missingTexts.length > 0 && (
+                      <div className="rounded-lg bg-white/80 px-3 py-2 dark:bg-white/[0.05]">
+                        <div className="text-[11px] font-medium text-red-600 dark:text-red-300">缺失文字</div>
+                        <div className="mt-1 text-xs text-gray-700 dark:text-gray-200">{textVerificationReport.missingTexts.join('、')}</div>
+                      </div>
+                    )}
+
+                    {[...textVerificationReport.changedTexts, ...textVerificationReport.numericChanges].length > 0 && (
+                      <div className="rounded-lg bg-white/80 px-3 py-2 dark:bg-white/[0.05]">
+                        <div className="text-[11px] font-medium text-amber-600 dark:text-amber-300">文字与数字变化</div>
+                        <div className="mt-1 space-y-1">
+                          {[...textVerificationReport.changedTexts, ...textVerificationReport.numericChanges].map((change, index) => (
+                            <div key={`${change.expected}-${change.actual}-${index}`} className="flex min-w-0 items-center gap-1.5 text-xs">
+                              <span className="min-w-0 truncate text-red-600 line-through dark:text-red-300">{change.expected || '(缺失)'}</span>
+                              <span className="shrink-0 text-gray-400">→</span>
+                              <span className="min-w-0 truncate font-medium text-green-700 dark:text-green-300">{change.actual || '(缺失)'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <details className="rounded-lg bg-white/70 px-3 py-2 text-xs dark:bg-white/[0.04]">
+                      <summary className="cursor-pointer text-gray-500 dark:text-gray-400">查看 OCR 提取全文</summary>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <div className="text-[11px] font-medium text-gray-400">来源图</div>
+                          <p className="mt-1 whitespace-pre-wrap text-gray-700 dark:text-gray-200">{textVerificationReport.sourceTexts.join('\n') || '(未识别到文字)'}</p>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-medium text-gray-400">结果图</div>
+                          <p className="mt-1 whitespace-pre-wrap text-gray-700 dark:text-gray-200">{textVerificationReport.resultTexts.join('\n') || '(未识别到文字)'}</p>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
             )}
 
