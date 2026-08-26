@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { deleteFavoriteCollection, useStore, submitTask, submitAgentMessage, stopAgentResponse, addImageFromFile, removeMultipleTasks, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
 import { DEFAULT_PARAMS, type TaskRecord } from '../types'
 import { getActiveAgentRounds } from '../lib/agentConversationState'
-import { getActiveApiProfile, getAgentImageApiProfile, normalizeSettings } from '../lib/apiProfiles'
+import { getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, isAgentTextApiProfile, normalizeSettings } from '../lib/apiProfiles'
 import { ensureImageCached, getCachedImage } from '../lib/imageCache'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { getAtImageQuery, getImageMentionLabel, getPromptIndexFromVisibleIndex, getPromptMentionParts, getSelectedImageMentionLabel, imageMentionMatches, insertImageMentionAtVisibleRange, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, stripImageMentionMarkers } from '../lib/promptImageMentions'
@@ -21,6 +21,7 @@ import ButtonTooltip from './input/buttonTooltip'
 import DragUploadOverlay from './input/dragUploadOverlay'
 import InputBatchBars from './input/inputBatchBars'
 import InputParamsPanel from './input/inputParamsPanel'
+import PromptEnhancerModal from './PromptEnhancerModal'
 
 /** API 支持的最大参考图数量 */
 const API_MAX_IMAGES = 16
@@ -355,6 +356,7 @@ export default function InputBar() {
   const [imageHintId, setImageHintId] = useState<string | null>(null)
   const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem('mobile-composer-collapsed') !== 'false')
   const [showSizePicker, setShowSizePicker] = useState(false)
+  const [showPromptEnhancer, setShowPromptEnhancer] = useState(false)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
   const [imageDragIndex, setImageDragIndex] = useState<number | null>(null)
@@ -443,6 +445,10 @@ export default function InputBar() {
   }, [isMobile, mobileCollapsed])
 
   const settingsActiveProfile = useMemo(() => getActiveApiProfile(settings), [settings])
+  const promptEnhancerProfile = useMemo(() => {
+    const profile = getAgentTextApiProfile(settings)
+    return profile && isAgentTextApiProfile(profile) ? profile : null
+  }, [settings])
   const currentActiveProfile = useMemo(() => (
     appMode === 'agent'
       ? getAgentImageApiProfile(settings) ?? settingsActiveProfile
@@ -1829,6 +1835,18 @@ export default function InputBar() {
             )}
           </div>
 
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowPromptEnhancer(true)}
+              disabled={!prompt.trim()}
+              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 dark:border-blue-500/20 dark:bg-blue-500/[0.08] dark:text-blue-300"
+            >
+              <span aria-hidden="true">✦</span>
+              智能优化提示词
+            </button>
+          </div>
+
           {/* 参数 + 按钮 */}
           <div className="mt-3">
             {/* 桌面端布局 */}
@@ -2016,6 +2034,19 @@ export default function InputBar() {
           />
         </div>
       </div>
+
+      <PromptEnhancerModal
+        open={showPromptEnhancer}
+        prompt={prompt}
+        profile={promptEnhancerProfile}
+        onClose={() => setShowPromptEnhancer(false)}
+        onApply={(enhancedPrompt) => {
+          setPrompt(enhancedPrompt)
+          setPromptExpanded(true)
+          setMobileCollapsed(false)
+          showToast('已应用增强提示词，可继续修改或直接生成', 'success')
+        }}
+      />
     </>
   )
 }
