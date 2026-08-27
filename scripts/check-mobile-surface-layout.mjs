@@ -12,6 +12,7 @@ const results = read('src/components/ResultsCenter.tsx')
 const app = read('src/App.tsx')
 const styles = read('src/index.css')
 const header = read('src/components/Header.tsx')
+const inputBar = read('src/components/InputBar.tsx')
 
 const agentListClass = agent.match(/data-agent-message-list[\s\S]{0,180}?className="([^"]+)"/)?.[1]
 if (!agentListClass) fail('Agent message list marker or class is missing')
@@ -40,6 +41,14 @@ if (!styles.includes('overflow-x: clip') || !styles.includes('max-width: 100%'))
 
 if (!styles.includes('[data-agent-message-list] > *') || !styles.includes('[data-creation-content]')) {
   fail('surface children must stay inside the iOS WebView content box')
+}
+
+if (!inputBar.includes("renderParams('mobile-param-grid grid-cols-2")) {
+  fail('mobile parameter controls must use a bounded two-column grid')
+}
+
+if (!styles.includes('.mobile-param-grid > label') || styles.includes('.mobile-param-strip')) {
+  fail('mobile parameter controls must not rely on a clipped horizontal strip')
 }
 
 if (!header.includes('sticky top-0') || header.includes(' fixed top-0')) {

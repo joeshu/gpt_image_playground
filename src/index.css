@@ -645,31 +645,23 @@ input[type="number"] {
 }
 
 
-/* Compact one-hand parameter strip: all controls remain available without making the composer three rows taller. */
+/* Mobile parameters use a bounded two-column grid so every option stays inside the composer. */
 @media (max-width: 639px) {
-  .mobile-param-strip {
-    overscroll-behavior-x: contain;
-    scroll-padding-inline: 0.25rem;
-    padding-right: 1.25rem;
-    -webkit-overflow-scrolling: touch;
-    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 91%, transparent 100%);
-    mask-image: linear-gradient(to right, #000 0%, #000 91%, transparent 100%);
-  }
-
-  .mobile-param-strip > label {
+  .mobile-param-grid {
     min-width: 0;
-    scroll-snap-align: start;
   }
 
-  .mobile-param-strip button,
-  .mobile-param-strip input,
-  .mobile-param-strip [role="button"] {
-    min-height: 2.5rem;
+  .mobile-param-grid > label {
+    min-width: 0;
   }
 
-  .mobile-param-strip::after {
-    content: "";
-    width: 0.25rem;
+  .mobile-param-grid button,
+  .mobile-param-grid input,
+  .mobile-param-grid [role="button"] {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.75rem;
   }
 }
 
