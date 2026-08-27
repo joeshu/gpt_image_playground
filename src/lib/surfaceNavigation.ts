@@ -6,6 +6,10 @@ export function resetSurfaceScroll(target: SurfaceScrollWindow = window) {
   target.requestAnimationFrame(() => {
     target.requestAnimationFrame(() => {
       target.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      if (typeof document !== 'undefined') {
+        document.documentElement.scrollLeft = 0
+        document.body.scrollLeft = 0
+      }
     })
   })
 }
