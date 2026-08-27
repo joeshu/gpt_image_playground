@@ -58,12 +58,16 @@ if (!workbench.includes('data-creation-layout') || !styles.includes('[data-creat
   fail('creation workbench layout must explicitly bound mobile grid and scroll children')
 }
 
-if (!inputBar.includes("renderParams('mobile-param-grid grid-cols-2")) {
-  fail('mobile parameter controls must use a bounded two-column grid')
+if (!inputBar.includes("renderParams('mobile-param-grid mobile-param-strip")) {
+  fail('mobile parameter controls must use the contained horizontal strip')
 }
 
-if (!styles.includes('.mobile-param-grid > label') || styles.includes('.mobile-param-strip')) {
-  fail('mobile parameter controls must not rely on a clipped horizontal strip')
+if (!styles.includes('.mobile-param-strip') || !styles.includes('touch-action: pan-x') || !styles.includes('overscroll-behavior-x: contain')) {
+  fail('mobile parameter controls must expose a touch-scrollable horizontal boundary')
+}
+
+if (!styles.includes('.mobile-param-strip > label') || !styles.includes('scroll-snap-type: x proximity')) {
+  fail('mobile parameter strip items must remain bounded and reachable')
 }
 
 if (!header.includes('sticky top-0') || header.includes(' fixed top-0')) {
