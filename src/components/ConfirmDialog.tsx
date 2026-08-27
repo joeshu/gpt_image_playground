@@ -50,6 +50,7 @@ export default function ConfirmDialog() {
   const [canConfirm, setCanConfirm] = useState(true)
   const [checkboxChecked, setCheckboxChecked] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const delay = confirmDialog?.minConfirmDelayMs ?? 0
@@ -87,8 +88,6 @@ export default function ConfirmDialog() {
   const confirmText = confirmDialog.confirmText ?? (isDestructive ? '确认删除' : '确认')
   const cancelText = confirmDialog.cancelText ?? '取消'
   const customButtons = confirmDialog.buttons?.filter((button) => button.label.trim()) ?? []
-  const modalRef = useRef<HTMLDivElement>(null)
-
   return (
     <div
       data-no-drag-select
