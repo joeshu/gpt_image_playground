@@ -384,7 +384,12 @@ export default function AgentWorkspace() {
   useEffect(() => {
     if (!scrollTargetRoundId) return
     const id = window.requestAnimationFrame(() => {
-      messageRefs.current.get(scrollTargetRoundId)?.scrollIntoView({ block: 'center' })
+      const target = messageRefs.current.get(scrollTargetRoundId)
+      if (target) {
+        const targetTop = target.getBoundingClientRect().top + window.scrollY
+        const centeredTop = Math.max(0, targetTop - (window.innerHeight - target.offsetHeight) / 2)
+        window.scrollTo({ top: centeredTop, left: 0, behavior: 'auto' })
+      }
       setScrollTargetRoundId(null)
     })
     return () => window.cancelAnimationFrame(id)
