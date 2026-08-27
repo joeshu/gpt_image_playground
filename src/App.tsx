@@ -34,13 +34,23 @@ let resolveStoreReady: (() => void) | null = null
 const storeReady = new Promise<void>((resolve) => { resolveStoreReady = resolve })
 
 type AppSurface = 'home' | 'creation' | 'results'
+const SURFACE_HISTORY_KEY = 'gptImagePlaygroundSurface'
+
+function isAppSurface(value: unknown): value is AppSurface {
+  return value === 'home' || value === 'creation' || value === 'results'
+}
+
+function getInitialSurface(): AppSurface {
+  if (typeof window === 'undefined') return 'home'
+  return isAppSurface(window.history.state?.[SURFACE_HISTORY_KEY]) ? window.history.state[SURFACE_HISTORY_KEY] : 'home'
+}
 
 export default function App() {
   const appMode = useStore((s) => s.appMode)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
   const showToast = useStore((s) => s.showToast)
-  const [activeSurface, setActiveSurface] = useState<AppSurface>('home')
+  const [activeSurface, setActiveSurface] = useState<AppSurface>(getInitialSurface)
   const [promptStudioOpen, setPromptStudioOpen] = useState(false)
   const [promptStudioApplyToken, setPromptStudioApplyToken] = useState(0)
   const [creationBatchBusy, setCreationBatchBusy] = useState(false)
@@ -56,9 +66,28 @@ export default function App() {
   }
 
   const navigateToSurface = (surface: AppSurface) => {
+    if (surface === activeSurface) {
+      resetSurfaceScroll()
+      return
+    }
     setActiveSurface(surface)
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ ...window.history.state, [SURFACE_HISTORY_KEY]: surface }, '', window.location.href)
+    }
     resetSurfaceScroll()
   }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.history.replaceState({ ...window.history.state, [SURFACE_HISTORY_KEY]: activeSurface }, '', window.location.href)
+    const handlePopState = (event: PopStateEvent) => {
+      const nextSurface = isAppSurface(event.state?.[SURFACE_HISTORY_KEY]) ? event.state[SURFACE_HISTORY_KEY] : 'home'
+      setActiveSurface(nextSurface)
+      resetSurfaceScroll()
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [activeSurface])
 
   useEffect(() => {
     let disposed = false

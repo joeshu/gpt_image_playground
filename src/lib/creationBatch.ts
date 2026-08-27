@@ -251,7 +251,7 @@ export function getCreationBatchProgress(job: CreationBatchJob) {
   const pending = job.items.filter((item) => item.status === 'pending').length
   const running = job.items.filter((item) => item.status === 'running').length
   const cancelled = job.items.filter((item) => item.status === 'cancelled').length
-  const finished = done + cancelled
+  const finished = done + errors + cancelled
   return {
     total,
     done,

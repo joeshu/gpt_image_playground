@@ -11,6 +11,7 @@ import {
   getCreationBatchCombinationCount,
   getCreationProjectCompletion,
   loadCreationWorkspace,
+  normalizeCreationBrandColor,
   parseCreationProjectExport,
   removeCreationProject,
   saveCreationWorkspace,
@@ -461,7 +462,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[['primaryColor', '品牌主色'], ['secondaryColor', '辅助色'], ['neutralColor', '中性色']].map(([key, label]) => {
                     const color = activeProject.brand[key as keyof typeof activeProject.brand] as string
-                    return <label key={key} className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">{label}</span><div className="mt-1 flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 dark:border-white/[0.1] dark:bg-white/[0.04]"><input type="color" value={color} onChange={(event) => updateBrand({ [key]: event.target.value })} className="h-8 w-9 cursor-pointer rounded-lg border-0 bg-transparent p-0" aria-label={label} /><input value={color} onChange={(event) => updateBrand({ [key]: event.target.value })} className="min-w-0 flex-1 border-0 bg-transparent px-1 text-sm uppercase text-gray-700 outline-none focus:ring-0 dark:text-gray-200" /></div></label>
+                    return <label key={key} className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">{label}</span><div className="mt-1 flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 dark:border-white/[0.1] dark:bg-white/[0.04]"><input type="color" value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#000000'} onChange={(event) => updateBrand({ [key]: event.target.value.toLowerCase() })} className="h-8 w-9 cursor-pointer rounded-lg border-0 bg-transparent p-0" aria-label={label} /><input value={color} onChange={(event) => updateBrand({ [key]: event.target.value })} onBlur={() => updateBrand({ [key]: normalizeCreationBrandColor(color, '#000000') })} inputMode="text" maxLength={7} spellCheck={false} className="min-w-0 flex-1 border-0 bg-transparent px-1 text-sm uppercase text-gray-700 outline-none focus:ring-0 dark:text-gray-200" /></div></label>
                   })}
                 </div>
                 <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">视觉资产说明</span><textarea value={activeProject.brand.visualNotes} onChange={(event) => updateBrand({ visualNotes: event.target.value })} rows={5} placeholder="记录 Logo 使用方式、品牌图形、字体气质、图片中的固定元素等。只填写已经确认的品牌事实。" className={fieldClass} /></label>

@@ -25,8 +25,12 @@ function limitText(value: unknown, maxLength: number) {
   return Array.from(value.trim()).slice(0, maxLength).join('')
 }
 
-function normalizeColor(value: unknown, fallback: string) {
+export function normalizeCreationBrandColor(value: unknown, fallback: string) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim().toLowerCase() : fallback
+}
+
+function normalizeColor(value: unknown, fallback: string) {
+  return normalizeCreationBrandColor(value, fallback)
 }
 
 function createId(now: number) {

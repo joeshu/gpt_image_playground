@@ -61,6 +61,7 @@ export default function DetailModal() {
   const modalRef = useRef<HTMLDivElement>(null)
   const rawUrlsModalRef = useRef<HTMLDivElement>(null)
   const rawResponseModalRef = useRef<HTMLDivElement>(null)
+  const commercialCheckImageIdRef = useRef<string | null>(null)
 
   const rawUrlsBackdropPointerDownRef = useRef(false)
   const rawResponseBackdropPointerDownRef = useRef(false)
@@ -223,6 +224,13 @@ export default function DetailModal() {
     ? task?.visualDifferenceByImage?.[currentOutputImageId]
     : undefined
   const commercialDeliveryCheck = getCommercialDeliveryCheck(textVerificationReport, visualDifferenceReport)
+
+  useEffect(() => {
+    if (commercialCheckImageIdRef.current && commercialCheckImageIdRef.current !== currentOutputImageId) {
+      commercialCheckImageIdRef.current = null
+      setIsRunningCommercialCheck(false)
+    }
+  }, [currentOutputImageId])
   const protectedTextCandidates = textVerificationReport ? getProtectableTexts(textVerificationReport) : []
   const protectedTexts = currentOutputImageId
     ? task?.protectedTextsByImage?.[currentOutputImageId] ?? []
@@ -631,14 +639,19 @@ export default function DetailModal() {
   }
 
   const handleRunCommercialCheck = async () => {
-    if (!task || !canVerifyText || !currentOutputImageId) return
+    const imageId = currentOutputImageId
+    if (!task || !canVerifyText || !imageId || isRunningCommercialCheck) return
+    commercialCheckImageIdRef.current = imageId
     setIsRunningCommercialCheck(true)
     try {
       const rerunAll = Boolean(textVerificationReport && visualDifferenceReport)
       if (rerunAll || !textVerificationReport) await handleVerifyText()
       if (rerunAll || !visualDifferenceReport) await handleAnalyzeVisualDifference()
     } finally {
-      setIsRunningCommercialCheck(false)
+      if (commercialCheckImageIdRef.current === imageId) {
+        commercialCheckImageIdRef.current = null
+        setIsRunningCommercialCheck(false)
+      }
     }
   }
 

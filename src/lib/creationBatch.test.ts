@@ -104,7 +104,7 @@ describe('creation batch queue', () => {
       finishedAt: 250,
     }, 250)
 
-    expect(getCreationBatchProgress(failed)).toMatchObject({ total: 2, errors: 1, pending: 1, finished: 0, percent: 0 })
+    expect(getCreationBatchProgress(failed)).toMatchObject({ total: 2, errors: 1, pending: 1, finished: 1, percent: 50 })
     expect(failed.items[0].error).toBe('网络超时')
   })
 
