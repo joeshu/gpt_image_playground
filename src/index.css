@@ -483,6 +483,10 @@ input[type="number"] {
   min-width: 0;
   max-width: 100%;
   overflow-x: clip;
+  /* The composer is fixed outside this flow. Keep the last message above its
+     measured box, including when iOS changes the visual viewport for the keyboard. */
+  padding-bottom: max(12rem, calc(var(--input-bar-clearance, 12rem) + 1.5rem));
+  scroll-padding-bottom: max(12rem, calc(var(--input-bar-clearance, 12rem) + 1.5rem));
 }
 
 [data-agent-message-list] > * {
