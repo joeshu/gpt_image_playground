@@ -652,19 +652,43 @@ input[type="number"] {
 }
 
 
-/* Mobile parameters use a bounded two-column grid so every option stays inside the composer. */
+/* Mobile parameters stay in a contained horizontal strip so all six controls remain reachable. */
 @media (max-width: 639px) {
   .mobile-param-grid {
     min-width: 0;
   }
 
-  .mobile-param-grid > label {
+  .mobile-param-strip {
+    display: flex !important;
+    flex: none !important;
+    flex-wrap: nowrap;
+    width: 100%;
     min-width: 0;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.25rem;
   }
 
-  .mobile-param-grid button,
-  .mobile-param-grid input,
-  .mobile-param-grid [role="button"] {
+  .mobile-param-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-param-strip > label {
+    flex: 0 0 min(42vw, 11rem);
+    width: min(42vw, 11rem);
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .mobile-param-strip button,
+  .mobile-param-strip input,
+  .mobile-param-strip [role="button"] {
     box-sizing: border-box;
     min-width: 0;
     max-width: 100%;
