@@ -33,6 +33,11 @@ export function installMobileViewportGuards() {
       root.style.setProperty('--visual-viewport-height', `${Math.round(viewport.height)}px`)
       root.style.setProperty('--keyboard-inset', `${keyboardInset}px`)
       root.classList.toggle('ios-keyboard-open', keyboardInset >= KEYBOARD_OPEN_THRESHOLD)
+      if (keyboardInset < KEYBOARD_OPEN_THRESHOLD) {
+        window.scrollTo({ left: 0, top: window.scrollY, behavior: 'auto' })
+        root.scrollLeft = 0
+        document.body.scrollLeft = 0
+      }
     })
   }
 
@@ -42,6 +47,10 @@ export function installMobileViewportGuards() {
       const active = document.activeElement
       if (!(active instanceof HTMLElement)) return
       if (!active.matches('input, textarea, [contenteditable="true"]')) return
+      // Inputs inside fixed sheets/drawers must not call scrollIntoView on the
+      // document: iOS can preserve the resulting horizontal offset after the
+      // keyboard is dismissed and shift the entire app off-screen.
+      if (active.closest('[data-agent-sidebar], [data-input-bar]')) return
       active.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
     }, 180)
   }
