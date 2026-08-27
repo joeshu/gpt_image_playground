@@ -56,6 +56,11 @@ if (!surfaceNavigation.includes('document.documentElement.scrollLeft = 0') || !s
   fail('surface switches must clear stale horizontal WebView scroll')
 }
 
+const viewport = read('src/lib/viewport.ts')
+if (!agent.includes('data-agent-sidebar') || !viewport.includes("active.closest('[data-agent-sidebar], [data-input-bar]')")) {
+  fail('fixed Agent drawer inputs must not scroll the document horizontally')
+}
+
 if (!workbench.includes("window.requestAnimationFrame") || !results.includes("window.requestAnimationFrame")) {
   fail('visible surfaces must reset iOS WebView scroll after they render')
 }
