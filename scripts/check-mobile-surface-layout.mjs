@@ -25,6 +25,7 @@ const sizePicker = read('src/components/SizePickerModal.tsx')
 const stateOwnedPpt = read('src/components/StateOwnedPptBriefModal.tsx')
 const confirmDialog = read('src/components/ConfirmDialog.tsx')
 const supportPrompt = read('src/components/SupportPromptModal.tsx')
+const surfaceNavigation = read('src/lib/surfaceNavigation.ts')
 
 const agentListClass = agent.match(/data-agent-message-list[\s\S]{0,180}?className="([^"]+)"/)?.[1]
 if (!agentListClass) fail('Agent message list marker or class is missing')
@@ -41,6 +42,18 @@ for (const [name, source, marker] of [
 
 if (!app.includes("navigateToSurface('creation')") || !app.includes("navigateToSurface('results'")) {
   fail('surface switches must reset stale document scroll')
+}
+
+if (!styles.includes('overflow-x: clip') || !styles.includes('max-width: 100%')) {
+  fail('mobile surfaces must prevent page-level horizontal overflow')
+}
+
+if (!inputBar.includes('data-mobile-param-scroll')) {
+  fail('mobile parameter controls must have an explicit scroll boundary')
+}
+
+if (!surfaceNavigation.includes('document.documentElement.scrollLeft = 0') || !surfaceNavigation.includes('document.body.scrollLeft = 0')) {
+  fail('surface switches must clear stale horizontal WebView scroll')
 }
 
 if (!workbench.includes("window.requestAnimationFrame") || !results.includes("window.requestAnimationFrame")) {
