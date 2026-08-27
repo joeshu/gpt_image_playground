@@ -102,7 +102,7 @@ interface CreationWorkbenchProps {
   visible?: boolean
 }
 
-export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatchBusyChange, visible = true }: CreationWorkbenchProps) {
+export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromptApplied, onBatchBusyChange, visible = true }: CreationWorkbenchProps) {
   const currentPrompt = useStore((state) => state.prompt)
   const inputImages = useStore((state) => state.inputImages)
   const showToast = useStore((state) => state.showToast)
