@@ -68,6 +68,10 @@ if (!styles.includes('[data-agent-message-list] > *') || !styles.includes('[data
   fail('surface children must stay inside the iOS WebView content box')
 }
 
+if (!styles.includes('[data-agent-message-list]') || !styles.includes('scroll-padding-bottom: max(12rem')) {
+  fail('Agent history must reserve the measured fixed composer clearance')
+}
+
 if (!workbench.includes('data-creation-layout') || !styles.includes('[data-creation-layout]')) {
   fail('creation workbench layout must explicitly bound mobile grid and scroll children')
 }
