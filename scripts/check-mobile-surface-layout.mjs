@@ -11,6 +11,7 @@ const workbench = read('src/components/CreationWorkbench.tsx')
 const results = read('src/components/ResultsCenter.tsx')
 const app = read('src/App.tsx')
 const styles = read('src/index.css')
+const header = read('src/components/Header.tsx')
 
 const agentListClass = agent.match(/data-agent-message-list[\s\S]{0,180}?className="([^"]+)"/)?.[1]
 if (!agentListClass) fail('Agent message list marker or class is missing')
@@ -35,6 +36,10 @@ if (!styles.includes('overflow-x: clip') || !styles.includes('max-width: 100%'))
 
 if (!styles.includes('[data-agent-message-list] > *') || !styles.includes('[data-creation-content]')) {
   fail('surface children must stay inside the iOS WebView content box')
+}
+
+if (header.includes("'-translate-y-full sm:translate-y-0'")) {
+  fail('global navigation must remain reachable while Agent is active')
 }
 
 if (!process.exitCode) console.log('Mobile surface layout contract passed')

@@ -159,7 +159,7 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
 
   return (
     <>
-      <header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08] transition-transform duration-300 ease-in-out ${isAgentSurface && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
+      <header data-no-drag-select className="safe-area-top fixed top-0 left-0 right-0 z-40 translate-y-0 bg-white/80 backdrop-blur border-b border-gray-200 transition-transform duration-300 ease-in-out dark:border-white/[0.08] dark:bg-gray-950/80">
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between gap-1 relative">
           <div className="flex min-w-0 flex-1 items-center gap-1 pr-1 sm:gap-2 sm:pr-2">
             <h1 className="relative mr-1 inline-flex min-w-0 items-start sm:mr-2">
@@ -377,7 +377,7 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
         </div>
       </div>
 
-      <div className={`safe-area-top invisible pointer-events-none transition-all duration-300 ease-in-out ${isAgentSurface && !agentMobileHeaderVisible ? 'max-h-0 sm:max-h-[500px] opacity-0 sm:opacity-100 overflow-hidden sm:overflow-visible' : 'max-h-[500px] opacity-100'}`} aria-hidden="true">
+      <div className="safe-area-top invisible pointer-events-none max-h-[500px] opacity-100" aria-hidden="true">
         <div className="safe-header-inner" />
         <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${isGallerySurface && scrollDirection === 'down' ? 'max-h-0 pb-0' : 'max-h-16 pb-1.5'}`}>
           <div className="p-1">
