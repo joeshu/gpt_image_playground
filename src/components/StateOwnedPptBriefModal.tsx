@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import {
@@ -31,9 +31,10 @@ const FIELDS: Array<{ key: keyof Pick<StateOwnedPptBrief, 'topic' | 'audience' |
 export default function StateOwnedPptBriefModal({ open, currentPrompt, onClose, onApply }: StateOwnedPptBriefModalProps) {
   const [brief, setBrief] = useState<StateOwnedPptBrief>(DEFAULT_STATE_OWNED_PPT_BRIEF)
   const [error, setError] = useState('')
+  const modalRef = useRef<HTMLElement>(null)
 
   useCloseOnEscape(open, onClose)
-  usePreventBackgroundScroll(open)
+  usePreventBackgroundScroll(open, modalRef)
 
   useEffect(() => {
     if (!open) return
@@ -66,6 +67,7 @@ export default function StateOwnedPptBriefModal({ open, currentPrompt, onClose, 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 sm:items-center sm:p-4" onClick={onClose}>
       <section
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label="国企汇报 PPT 结构卡"

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import type { PromptPreflightResult } from '../lib/promptPreflight'
@@ -20,8 +20,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export default function PromptPreflightModal({ open, result, onCancel, onConfirm }: PromptPreflightModalProps) {
+  const modalRef = useRef<HTMLElement>(null)
   useCloseOnEscape(open, onCancel)
-  usePreventBackgroundScroll(open)
+  usePreventBackgroundScroll(open, modalRef)
 
   useEffect(() => {
     if (open) document.activeElement instanceof HTMLElement && document.activeElement.blur()
@@ -35,6 +36,7 @@ export default function PromptPreflightModal({ open, result, onCancel, onConfirm
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 sm:items-center sm:p-4" onClick={onCancel}>
       <section
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label="生成前质量检查"

@@ -13,6 +13,14 @@ const app = read('src/App.tsx')
 const styles = read('src/index.css')
 const header = read('src/components/Header.tsx')
 const inputBar = read('src/components/InputBar.tsx')
+const promptStudio = read('src/components/PromptStudioModal.tsx')
+const promptEnhancer = read('src/components/PromptEnhancerModal.tsx')
+const promptPreflight = read('src/components/PromptPreflightModal.tsx')
+const promptVersions = read('src/components/PromptVersionHistoryModal.tsx')
+const sizePicker = read('src/components/SizePickerModal.tsx')
+const stateOwnedPpt = read('src/components/StateOwnedPptBriefModal.tsx')
+const confirmDialog = read('src/components/ConfirmDialog.tsx')
+const supportPrompt = read('src/components/SupportPromptModal.tsx')
 
 const agentListClass = agent.match(/data-agent-message-list[\s\S]{0,180}?className="([^"]+)"/)?.[1]
 if (!agentListClass) fail('Agent message list marker or class is missing')
@@ -57,6 +65,26 @@ if (!styles.includes('.mobile-param-grid > label') || styles.includes('.mobile-p
 
 if (!header.includes('sticky top-0') || header.includes(' fixed top-0')) {
   fail('global mobile header must remain in document flow to reserve its own height')
+}
+
+const modalScrollContracts = [
+  ['Prompt Studio', promptStudio, 'usePreventBackgroundScroll(open && activeTool === null, modalRef)'],
+  ['Prompt Enhancer', promptEnhancer, 'usePreventBackgroundScroll(open, modalRef)'],
+  ['Prompt Preflight', promptPreflight, 'usePreventBackgroundScroll(open, modalRef)'],
+  ['Prompt Version History', promptVersions, 'usePreventBackgroundScroll(open, modalRef)'],
+  ['Size Picker', sizePicker, 'usePreventBackgroundScroll(true, modalRef)'],
+  ['State-Owned PPT', stateOwnedPpt, 'usePreventBackgroundScroll(open, modalRef)'],
+  ['Confirm Dialog', confirmDialog, 'usePreventBackgroundScroll(Boolean(confirmDialog), modalRef)'],
+  ['Support Prompt', supportPrompt, 'usePreventBackgroundScroll(visible, modalRef)'],
+]
+for (const [name, source, hookCall] of modalScrollContracts) {
+  if (!source.includes(hookCall) || !source.includes('ref={modalRef}')) {
+    fail(`${name} must provide a scroll boundary to the background-scroll lock`)
+  }
+}
+
+if (!promptStudio.includes('activeTool === null')) {
+  fail('Prompt Studio must release its parent scroll lock while a child tool is open')
 }
 
 if (header.includes('safe-area-top invisible pointer-events-none')) {

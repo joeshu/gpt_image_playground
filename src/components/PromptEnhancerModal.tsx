@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiProfile, InputImage } from '../types'
 import { enhancePrompt, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES, type PromptEnhancementLevel, type PromptEnhancementResult } from '../lib/promptEnhancer'
 import { savePromptVersion } from '../lib/promptVersionHistory'
@@ -40,6 +40,7 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
   const [result, setResult] = useState<PromptEnhancementResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const modalRef = useRef<HTMLElement>(null)
   const detectedIntent = useMemo(() => compilePromptIntent(prompt), [prompt])
   const activeTaskType = taskTypeOverride ?? detectedIntent.taskType
   const referenceImageCount = Math.min(referenceImages.length, PROMPT_ENHANCER_MAX_REFERENCE_IMAGES)
@@ -49,7 +50,7 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
     .join('、')
 
   useCloseOnEscape(open && !isLoading, onClose)
-  usePreventBackgroundScroll(open)
+  usePreventBackgroundScroll(open, modalRef)
 
   useEffect(() => {
     if (!open) return
@@ -96,6 +97,7 @@ export default function PromptEnhancerModal({ open, prompt, profile, referenceIm
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 sm:items-center sm:p-4" onClick={onClose}>
       <section
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label="智能提示词增强"

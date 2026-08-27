@@ -47,9 +47,8 @@ function findPresetForSize(size: string) {
 }
 
 export default function SizePickerModal({ currentSize, onSelect, onClose, allowAuto = true, codexCli = false }: Props) {
-  usePreventBackgroundScroll(true)
-
   const modalRef = useRef<HTMLDivElement>(null)
+  usePreventBackgroundScroll(true, modalRef)
   const mouseDownTargetRef = useRef<EventTarget | null>(null)
 
   const handleMouseDown = (e: React.MouseEvent) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import {
@@ -28,9 +28,10 @@ const SOURCE_LABEL: Record<PromptVersion['source'], string> = {
 export default function PromptVersionHistoryModal({ open, onClose, onRestore }: PromptVersionHistoryModalProps) {
   const [versions, setVersions] = useState<PromptVersion[]>([])
   const [selectedId, setSelectedId] = useState('')
+  const modalRef = useRef<HTMLElement>(null)
 
   useCloseOnEscape(open, onClose)
-  usePreventBackgroundScroll(open)
+  usePreventBackgroundScroll(open, modalRef)
 
   const refresh = () => {
     const next = loadPromptVersions()
@@ -58,6 +59,7 @@ export default function PromptVersionHistoryModal({ open, onClose, onRestore }: 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 sm:items-center sm:p-4" onClick={onClose}>
       <section
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label="提示词版本"

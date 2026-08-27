@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { InputImage } from '../types'
 import { getActiveAgentRounds } from '../lib/agentConversationState'
@@ -67,6 +67,7 @@ export default function PromptStudioModal({ open, onClose, onPromptApplied }: { 
   const [activeTool, setActiveTool] = useState<PromptStudioTool | null>(null)
   const [agentPromptReferenceImages, setAgentPromptReferenceImages] = useState<PromptEnhancerReference[]>([])
   const [agentPromptReferenceLoading, setAgentPromptReferenceLoading] = useState(false)
+  const modalRef = useRef<HTMLElement>(null)
 
   const activeAgentConversation = appMode === 'agent'
     ? agentConversations.find((conversation) => conversation.id === activeAgentConversationId) ?? null
@@ -133,7 +134,7 @@ export default function PromptStudioModal({ open, onClose, onPromptApplied }: { 
   const detectedIntent = useMemo(() => compilePromptIntent(prompt), [prompt])
 
   useCloseOnEscape(open && activeTool === null, onClose)
-  usePreventBackgroundScroll(open)
+  usePreventBackgroundScroll(open && activeTool === null, modalRef)
 
   useEffect(() => {
     if (!open) setActiveTool(null)
@@ -153,6 +154,7 @@ export default function PromptStudioModal({ open, onClose, onPromptApplied }: { 
     <>
       <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-5" onClick={onClose}>
         <section
+          ref={modalRef}
           role="dialog"
           aria-modal="true"
           aria-label="提示词工作室"
