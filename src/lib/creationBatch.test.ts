@@ -1,3 +1,4 @@
+// Regression coverage for failed-item progress and mobile P1 behavior.
 import { describe, expect, it } from 'vitest'
 import {
   createCreationBatchJob,
