@@ -33,4 +33,8 @@ if (!styles.includes('overflow-x: clip') || !styles.includes('max-width: 100%'))
   fail('mobile surfaces must prevent page-level horizontal overflow')
 }
 
+if (!styles.includes('[data-agent-message-list] > *') || !styles.includes('[data-creation-content]')) {
+  fail('surface children must stay inside the iOS WebView content box')
+}
+
 if (!process.exitCode) console.log('Mobile surface layout contract passed')
