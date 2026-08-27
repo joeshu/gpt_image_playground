@@ -328,7 +328,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
   return (
     <main data-creation-workbench aria-hidden={!visible} className={`${visible ? '' : 'hidden'} min-h-[100svh] w-full min-w-0 overflow-x-clip bg-gray-50 pb-8 dark:bg-gray-950`}>
       <div data-creation-content className="safe-area-x mx-auto w-full min-w-0 max-w-7xl px-0 pt-4 sm:pt-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex min-w-0 w-full max-w-full flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <button type="button" onClick={requestClose} className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-gray-800 dark:hover:bg-white/[0.06] dark:hover:text-gray-200">
               <span aria-hidden="true">←</span>
@@ -342,7 +342,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500 dark:text-gray-400">将品牌、风格、系列和批量规则集中管理，再一次性应用到画廊或 Agent 的当前提示词。</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
             <select
               value={activeProject.id}
               onChange={(event) => setWorkspace((current) => ({ ...current, activeProjectId: event.target.value }))}
@@ -361,10 +361,10 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-6">
-          <aside className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
+        <div data-creation-layout className="mt-6 grid min-w-0 w-full max-w-full gap-4 lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-6">
+          <aside className="min-w-0 w-full max-w-full rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
             <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-400">项目导航</div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible">
+            <div className="flex min-w-0 max-w-full gap-1.5 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible">
               {MODULES.map((item) => (
                 <button key={item.value} type="button" onClick={() => setActiveModule(item.value)} className={`min-w-[7.5rem] rounded-xl px-3 py-2.5 text-left transition lg:block lg:w-full ${activeModule === item.value ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.05]'}`}>
                   <div className="text-xs font-semibold">{item.label}</div>
@@ -378,8 +378,8 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
             </div>
           </aside>
 
-          <section className="min-w-0 w-full">
-            <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm dark:border-blue-500/15 dark:from-blue-500/[0.1] dark:to-white/[0.03] sm:flex-row sm:items-center sm:justify-between">
+          <section className="min-w-0 w-full max-w-full">
+            <div className="mb-4 flex min-w-0 w-full max-w-full flex-col gap-3 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm dark:border-blue-500/15 dark:from-blue-500/[0.1] dark:to-white/[0.03] sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="text-xs font-medium text-blue-600 dark:text-blue-300">当前项目</div>
                 <div className="mt-1 flex items-center gap-2">
@@ -391,8 +391,8 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
               <div className="w-full shrink-0 sm:w-48"><ProjectProgress project={activeProject} /></div>
             </div>
 
-            <div className="mb-4 flex items-end justify-between gap-3">
-              <div>
+            <div className="mb-4 flex min-w-0 w-full max-w-full items-end justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{activeModuleInfo.label}</h2>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{activeModuleInfo.description}</p>
               </div>
@@ -518,9 +518,9 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
           </section>
         </div>
 
-        <div className="sticky bottom-0 z-10 mt-6 flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-white/[0.08] dark:bg-gray-900/95 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">自动保存在本机 · 不新增 AI 调用 · 应用后仍可在输入栏继续修改</div>
-          <div className="flex gap-2"><button type="button" onClick={requestClose} className="min-h-11 flex-1 rounded-xl bg-gray-100 px-4 text-xs font-medium text-gray-700 dark:bg-white/[0.07] dark:text-gray-200 sm:flex-none">返回</button><button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:flex-none">应用到当前提示词</button></div>
+        <div className="sticky bottom-0 z-10 mt-6 flex min-w-0 w-full max-w-full flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-white/[0.08] dark:bg-gray-900/95 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">自动保存在本机 · 不新增 AI 调用 · 应用后仍可在输入栏继续修改</div>
+          <div className="flex min-w-0 w-full gap-2 sm:w-auto"><button type="button" onClick={requestClose} className="min-h-11 min-w-0 flex-1 rounded-xl bg-gray-100 px-4 text-xs font-medium text-gray-700 dark:bg-white/[0.07] dark:text-gray-200 sm:flex-none">返回</button><button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 min-w-0 flex-1 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:flex-none">应用到当前提示词</button></div>
         </div>
       </div>
     </main>

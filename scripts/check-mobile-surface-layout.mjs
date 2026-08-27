@@ -43,6 +43,10 @@ if (!styles.includes('[data-agent-message-list] > *') || !styles.includes('[data
   fail('surface children must stay inside the iOS WebView content box')
 }
 
+if (!workbench.includes('data-creation-layout') || !styles.includes('[data-creation-layout]')) {
+  fail('creation workbench layout must explicitly bound mobile grid and scroll children')
+}
+
 if (!inputBar.includes("renderParams('mobile-param-grid grid-cols-2")) {
   fail('mobile parameter controls must use a bounded two-column grid')
 }

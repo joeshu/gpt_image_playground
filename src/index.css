@@ -460,6 +460,13 @@ input[type="number"] {
   max-width: 100%;
 }
 
+[data-creation-layout],
+[data-creation-layout] > *,
+[data-creation-layout] .overflow-x-auto {
+  min-width: 0;
+  max-width: 100%;
+}
+
 [data-agent-message-list] {
   min-width: 0;
   max-width: 100%;
