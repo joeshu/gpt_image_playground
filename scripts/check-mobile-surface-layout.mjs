@@ -26,8 +26,12 @@ for (const [name, source, marker] of [
   else if (/\bpt-(?:20|24|28|32)\b/.test(className)) fail(`${name} duplicates the fixed header spacer with excessive top padding`)
 }
 
-if (!app.includes("navigateToSurface('creation')") || !app.includes("navigateToSurface('results')")) {
+if (!app.includes("navigateToSurface('creation')") || !app.includes("navigateToSurface('results'")) {
   fail('surface switches must reset stale document scroll')
+}
+
+if (!workbench.includes("window.requestAnimationFrame") || !results.includes("window.requestAnimationFrame")) {
+  fail('visible surfaces must reset iOS WebView scroll after they render')
 }
 
 if (!styles.includes('overflow-x: clip') || !styles.includes('max-width: 100%')) {

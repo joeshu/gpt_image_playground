@@ -140,6 +140,15 @@ export default function ResultsCenter({ onClose, onOpenCreationWorkbench }: { on
   }, [activeTab, refreshBatchJobs, tasks])
 
   useEffect(() => {
+    const scrollToTop = () => window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    const frame = window.requestAnimationFrame(() => {
+      scrollToTop()
+      window.requestAnimationFrame(scrollToTop)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
+
+  useEffect(() => {
     const handleBatchChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ jobs?: CreationBatchJob[] }>).detail
       if (Array.isArray(detail?.jobs)) {

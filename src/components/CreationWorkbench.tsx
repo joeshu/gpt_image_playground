@@ -125,6 +125,16 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
   useCloseOnEscape(visible, requestClose)
 
   useEffect(() => {
+    if (!visible) return
+    const scrollToTop = () => window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    const frame = window.requestAnimationFrame(() => {
+      scrollToTop()
+      window.requestAnimationFrame(scrollToTop)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [visible])
+
+  useEffect(() => {
     saveCreationWorkspace(workspace)
   }, [workspace])
 
