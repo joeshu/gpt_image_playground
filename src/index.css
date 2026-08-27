@@ -678,7 +678,7 @@ input[type="number"] {
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     touch-action: pan-x;
     overscroll-behavior-x: contain;
@@ -696,20 +696,18 @@ input[type="number"] {
   }
 
   .mobile-param-strip {
-    display: flex !important;
-    flex: none !important;
-    flex-wrap: nowrap;
-    width: max-content;
-    min-width: 100%;
-    max-width: none;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: 0.5rem;
     overflow: visible;
-    padding-inline: 0 calc(3rem + var(--safe-area-right));
+    padding-inline: 0;
   }
 
   .mobile-param-strip > label {
-    flex: 0 0 min(42vw, 11rem);
-    width: min(42vw, 11rem);
+    width: 100%;
     min-width: 0;
     scroll-snap-align: start;
   }
