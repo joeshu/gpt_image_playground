@@ -467,6 +467,18 @@ input[type="number"] {
   max-width: 100%;
 }
 
+[data-creation-actions] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 639px) {
+  [data-creation-actions] {
+    padding-bottom: calc(0.75rem + var(--safe-area-bottom));
+    scroll-margin-bottom: calc(1rem + var(--safe-area-bottom));
+  }
+}
+
 [data-agent-message-list] {
   min-width: 0;
   max-width: 100%;

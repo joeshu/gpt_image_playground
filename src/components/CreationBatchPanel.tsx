@@ -188,7 +188,7 @@ function CreationBatchItemRow({ item, index, task, busy, onOpenDetail, onReuseCo
   }, [outputImageIds])
 
   return (
-    <div data-creation-batch-item className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,auto)] items-center gap-2 px-3 py-2.5 text-xs sm:grid-cols-[3rem_minmax(0,1fr)_auto_minmax(0,auto)]">
+    <div data-creation-batch-item className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 px-3 py-2.5 text-xs sm:grid-cols-[3rem_minmax(0,1fr)_auto_minmax(0,auto)] sm:items-center">
       <span className="tabular-nums text-gray-400">{index + 1}</span>
       <div className="min-w-0">
         <div className="truncate text-gray-700 dark:text-gray-200">{getVariableSummary(item)}</div>
@@ -209,7 +209,7 @@ function CreationBatchItemRow({ item, index, task, busy, onOpenDetail, onReuseCo
         </div>
       </div>
       <span className={`whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-medium ${getItemStatusClass(item.status)}`}>{getItemStatusLabel(item.status)}</span>
-      <div className="flex flex-wrap justify-end gap-1">
+      <div className="col-span-3 flex min-w-0 flex-wrap justify-start gap-1 sm:col-span-1 sm:justify-end">
         {task && <button type="button" onClick={() => onOpenDetail(task.id)} className="rounded-lg px-2 py-1.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/10">查看详情</button>}
         {task && <button type="button" onClick={() => onReuseConfig(task)} className="rounded-lg px-2 py-1.5 text-[10px] font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/[0.08]">复用配置</button>}
         {task && task.outputImages.length > 0 && <button type="button" onClick={() => onEditOutputs(task)} className="rounded-lg px-2 py-1.5 text-[10px] font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/[0.08]">带入图片</button>}
@@ -552,7 +552,7 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
       {batchState.jobs.length > 0 && (
         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">当前批次</span><select value={activeJob?.id ?? ''} onChange={(event) => replaceBatchState((state) => ({ ...state, activeJobId: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-400 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-100" aria-label="当前批量任务">{batchState.jobs.map((job) => <option key={job.id} value={job.id}>{formatJobTime(job.createdAt)} · {job.projectSnapshot.name} · {job.items.length} 组合 · {getJobStatusLabel(job.status)}{job.archivedAt ? ' · 已归档' : ''}</option>)}</select></label>
-          <div className="flex gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             {activeJob && activeJob.status === 'running' ? <button type="button" onClick={() => handlePauseJob(activeJob.id)} className="min-h-11 rounded-xl bg-amber-500 px-3 text-xs font-medium text-white hover:bg-amber-600">暂停</button> : activeJob && activeJob.status !== 'completed' && activeJob.status !== 'cancelled' && !activeJob.archivedAt ? <button type="button" onClick={() => handleStartJob(activeJob.id)} disabled={runnerRef.current} className="min-h-11 rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{activeJob.status === 'paused' || activeJob.status === 'failed' ? '继续生成' : '开始生成'}</button> : null}
             {activeJob && (activeJob.status === 'running' || activeJob.status === 'paused') && <button type="button" onClick={() => handleCancelJob(activeJob.id)} className="min-h-11 rounded-xl border border-red-200 px-3 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:hover:bg-red-500/10">取消未提交</button>}
             {activeJob && activeJob.status !== 'running' && !runnerRef.current && <button type="button" onClick={() => handleToggleArchive(activeJob.id)} className="min-h-11 rounded-xl border border-violet-200 px-3 text-xs font-medium text-violet-600 hover:bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:hover:bg-violet-500/10">{activeJob.archivedAt ? '恢复归档' : '归档批次'}</button>}
@@ -584,7 +584,7 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
               </div>
               <p className="mt-1 text-xs leading-relaxed text-violet-700/80 dark:text-violet-200/80">只汇总已保存的 OCR 文字核验与视觉差异报告；点击逐项检查后才会产生对应的手动分析调用。</p>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex w-full min-w-0 shrink-0 flex-wrap gap-2 sm:w-auto">
               <button type="button" onClick={handleOpenNextCheck} disabled={!firstUncheckedItem} className="min-h-10 rounded-xl bg-violet-700 px-3 text-xs font-medium text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">{firstUncheckedItem ? '检查下一项' : deliverySummary.outputCount > 0 ? '已完成检查' : '等待生成结果'}</button>
               <button type="button" onClick={() => void handleCopyReproductionManifest()} className="min-h-10 rounded-xl border border-violet-200 bg-white/70 px-3 text-xs font-medium text-violet-700 hover:bg-white dark:border-violet-500/25 dark:bg-white/[0.06] dark:text-violet-200 dark:hover:bg-white/[0.1]">复制复现信息</button>
             </div>
@@ -607,7 +607,7 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
 
       {activeJob && visibleItems.length > 0 && (
         <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 dark:border-white/[0.08]">
-          <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,auto)] gap-2 bg-gray-50 px-3 py-2 text-[10px] font-medium text-gray-400 dark:bg-white/[0.04] sm:grid-cols-[3rem_minmax(0,1fr)_auto_minmax(0,auto)]"><span>#</span><span>变量组合 / 结果</span><span>状态</span><span>操作</span></div>
+          <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 bg-gray-50 px-3 py-2 text-[10px] font-medium text-gray-400 dark:bg-white/[0.04] sm:grid-cols-[3rem_minmax(0,1fr)_auto_minmax(0,auto)]"><span>#</span><span>变量组合 / 结果</span><span>状态</span><span className="hidden sm:block">操作</span></div>
           <div className="divide-y divide-gray-100 dark:divide-white/[0.06]">
             {visibleItems.map((item, index) => <CreationBatchItemRow key={item.id} item={item} index={index} task={item.taskId ? tasksById.get(item.taskId) : undefined} busy={runnerRef.current} onOpenDetail={handleOpenTask} onReuseConfig={(task) => { void reuseConfig(task) }} onEditOutputs={(task) => { void editOutputs(task) }} onRetry={(itemId) => handleRetryItem(activeJob.id, itemId)} />)}
           </div>

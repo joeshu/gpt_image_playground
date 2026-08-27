@@ -58,6 +58,14 @@ if (!workbench.includes('data-creation-layout') || !styles.includes('[data-creat
   fail('creation workbench layout must explicitly bound mobile grid and scroll children')
 }
 
+if (!workbench.includes('data-creation-actions') || !styles.includes('[data-creation-actions]')) {
+  fail('creation workbench actions must reserve the iOS bottom safe area')
+}
+
+if (!creationBatch.includes('grid-cols-[2rem_minmax(0,1fr)_auto]') || !creationBatch.includes('col-span-3') || !creationBatch.includes('sm:col-span-1')) {
+  fail('batch queue rows must move actions below content on narrow screens')
+}
+
 if (!inputBar.includes("renderParams('mobile-param-grid mobile-param-strip")) {
   fail('mobile parameter controls must use the contained horizontal strip')
 }

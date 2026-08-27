@@ -521,7 +521,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
           </section>
         </div>
 
-        <div className="sticky bottom-0 z-10 mt-6 flex min-w-0 w-full max-w-full flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-white/[0.08] dark:bg-gray-900/95 sm:flex-row sm:items-center sm:justify-between">
+        <div data-creation-actions className="sticky bottom-0 z-10 mt-6 flex min-w-0 w-full max-w-full flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-white/[0.08] dark:bg-gray-900/95 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">自动保存在本机 · 不新增 AI 调用 · 应用后仍可在输入栏继续修改</div>
           <div className="flex min-w-0 w-full gap-2 sm:w-auto"><button type="button" onClick={requestClose} className="min-h-11 min-w-0 flex-1 rounded-xl bg-gray-100 px-4 text-xs font-medium text-gray-700 dark:bg-white/[0.07] dark:text-gray-200 sm:flex-none">返回</button><button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 min-w-0 flex-1 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:flex-none">应用到当前提示词</button></div>
         </div>
