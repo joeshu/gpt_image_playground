@@ -224,6 +224,11 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
   const batchStateRef = useRef(batchState)
   const runnerRef = useRef(false)
   const stopRequestedRef = useRef(false)
+  const draftSnapshotRef = useRef<{
+    prompt: string
+    inputImages: InputImage[]
+    params: ReturnType<typeof useStore.getState>['params']
+  } | null>(null)
   const [creating, setCreating] = useState(false)
   const [visibleItemCount, setVisibleItemCount] = useState(8)
   const tasks = useStore((state) => state.tasks)
@@ -410,6 +415,14 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
       if (batchStateRef.current.jobs.find((item) => item.id === jobId)?.status !== 'cancelled') markJobFinished(jobId, 'failed')
       showToast(message, 'error')
     } finally {
+      const draft = draftSnapshotRef.current
+      if (draft) {
+        const state = useStore.getState()
+        state.setPrompt(draft.prompt)
+        state.setInputImages(draft.inputImages)
+        state.setParams(draft.params)
+      }
+      draftSnapshotRef.current = null
       runnerRef.current = false
       setRunnerBusy(false)
     }
@@ -422,6 +435,12 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
     if (job.archivedAt) {
       showToast('请先恢复归档，再继续生成这个批次', 'info')
       return
+    }
+    const currentState = useStore.getState()
+    draftSnapshotRef.current = {
+      prompt: currentState.prompt,
+      inputImages: currentState.inputImages,
+      params: currentState.params,
     }
     stopRequestedRef.current = false
     updateJob(jobId, (current) => patchCreationBatchJob(current, { status: 'running' }))

@@ -302,6 +302,7 @@ export default function App() {
       <CreationWorkbench
         visible={activeSurface === 'creation'}
         onBatchBusyChange={setCreationBatchBusy}
+        onPromptApplied={() => setPromptStudioApplyToken((value) => value + 1)}
         onClose={() => {
           setPromptStudioOpen(false)
           navigateToSurface('home')

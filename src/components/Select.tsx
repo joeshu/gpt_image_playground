@@ -32,6 +32,7 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
   const [isOpen, setIsOpen] = useState(false)
   const [menuMaxHeight, setMenuMaxHeight] = useState(DEFAULT_DROPDOWN_MAX_HEIGHT)
   const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom')
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number; width: number } | null>(null)
   const [draggedValue, setDraggedValue] = useState<string | number | null>(null)
   const [dragOverValue, setDragOverValue] = useState<string | number | null>(null)
   const [dragDropPosition, setDragDropPosition] = useState<'before' | 'after' | null>(null)
@@ -48,6 +49,7 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
   const dragScrollIntervalRef = useRef<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const triggerTooltip = useTooltip()
   const [hoveredOptionTooltip, setHoveredOptionTooltip] = useState<string | number | null>(null)
@@ -102,9 +104,9 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
+      const target = e.target as Node
+      if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setIsOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -121,17 +123,6 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
       let availableBelow = window.innerHeight - rect.bottom - 8
       let availableAbove = rect.top - 8
       
-      let parent = trigger.parentElement
-      while (parent && parent !== document.body) {
-        const style = window.getComputedStyle(parent)
-        if (/(auto|scroll|hidden|clip)/.test(`${style.overflow} ${style.overflowY}`)) {
-          const parentRect = parent.getBoundingClientRect()
-          availableBelow = Math.min(availableBelow, parentRect.bottom - rect.bottom - 8)
-          availableAbove = Math.min(availableAbove, rect.top - parentRect.top - 8)
-        }
-        parent = parent.parentElement
-      }
-      
       let newPlacement: 'bottom' | 'top' = 'bottom'
       let maxHeight = DEFAULT_DROPDOWN_MAX_HEIGHT
       
@@ -143,8 +134,14 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
         maxHeight = Math.min(DEFAULT_DROPDOWN_MAX_HEIGHT, Math.floor(availableBelow))
       }
       
+      const resolvedMaxHeight = Math.max(0, maxHeight)
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8))
+      const top = newPlacement === 'top'
+        ? Math.max(8, rect.top - resolvedMaxHeight - 6)
+        : Math.min(Math.max(8, rect.bottom + 6), Math.max(8, window.innerHeight - resolvedMaxHeight - 8))
       setPlacement(newPlacement)
-      setMenuMaxHeight(Math.max(0, maxHeight))
+      setMenuMaxHeight(resolvedMaxHeight)
+      setMenuPosition({ left, top, width: rect.width })
     }
 
     updateMenuMaxHeight()
@@ -201,12 +198,12 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
         )}
       </div>
 
-      {isOpen && (
+{isOpen && menuPosition && createPortal(
         <div
-          className={`absolute z-50 w-full overflow-hidden overflow-y-auto rounded-xl border border-gray-200/60 bg-white/95 py-1 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-black/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-gray-900/95 dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] dark:ring-white/10 custom-scrollbar ${
-            placement === 'top' ? 'bottom-full mb-1.5 animate-dropdown-up' : 'top-full mt-1.5 animate-dropdown-down'
-          }`}
-          style={{ maxHeight: menuMaxHeight }}
+          ref={menuRef}
+          data-scroll-boundary
+          className="fixed z-[120] overflow-hidden overflow-y-auto rounded-xl border border-gray-200/60 bg-white/95 py-1 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-black/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-gray-900/95 dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] dark:ring-white/10 custom-scrollbar"
+          style={{ left: menuPosition.left, top: menuPosition.top, width: menuPosition.width, maxHeight: menuMaxHeight }}
         >
           {options.map((option) => (
             <div
@@ -476,7 +473,8 @@ export default function Select({ value, onChange, onReorder, options, disabled, 
               )}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {touchDragPreview && createPortal(

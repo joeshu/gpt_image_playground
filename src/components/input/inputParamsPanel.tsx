@@ -7,9 +7,12 @@ import { ChevronDownIcon } from '../icons'
 function AutoValueField() {
   return (
     <div
-      aria-label="auto（自动）"
+      role="status"
+      aria-disabled="true"
+      aria-label="自动（当前服务商固定设置）"
+      title="当前服务商固定使用自动设置，无需手动调整"
       data-auto-value-field
-      className="flex min-h-[34px] w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-gray-200/60 bg-gray-100/60 px-3 py-1.5 text-base text-gray-500 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-gray-400 sm:text-xs"
+      className="flex min-h-[34px] w-full min-w-0 cursor-not-allowed items-center justify-between gap-2 rounded-xl border border-dashed border-gray-200/60 bg-gray-100/60 px-3 py-1.5 text-base text-gray-500 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-gray-400 sm:text-xs"
     >
       <span className="truncate font-mono">auto</span>
       <span className="shrink-0 rounded-md bg-gray-200/70 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-white/[0.08] dark:text-gray-400">

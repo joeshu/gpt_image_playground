@@ -96,6 +96,7 @@ function ModuleCard({
 interface CreationWorkbenchProps {
   onClose: () => void
   onOpenPromptStudio?: () => void
+  onPromptApplied?: () => void
   onBatchBusyChange?: (busy: boolean) => void
   /** 工作台离开当前一级页面时保持挂载，避免批量队列 runner 被卸载。 */
   visible?: boolean
@@ -300,6 +301,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
     const prompt = buildCreationPrompt(activeProject, currentPrompt)
     savePromptVersion({ prompt, source: 'template' })
     setPrompt(prompt)
+    onPromptApplied?.()
     requestClose()
     showToast('已将创作规则应用到当前提示词', 'success')
   }
@@ -364,7 +366,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
         <div data-creation-layout className="mt-6 grid min-w-0 w-full max-w-full gap-4 lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-6">
           <aside className="min-w-0 w-full max-w-full rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
             <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-400">项目导航</div>
-            <div className="flex min-w-0 max-w-full gap-1.5 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible">
+            <div className="flex min-w-0 max-w-full gap-1.5 touch-pan-x overscroll-x-contain overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] lg:block lg:space-y-1 lg:overflow-visible">
               {MODULES.map((item) => (
                 <button key={item.value} type="button" onClick={() => setActiveModule(item.value)} className={`min-w-[7.5rem] rounded-xl px-3 py-2.5 text-left transition lg:block lg:w-full ${activeModule === item.value ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.05]'}`}>
                   <div className="text-xs font-semibold">{item.label}</div>

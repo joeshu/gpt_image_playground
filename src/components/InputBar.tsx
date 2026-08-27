@@ -361,7 +361,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
   const [submitHover, setSubmitHover] = useState(false)
   const [attachHover, setAttachHover] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
-  const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem('mobile-composer-collapsed') !== 'false')
+  const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem(`mobile-composer-collapsed-${appMode}`) !== 'false')
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showPromptPreflight, setShowPromptPreflight] = useState(false)
   const [promptPreflightResult, setPromptPreflightResult] = useState<PromptPreflightResult | null>(null)
@@ -448,7 +448,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
   const dragCounter = useRef(0)
   const isMobile = useIsMobile()
 
-  const lastPromptStudioApplyTokenRef = useRef(promptStudioApplyToken)
+  const lastPromptStudioApplyTokenRef = useRef(0)
   useEffect(() => {
     if (lastPromptStudioApplyTokenRef.current === promptStudioApplyToken) return
     lastPromptStudioApplyTokenRef.current = promptStudioApplyToken
@@ -457,8 +457,12 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
   }, [promptStudioApplyToken])
 
   useEffect(() => {
-    if (isMobile) localStorage.setItem('mobile-composer-collapsed', String(mobileCollapsed))
-  }, [isMobile, mobileCollapsed])
+    if (isMobile) localStorage.setItem(`mobile-composer-collapsed-${appMode}`, String(mobileCollapsed))
+  }, [appMode, isMobile, mobileCollapsed])
+
+  useEffect(() => {
+    setMobileCollapsed(localStorage.getItem(`mobile-composer-collapsed-${appMode}`) !== 'false')
+  }, [appMode])
 
   const settingsActiveProfile = useMemo(() => getActiveApiProfile(settings), [settings])
   const currentActiveProfile = useMemo(() => (

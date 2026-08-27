@@ -14,6 +14,9 @@ const styles = read('src/index.css')
 const header = read('src/components/Header.tsx')
 const inputBar = read('src/components/InputBar.tsx')
 const promptStudio = read('src/components/PromptStudioModal.tsx')
+const select = read('src/components/Select.tsx')
+const inputParamsPanel = read('src/components/input/inputParamsPanel.tsx')
+const creationBatch = read('src/components/CreationBatchPanel.tsx')
 const promptEnhancer = read('src/components/PromptEnhancerModal.tsx')
 const promptPreflight = read('src/components/PromptPreflightModal.tsx')
 const promptVersions = read('src/components/PromptVersionHistoryModal.tsx')
@@ -85,6 +88,18 @@ for (const [name, source, hookCall] of modalScrollContracts) {
 
 if (!promptStudio.includes('activeTool === null')) {
   fail('Prompt Studio must release its parent scroll lock while a child tool is open')
+}
+
+if (!select.includes('createPortal(') || !select.includes('data-scroll-boundary')) {
+  fail('Select menus must escape clipping parents and expose a scroll boundary')
+}
+
+if (!inputParamsPanel.includes('role="status"') || !inputParamsPanel.includes('aria-disabled="true"')) {
+  fail('Auto parameter fields must be explicitly read-only status elements')
+}
+
+if (!creationBatch.includes('draftSnapshotRef') || !creationBatch.includes('state.setPrompt(draft.prompt)')) {
+  fail('Batch runner must restore the user draft after completion or cancellation')
 }
 
 if (header.includes('safe-area-top invisible pointer-events-none')) {

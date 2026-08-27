@@ -74,7 +74,7 @@ function MetricCard({ label, value, hint, tone = 'blue' }: { label: string; valu
   )
 }
 
-function BatchArchive({ jobs, tasks, onOpenWorkbench }: { jobs: CreationBatchJob[]; tasks: TaskRecord[]; onOpenWorkbench: () => void }) {
+function BatchArchive({ jobs, tasks, onOpenWorkbench, onOpenTask }: { jobs: CreationBatchJob[]; tasks: TaskRecord[]; onOpenWorkbench: () => void; onOpenTask: (taskId: string) => void }) {
   if (jobs.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center dark:border-white/[0.12] dark:bg-white/[0.03]">
@@ -90,6 +90,7 @@ function BatchArchive({ jobs, tasks, onOpenWorkbench }: { jobs: CreationBatchJob
       {jobs.map((job) => {
         const progress = getCreationBatchProgress(job)
         const delivery = getCreationBatchDeliverySummary(job, tasks)
+        const taskIds = job.items.map((item) => item.taskId).filter((taskId): taskId is string => Boolean(taskId && tasks.some((task) => task.id === taskId)))
         return (
           <article key={job.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -115,6 +116,16 @@ function BatchArchive({ jobs, tasks, onOpenWorkbench }: { jobs: CreationBatchJob
               <span>待复核 {delivery.warningOutputCount + delivery.partialOutputCount + delivery.pendingOutputCount}</span>
               {delivery.averageScore !== null && <span>平均 {delivery.averageScore} 分</span>}
             </div>
+            {taskIds.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {taskIds.slice(0, 3).map((taskId, index) => (
+                  <button key={taskId} type="button" onClick={() => onOpenTask(taskId)} className="min-h-9 rounded-lg bg-blue-50 px-3 text-[11px] font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20">
+                    查看结果 {index + 1}
+                  </button>
+                ))}
+                {taskIds.length > 3 && <span className="self-center text-[11px] text-gray-400">还有 {taskIds.length - 3} 个</span>}
+              </div>
+            )}
           </article>
         )
       })}
@@ -213,7 +224,7 @@ export default function ResultsCenter({ onClose, onOpenCreationWorkbench }: { on
           <MetricCard label="进行中任务" value={taskStats.running} hint="正在生成或等待恢复" tone="violet" />
         </div>
 
-        <div className="mt-6 flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+        <div className="mt-6 flex touch-pan-x overscroll-x-contain gap-1 overflow-x-auto rounded-xl [-webkit-overflow-scrolling:touch] border border-gray-200 bg-white/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
           {[
             ['outputs', '全部结果'],
             ['review', `待复核 ${taskStats.review}`],
@@ -224,7 +235,7 @@ export default function ResultsCenter({ onClose, onOpenCreationWorkbench }: { on
         </div>
 
         {activeTab === 'batches' ? (
-          <div className="mt-4"><BatchArchive jobs={batchJobs} tasks={tasks} onOpenWorkbench={onOpenCreationWorkbench} /></div>
+          <div className="mt-4"><BatchArchive jobs={batchJobs} tasks={tasks} onOpenWorkbench={onOpenCreationWorkbench} onOpenTask={setDetailTaskId} /></div>
         ) : (
           <>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
