@@ -1949,7 +1949,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
             <div className="sm:hidden flex flex-col gap-2">
               <div className={`collapse-section${mobileCollapsed ? ' collapsed' : ''}`}>
                 <div className="collapse-inner">
-                  {renderParams('mobile-param-grid grid-cols-2 gap-y-3 pb-1')}
+                  {renderParams('mobile-param-grid mobile-param-strip')}
                   <div className="h-2" />
                 </div>
               </div>
