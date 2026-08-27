@@ -119,7 +119,11 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex min-w-0 shrink-0 touch-pan-x overscroll-x-contain gap-1.5 overflow-x-auto border-b border-gray-100 px-5 py-3 [-webkit-overflow-scrolling:touch] dark:border-white/[0.08]">
+          <div
+            data-scroll-boundary="prompt-template-categories"
+            data-prompt-template-categories
+            className="flex min-w-0 shrink-0 touch-pan-x overscroll-x-contain gap-1.5 overflow-x-auto border-b border-gray-100 px-5 py-3 [-webkit-overflow-scrolling:touch] dark:border-white/[0.08]"
+          >
             {CATEGORIES.map((item) => (
               <button
                 key={item.value}
@@ -137,7 +141,11 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
           </div>
 
           <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden md:grid-cols-[310px_1fr] md:grid-rows-1">
-            <div className="min-h-0 min-w-0 max-h-56 touch-pan-y overscroll-contain overflow-y-auto border-b border-gray-100 p-3 [-webkit-overflow-scrolling:touch] md:max-h-none md:border-b-0 md:border-r dark:border-white/[0.08]">
+            <div
+              data-scroll-boundary="prompt-template-list"
+              data-prompt-template-list
+              className="min-h-0 min-w-0 max-h-56 touch-pan-y overscroll-contain overflow-y-auto border-b border-gray-100 p-3 [-webkit-overflow-scrolling:touch] md:max-h-none md:border-b-0 md:border-r dark:border-white/[0.08]"
+            >
               <div className="space-y-2">
                 {visibleTemplates.map((template) => (
                   <div key={template.id} className={`rounded-xl border p-2.5 transition ${
@@ -173,7 +181,11 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
               </div>
             </div>
 
-            <div className="min-h-0 min-w-0 touch-pan-y overscroll-contain overflow-y-auto px-5 pb-8 py-4 [-webkit-overflow-scrolling:touch]">
+            <div
+              data-scroll-boundary="prompt-template-editor"
+              data-prompt-template-editor
+              className="min-h-0 min-w-0 touch-pan-y overscroll-contain overflow-y-auto px-5 pb-8 py-4 [-webkit-overflow-scrolling:touch]"
+            >
               {selected ? (
                 <>
                   <div className="flex items-center justify-between gap-3">
