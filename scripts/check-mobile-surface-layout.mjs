@@ -14,6 +14,7 @@ const styles = read('src/index.css')
 const header = read('src/components/Header.tsx')
 const inputBar = read('src/components/InputBar.tsx')
 const promptStudio = read('src/components/PromptStudioModal.tsx')
+const promptTemplate = read('src/components/PromptTemplateModal.tsx')
 const select = read('src/components/Select.tsx')
 const inputParamsPanel = read('src/components/input/inputParamsPanel.tsx')
 const creationBatch = read('src/components/CreationBatchPanel.tsx')
@@ -74,8 +75,18 @@ if (!styles.includes('.mobile-param-strip') || !styles.includes('touch-action: p
   fail('mobile parameter controls must expose a touch-scrollable horizontal boundary')
 }
 
-if (!styles.includes('.mobile-param-strip > label') || !styles.includes('scroll-snap-type: x proximity')) {
+if (!styles.includes('.mobile-param-scroll') || !inputBar.includes('data-mobile-param-scroll')) {
+  fail('mobile parameter controls must have an explicit scroll boundary')
+}
+
+if (!styles.includes('.mobile-param-strip > label') || !styles.includes('scroll-padding-inline: 0 calc(3rem + var(--safe-area-right))')) {
   fail('mobile parameter strip items must remain bounded and reachable')
+}
+
+if (!promptTemplate.includes('data-scroll-boundary="prompt-template-categories"') ||
+    !promptTemplate.includes('data-scroll-boundary="prompt-template-editor"') ||
+    !styles.includes('[data-prompt-template-categories]')) {
+  fail('prompt template sheets must expose independent iOS scroll boundaries')
 }
 
 if (!header.includes('sticky top-0') || header.includes(' fixed top-0')) {
