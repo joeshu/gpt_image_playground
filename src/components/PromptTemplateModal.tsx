@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import {
@@ -37,9 +37,10 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [customTitle, setCustomTitle] = useState('')
+  const modalRef = useRef<HTMLElement>(null)
 
   useCloseOnEscape(open, onClose)
-  usePreventBackgroundScroll(open)
+  usePreventBackgroundScroll(open, modalRef)
 
   const refreshTemplates = () => {
     const next = getAllPromptTemplates()
@@ -101,10 +102,11 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 sm:items-center sm:p-4" onClick={onClose}>
       <section
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label="专业提示词模板"
-        className="flex max-h-[92dvh] w-full flex-col rounded-t-[28px] bg-white shadow-2xl sm:max-w-5xl sm:rounded-2xl dark:bg-gray-900"
+        className="flex max-h-[92dvh] min-h-0 w-full flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:max-w-5xl sm:rounded-2xl dark:bg-gray-900"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mx-auto mt-2 h-1 w-12 rounded-full bg-gray-300 sm:hidden dark:bg-gray-600" />
@@ -116,8 +118,8 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.08]" aria-label="关闭">×</button>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex gap-1.5 overflow-x-auto border-b border-gray-100 px-5 py-3 dark:border-white/[0.08]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-w-0 shrink-0 touch-pan-x overscroll-x-contain gap-1.5 overflow-x-auto border-b border-gray-100 px-5 py-3 [-webkit-overflow-scrolling:touch] dark:border-white/[0.08]">
             {CATEGORIES.map((item) => (
               <button
                 key={item.value}
@@ -134,8 +136,8 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
             ))}
           </div>
 
-          <div className="grid min-h-0 flex-1 md:grid-cols-[310px_1fr]">
-            <div className="max-h-56 overflow-y-auto border-b border-gray-100 p-3 md:max-h-none md:border-b-0 md:border-r dark:border-white/[0.08]">
+          <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden md:grid-cols-[310px_1fr] md:grid-rows-1">
+            <div className="min-h-0 min-w-0 max-h-56 touch-pan-y overscroll-contain overflow-y-auto border-b border-gray-100 p-3 [-webkit-overflow-scrolling:touch] md:max-h-none md:border-b-0 md:border-r dark:border-white/[0.08]">
               <div className="space-y-2">
                 {visibleTemplates.map((template) => (
                   <div key={template.id} className={`rounded-xl border p-2.5 transition ${
@@ -171,7 +173,7 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
               </div>
             </div>
 
-            <div className="min-h-0 overflow-y-auto px-5 py-4">
+            <div className="min-h-0 min-w-0 touch-pan-y overscroll-contain overflow-y-auto px-5 pb-8 py-4 [-webkit-overflow-scrolling:touch]">
               {selected ? (
                 <>
                   <div className="flex items-center justify-between gap-3">
@@ -229,7 +231,7 @@ export default function PromptTemplateModal({ open, currentPrompt, onClose, onAp
           </div>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-white/[0.08]">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-gray-100 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-white/[0.08]">
           <button type="button" onClick={() => setIsSaving((current) => !current)} disabled={!currentPrompt.trim()} className="min-h-10 rounded-lg px-3 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 dark:text-gray-300 dark:hover:bg-white/[0.06]">
             {isSaving ? '取消保存' : '保存当前为模板'}
           </button>
