@@ -42,6 +42,14 @@ if (!styles.includes('[data-agent-message-list] > *') || !styles.includes('[data
   fail('surface children must stay inside the iOS WebView content box')
 }
 
+if (!header.includes('sticky top-0') || header.includes(' fixed top-0')) {
+  fail('global mobile header must remain in document flow to reserve its own height')
+}
+
+if (header.includes('safe-area-top invisible pointer-events-none')) {
+  fail('mobile header must not rely on a duplicated approximate spacer')
+}
+
 if (header.includes("'-translate-y-full sm:translate-y-0'")) {
   fail('global navigation must remain reachable while Agent is active')
 }
