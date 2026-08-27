@@ -79,8 +79,8 @@ if (!styles.includes('.mobile-param-scroll') || !inputBar.includes('data-mobile-
   fail('mobile parameter controls must have an explicit scroll boundary')
 }
 
-if (!styles.includes('.mobile-param-strip > label') || !styles.includes('scroll-padding-inline: 0 calc(3rem + var(--safe-area-right))')) {
-  fail('mobile parameter strip items must remain bounded and reachable')
+if (!styles.includes('.mobile-param-strip > label') || !styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))')) {
+  fail('mobile parameter controls must use complete two-column fields instead of clipping the third control')
 }
 
 if (!promptTemplate.includes('data-scroll-boundary="prompt-template-categories"') ||
