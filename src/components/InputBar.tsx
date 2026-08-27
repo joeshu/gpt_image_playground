@@ -1676,7 +1676,8 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
 
       <div
         data-input-bar
-        className={`fixed bottom-[var(--bottom-safe-space)] left-1/2 z-30 min-w-0 w-full max-w-4xl -translate-x-1/2 px-3 transition-all duration-300 sm:px-4${promptExpanded ? ' flex flex-col' : ''}`}
+        data-scroll-boundary="composer"
+        className={`fixed bottom-[var(--bottom-safe-space)] left-1/2 z-30 min-w-0 w-full max-w-4xl max-h-[calc(100dvh-var(--safe-area-top))] -translate-x-1/2 touch-pan-y overscroll-contain overflow-y-auto px-3 transition-all duration-300 sm:px-4${promptExpanded ? ' flex flex-col' : ''}`}
         style={promptExpanded ? { top: `max(${promptExpandedTop}px, var(--safe-area-top))`, transitionProperty: 'none' } : undefined}
       >
         <InputBatchBars
