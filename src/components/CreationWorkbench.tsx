@@ -454,8 +454,8 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onBatch
                 </div>
                 <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">视觉资产说明</span><textarea value={activeProject.brand.visualNotes} onChange={(event) => updateBrand({ visualNotes: event.target.value })} rows={5} placeholder="记录 Logo 使用方式、品牌图形、字体气质、图片中的固定元素等。只填写已经确认的品牌事实。" className={fieldClass} /></label>
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div><div className="text-sm font-semibold text-blue-800 dark:text-blue-200">品牌参考图</div><p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-300">绑定当前输入栏的图片。应用规则时会尝试从本机图片库恢复它们，不会上传或调用 AI。</p></div>
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0"><div className="text-sm font-semibold text-blue-800 dark:text-blue-200">品牌参考图</div><p className="mt-1 break-words text-xs leading-relaxed text-gray-600 dark:text-gray-300">绑定当前输入栏的图片。应用规则时会尝试从本机图片库恢复它们，不会上传或调用 AI。</p></div>
                     <button type="button" onClick={handleBindCurrentImages} className="min-h-10 shrink-0 rounded-xl bg-white px-3 text-xs font-medium text-blue-700 shadow-sm hover:bg-blue-50 dark:bg-white/[0.08] dark:text-blue-200">绑定当前参考图</button>
                   </div>
                   <div className="mt-3 text-xs text-blue-700 dark:text-blue-300">已绑定 {activeProject.brand.referenceImageIds.length} 张</div>

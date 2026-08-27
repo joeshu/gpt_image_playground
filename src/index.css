@@ -28,6 +28,7 @@
 
 html {
   overflow-y: scroll;
+  overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -35,8 +36,16 @@ html {
 body {
   padding: 0;
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   -webkit-user-select: none;
   user-select: none;
+}
+
+#root {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .ios-modal-height {
@@ -418,6 +427,9 @@ input[type="number"] {
 
 .safe-area-x {
   box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding-left: max(1rem, var(--safe-area-left));
   padding-right: max(1rem, var(--safe-area-right));
 }
@@ -426,7 +438,16 @@ input[type="number"] {
 [data-creation-workbench],
 [data-agent-workspace] {
   box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+[data-results-center] {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 /* 长历史记录中只布局接近视口的卡片，保留占位高度避免滚动跳动。 */

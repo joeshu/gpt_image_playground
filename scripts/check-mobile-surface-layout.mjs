@@ -10,6 +10,7 @@ const agent = read('src/components/AgentWorkspace.tsx')
 const workbench = read('src/components/CreationWorkbench.tsx')
 const results = read('src/components/ResultsCenter.tsx')
 const app = read('src/App.tsx')
+const styles = read('src/index.css')
 
 const agentListClass = agent.match(/data-agent-message-list[\s\S]{0,180}?className="([^"]+)"/)?.[1]
 if (!agentListClass) fail('Agent message list marker or class is missing')
@@ -26,6 +27,10 @@ for (const [name, source, marker] of [
 
 if (!app.includes("navigateToSurface('creation')") || !app.includes("navigateToSurface('results')")) {
   fail('surface switches must reset stale document scroll')
+}
+
+if (!styles.includes('overflow-x: clip') || !styles.includes('max-width: 100%')) {
+  fail('mobile surfaces must prevent page-level horizontal overflow')
 }
 
 if (!process.exitCode) console.log('Mobile surface layout contract passed')
