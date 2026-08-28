@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useVersionCheck } from '../hooks/useVersionCheck'
 import { useTooltip } from '../hooks/useTooltip'
@@ -33,7 +33,6 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
   const setAppMode = useStore((s) => s.setAppMode)
   const setShowSettings = useStore((s) => s.setShowSettings)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
-  const agentMobileHeaderVisible = useStore((s) => s.agentMobileHeaderVisible)
   const agentConversations = useStore((s) => s.agentConversations)
   const activeAgentConversationId = useStore((s) => s.activeAgentConversationId)
   const filterFavorite = useStore((s) => s.filterFavorite)
@@ -48,52 +47,45 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const nativeApp = isNativeApp()
   const [isPwaInstalled, setIsPwaInstalled] = useState(() => nativeApp || isInstalledPwa())
-  const [hintVisible, setHintVisible] = useState(false)
-  const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('up')
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const historyButtonRef = useRef<HTMLButtonElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
+  const headerSpacerRef = useRef<HTMLDivElement>(null)
   const createConversation = useStore((s) => s.createAgentConversation)
 
-  useEffect(() => {
-    if (isAgentSurface) {
-      setScrollDirection('up')
-      return
-    }
+  useLayoutEffect(() => {
+    // The header is fixed so iOS cannot move it with the document while a
+    // drawer/input transition is being committed. Keep a real flow slot in
+    // sync with its measured height instead of using a second approximate
+    // header tree as a spacer.
+    const header = headerRef.current
+    const spacer = headerSpacerRef.current
+    if (!header || !spacer) return
+    const root = document.documentElement
+    const previousHeaderHeight = root.style.getPropertyValue('--global-header-height')
 
-    let lastScrollY = window.scrollY
-    let ticking = false
-
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY
-          if (currentScrollY < 20) {
-            setScrollDirection('up')
-          } else if (currentScrollY > lastScrollY + 10) {
-            setScrollDirection('down')
-          } else if (currentScrollY < lastScrollY - 10) {
-            setScrollDirection('up')
-          }
-          lastScrollY = currentScrollY
-          ticking = false
-        })
-        ticking = true
+    const syncSpacerHeight = () => {
+      const height = Math.ceil(header.getBoundingClientRect().height)
+      if (height > 0) {
+        const value = `${height}px`
+        spacer.style.height = value
+        root.style.setProperty('--global-header-height', value)
       }
     }
 
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [isAgentSurface])
+    syncSpacerHeight()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncSpacerHeight) : null
+    observer?.observe(header)
+    window.addEventListener('resize', syncSpacerHeight)
 
-  useEffect(() => {
-    if (isAgentSurface && !agentMobileHeaderVisible) {
-      setHintVisible(true)
-      const timer = setTimeout(() => {
-        setHintVisible(false)
-      }, 1500)
-      return () => clearTimeout(timer)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', syncSpacerHeight)
+      spacer.style.height = ''
+      if (previousHeaderHeight) root.style.setProperty('--global-header-height', previousHeaderHeight)
+      else root.style.removeProperty('--global-header-height')
     }
-  }, [isAgentSurface, agentMobileHeaderVisible])
+  }, [])
 
   const installTooltip = useTooltip()
   const helpTooltip = useTooltip()
@@ -159,7 +151,7 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
 
   return (
     <>
-      <header data-no-drag-select className="safe-area-top sticky top-0 left-0 right-0 z-40 translate-y-0 bg-white/80 backdrop-blur border-b border-gray-200 transition-transform duration-300 ease-in-out dark:border-white/[0.08] dark:bg-gray-950/80">
+      <header ref={headerRef} data-global-header data-no-drag-select className="safe-area-top fixed top-0 left-0 right-0 z-40 w-full translate-y-0 bg-white/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08] dark:bg-gray-950/80">
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between gap-1 relative">
           <div className="flex min-w-0 flex-1 items-center gap-1 pr-1 sm:gap-2 sm:pr-2">
             <h1 className="relative mr-1 inline-flex min-w-0 items-start sm:mr-2">
@@ -336,7 +328,7 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
             </div>
           </div>
         </div>
-        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${isGallerySurface && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-16 opacity-100 pb-1.5'}`}>
+        <div className="safe-area-x sm:hidden pb-1.5">
           <div className="grid min-h-10 grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
             <button
               type="button"
@@ -369,13 +361,8 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
           </div>
         </div>
       </header>
-      
-      {/* Hint for sliding down */}
-      <div className={`fixed top-0 left-0 right-0 z-30 flex justify-center pointer-events-none transition-all duration-300 ease-in-out sm:hidden ${isAgentSurface && hintVisible && !agentMobileHeaderVisible ? 'translate-y-[env(safe-area-inset-top,0px)] opacity-100' : '-translate-y-full opacity-0'}`}>
-        <div className="bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-b-xl shadow-lg">
-          下拉展示顶栏
-        </div>
-      </div>
+
+      <div ref={headerSpacerRef} data-global-header-spacer aria-hidden="true" />
 
       {showHelp && <HelpModal appMode={isAgentSurface ? 'agent' : 'gallery'} isFavoriteCollectionOverview={isGallerySurface && filterFavorite && !activeFavoriteCollectionId} onClose={() => setShowHelp(false)} />}
     </>

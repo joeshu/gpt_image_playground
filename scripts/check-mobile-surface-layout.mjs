@@ -125,8 +125,12 @@ if (!promptTemplate.includes('data-scroll-boundary="prompt-template-categories"'
   fail('prompt template sheets must expose independent iOS scroll boundaries')
 }
 
-if (!header.includes('sticky top-0') || header.includes(' fixed top-0')) {
-  fail('global mobile header must remain in document flow to reserve its own height')
+if (!header.includes('data-global-header') ||
+    !header.includes('data-global-header-spacer') ||
+    !header.includes('useLayoutEffect') ||
+    !header.includes('ResizeObserver') ||
+    !header.includes('safe-area-top fixed top-0')) {
+  fail('global mobile header must be fixed with a measured flow slot')
 }
 
 const modalScrollContracts = [
@@ -165,8 +169,12 @@ if (header.includes('safe-area-top invisible pointer-events-none')) {
   fail('mobile header must not rely on a duplicated approximate spacer')
 }
 
-if (header.includes("'-translate-y-full sm:translate-y-0'")) {
-  fail('global navigation must remain reachable while Agent is active')
+if (header.includes("'-translate-y-full sm:translate-y-0'") || header.includes('scrollDirection')) {
+  fail('global navigation must remain reachable and height-stable while Agent is active')
+}
+
+if (!agent.includes('data-agent-mobile-top-bar') || !styles.includes('top: var(--global-header-height')) {
+  fail('Agent mobile header must stay below the fixed global header')
 }
 
 if (!process.exitCode) console.log('Mobile surface layout contract passed')

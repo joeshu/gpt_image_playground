@@ -45,7 +45,30 @@ body {
 #root {
   min-width: 0;
   max-width: 100%;
-  overflow-x: clip;
+}
+
+/* Keep the global chrome out of the document scroll transform. iOS WebViews
+   can otherwise move a sticky header when a fixed drawer releases focus. The
+   matching flow slot is measured by Header at layout time. */
+[data-global-header] {
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+[data-global-header-spacer] {
+  box-sizing: border-box;
+  height: calc(var(--safe-area-top) + 3.5rem);
+}
+
+@media (max-width: 639px) {
+  [data-global-header-spacer] {
+    height: calc(max(0.5rem, var(--safe-area-top)) + 6.375rem);
+  }
+
+  [data-agent-mobile-top-bar] {
+    top: var(--global-header-height, 6.375rem);
+  }
 }
 
 .ios-modal-height {
