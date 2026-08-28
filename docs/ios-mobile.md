@@ -29,11 +29,12 @@ Never auto-merge an upstream PR before the Unsigned IPA workflow and device smok
 
 ## Release checklist
 
-1. Merge a reviewed upstream sync PR.
-2. Run the Unsigned workflow.
-3. Install and launch-test the unsigned build in its intended environment.
-4. Run the Ad-hoc workflow when signing secrets and registered devices are available.
+1. Merge the reviewed mobile delivery changes into `main`.
+2. Create a version tag matching `v*` on `main` (for example, `v0.7.7`).
+3. Wait for the Unsigned workflow to finish; it publishes the IPA, `.app.zip`, and build report to a GitHub Release.
+4. Install and launch-test the Unsigned IPA in its intended environment.
 5. Verify launch, API request, background/resume, photo import, export, and upgrade from the previous IPA.
+6. Treat Ad-hoc as optional and manual-only; run it only when signing secrets and registered devices are available.
 
 
 ## Deterministic native configuration
