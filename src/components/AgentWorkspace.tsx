@@ -10,6 +10,7 @@ import { getAgentAssistantBlocks, getAgentAssistantCopyContent, getRoundTaskSlot
 import { sanitizeAgentText } from '../lib/agentApi'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
+import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import TaskCard from './TaskCard'
 import MarkdownRenderer from './MarkdownRenderer'
 import { TooltipButton as AgentActionButton } from './TooltipButton'
@@ -106,6 +107,21 @@ const MOBILE_HEADER_PULL_THRESHOLD = 24
 const MOBILE_HEADER_PULL_MAX_OFFSET = 48
 const MOBILE_HEADER_EDGE_GUARD = 24
 
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const mediaQuery = window.matchMedia('(max-width: 639px)')
+    const sync = () => setIsMobile(mediaQuery.matches)
+    sync()
+    mediaQuery.addEventListener?.('change', sync)
+    return () => mediaQuery.removeEventListener?.('change', sync)
+  }, [])
+
+  return isMobile
+}
+
 function getPageScrollTop() {
   return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
 }
@@ -159,6 +175,13 @@ export default function AgentWorkspace() {
   const conversationLongPressTimer = useRef<number | null>(null)
   const autoScrollStateRef = useRef<{ conversationId: string | null; lastUserMessageSignature: string | null }>({ conversationId: null, lastUserMessageSignature: null })
   const errorCopyPointerDownRef = useRef<{ x: number; y: number } | null>(null)
+  const agentSidebarRef = useRef<HTMLElement>(null)
+  const isMobileViewport = useIsMobileViewport()
+
+  usePreventBackgroundScroll(
+    appMode === 'agent' && isMobileViewport && !sidebarCollapsed,
+    agentSidebarRef,
+  )
 
   const updateIsScrolledToBottom = useCallback(() => {
     const sentinel = bottomSentinelRef.current
@@ -634,11 +657,20 @@ export default function AgentWorkspace() {
 
       {/* Mobile Left Sidebar Overlay Backdrop */}
       {!sidebarCollapsed && (
-        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarCollapsed(true)} />
+        <div data-agent-sidebar-backdrop className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarCollapsed(true)} />
       )}
       
       {/* Left Sidebar */}
-      <aside data-agent-sidebar className={`fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-[320px] flex-col border-r border-gray-200 bg-white/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-white/[0.08] dark:bg-gray-950/95 lg:hidden ${!sidebarCollapsed ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside
+        ref={agentSidebarRef}
+        data-agent-sidebar
+        data-scroll-boundary="agent-sidebar"
+        role="dialog"
+        aria-modal={!sidebarCollapsed}
+        aria-hidden={sidebarCollapsed}
+        aria-label="Agent 对话列表"
+        className={`fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-[320px] flex-col border-r border-gray-200 bg-white/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-white/[0.08] dark:bg-gray-950/95 lg:hidden ${!sidebarCollapsed ? 'translate-x-0' : '-translate-x-full'}`}
+      >
         <div className="pl-[max(1rem,env(safe-area-inset-left))] flex h-full min-h-0 w-full flex-col pb-[env(safe-area-inset-bottom)]">
           <div className="safe-area-top shrink-0">
             <div className="flex h-14 items-center justify-between gap-2 px-4">

@@ -1,11 +1,42 @@
 const KEYBOARD_OPEN_THRESHOLD = 80
 
-function resetHorizontalViewport() {
+function finiteViewportMetric(value: number | undefined, fallback = 0) {
+  return Number.isFinite(value) ? Math.max(0, value as number) : fallback
+}
+
+export function getVisualViewportMetrics(
+  viewport: Pick<VisualViewport, 'offsetLeft' | 'offsetTop' | 'width'>,
+  fallbackWidth: number,
+) {
+  return {
+    left: finiteViewportMetric(viewport.offsetLeft),
+    top: finiteViewportMetric(viewport.offsetTop),
+    width: finiteViewportMetric(viewport.width, finiteViewportMetric(fallbackWidth)),
+  }
+}
+
+function syncVisualViewportVariables(viewport: VisualViewport | null) {
+  const root = document.documentElement
+  if (!viewport) {
+    root.style.setProperty('--visual-viewport-left', '0px')
+    root.style.setProperty('--visual-viewport-top', '0px')
+    root.style.setProperty('--visual-viewport-width', '100%')
+    return
+  }
+
+  const metrics = getVisualViewportMetrics(viewport, window.innerWidth)
+  root.style.setProperty('--visual-viewport-left', `${Math.round(metrics.left)}px`)
+  root.style.setProperty('--visual-viewport-top', `${Math.round(metrics.top)}px`)
+  root.style.setProperty('--visual-viewport-width', `${Math.round(metrics.width)}px`)
+}
+
+function resetHorizontalViewport(viewport: VisualViewport | null = window.visualViewport) {
   const root = document.documentElement
   const top = window.scrollY
   window.scrollTo({ left: 0, top, behavior: 'auto' })
   root.scrollLeft = 0
   document.body.scrollLeft = 0
+  syncVisualViewportVariables(viewport)
 }
 
 export function calculateKeyboardInset(
@@ -21,6 +52,7 @@ export function installMobileViewportGuards() {
   const viewport = window.visualViewport
   const root = document.documentElement
   if (!viewport) {
+    syncVisualViewportVariables(null)
     root.style.setProperty('--visual-viewport-height', `${window.innerHeight}px`)
     root.style.setProperty('--keyboard-inset', '0px')
     return
@@ -32,6 +64,7 @@ export function installMobileViewportGuards() {
   const update = () => {
     window.cancelAnimationFrame(frame)
     frame = window.requestAnimationFrame(() => {
+      syncVisualViewportVariables(viewport)
       const keyboardInset = calculateKeyboardInset(
         window.innerHeight,
         viewport.height,
@@ -42,13 +75,13 @@ export function installMobileViewportGuards() {
       root.style.setProperty('--keyboard-inset', `${keyboardInset}px`)
       root.classList.toggle('ios-keyboard-open', keyboardInset >= KEYBOARD_OPEN_THRESHOLD)
       if (keyboardInset < KEYBOARD_OPEN_THRESHOLD) {
-        resetHorizontalViewport()
+        resetHorizontalViewport(viewport)
         // iOS may commit the keyboard dismissal one or two frames after the
         // visualViewport resize event. Repeat the correction after that
         // commit so a fixed drawer cannot leave the app horizontally shifted.
         window.requestAnimationFrame(() => {
-          resetHorizontalViewport()
-          window.requestAnimationFrame(resetHorizontalViewport)
+          resetHorizontalViewport(viewport)
+          window.requestAnimationFrame(() => resetHorizontalViewport(viewport))
         })
       }
     })
@@ -76,9 +109,12 @@ export function installMobileViewportGuards() {
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     if (!target.closest('[data-agent-sidebar]')) return
-    window.setTimeout(resetHorizontalViewport, 0)
-    window.setTimeout(resetHorizontalViewport, 180)
-    window.setTimeout(resetHorizontalViewport, 420)
+    window.setTimeout(() => resetHorizontalViewport(viewport), 0)
+    window.setTimeout(() => resetHorizontalViewport(viewport), 180)
+    window.setTimeout(() => resetHorizontalViewport(viewport), 420)
+  })
+  viewport.addEventListener('scrollend', () => {
+    if (!root.classList.contains('ios-keyboard-open')) resetHorizontalViewport(viewport)
   })
   update()
 }

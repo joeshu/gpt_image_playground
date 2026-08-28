@@ -6,7 +6,13 @@ type ScrollDelta = { x: number; y: number }
 let lockCount = 0
 let previousBodyOverflow = ''
 let previousBodyOverscrollBehavior = ''
+let previousBodyPosition = ''
+let previousBodyTop = ''
+let previousBodyLeft = ''
+let previousBodyRight = ''
+let previousBodyWidth = ''
 let previousDocumentOverscrollBehavior = ''
+let lockedScrollY = 0
 
 function getAllowedRoot(target: EventTarget | null, allowRefs?: ScrollBoundaryRef | ScrollBoundaryRef[]) {
   if (!(target instanceof Node)) return null
@@ -71,9 +77,23 @@ export function usePreventBackgroundScroll(active: boolean, allowRefs?: ScrollBo
     if (lockCount === 0) {
       previousBodyOverflow = document.body.style.overflow
       previousBodyOverscrollBehavior = document.body.style.overscrollBehavior
+      previousBodyPosition = document.body.style.position
+      previousBodyTop = document.body.style.top
+      previousBodyLeft = document.body.style.left
+      previousBodyRight = document.body.style.right
+      previousBodyWidth = document.body.style.width
       previousDocumentOverscrollBehavior = document.documentElement.style.overscrollBehavior
+      lockedScrollY = window.scrollY
       document.body.style.overflow = 'hidden'
       document.body.style.overscrollBehavior = 'none'
+      // iOS WebView may still move the document when an input inside a fixed
+      // drawer receives focus. Freeze the layout viewport while the overlay
+      // owns interaction, then restore the exact scroll position on release.
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${lockedScrollY}px`
+      document.body.style.left = '0'
+      document.body.style.right = '0'
+      document.body.style.width = '100%'
       document.documentElement.style.overscrollBehavior = 'none'
     }
     lockCount += 1
@@ -123,9 +143,14 @@ export function usePreventBackgroundScroll(active: boolean, allowRefs?: ScrollBo
       if (lockCount === 0) {
         document.body.style.overflow = previousBodyOverflow
         document.body.style.overscrollBehavior = previousBodyOverscrollBehavior
+        document.body.style.position = previousBodyPosition
+        document.body.style.top = previousBodyTop
+        document.body.style.left = previousBodyLeft
+        document.body.style.right = previousBodyRight
+        document.body.style.width = previousBodyWidth
         document.documentElement.style.overscrollBehavior = previousDocumentOverscrollBehavior
+        window.scrollTo({ top: lockedScrollY, left: 0, behavior: 'auto' })
       }
     }
   }, [active, allowRefs])
 }
-

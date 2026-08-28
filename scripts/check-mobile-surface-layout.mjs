@@ -62,9 +62,17 @@ if (!agent.includes('data-agent-sidebar') || !viewport.includes("active.closest(
 }
 
 if (!viewport.includes("target.closest('[data-agent-sidebar]')") ||
-    !viewport.includes('window.setTimeout(resetHorizontalViewport, 420)') ||
-    !styles.includes('width: 100vw !important')) {
+    !viewport.includes('viewport.offsetLeft') ||
+    !viewport.includes("addEventListener('scrollend'") ||
+    !styles.includes('width: var(--visual-viewport-width, 100%) !important')) {
   fail('drawer dismissal must restore the mobile visual viewport and composer width')
+}
+
+if (!agent.includes('usePreventBackgroundScroll(') ||
+    !agent.includes('data-scroll-boundary="agent-sidebar"') ||
+    !agent.includes('data-agent-sidebar-backdrop') ||
+    !styles.includes('height: var(--visual-viewport-height, 100dvh) !important')) {
+  fail('Agent drawer must isolate background scrolling while editing')
 }
 
 if (!workbench.includes("window.requestAnimationFrame") || !results.includes("window.requestAnimationFrame")) {
