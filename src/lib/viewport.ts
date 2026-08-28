@@ -1,5 +1,13 @@
 const KEYBOARD_OPEN_THRESHOLD = 80
 
+function resetHorizontalViewport() {
+  const root = document.documentElement
+  const top = window.scrollY
+  window.scrollTo({ left: 0, top, behavior: 'auto' })
+  root.scrollLeft = 0
+  document.body.scrollLeft = 0
+}
+
 export function calculateKeyboardInset(
   layoutHeight: number,
   visualHeight: number,
@@ -34,9 +42,14 @@ export function installMobileViewportGuards() {
       root.style.setProperty('--keyboard-inset', `${keyboardInset}px`)
       root.classList.toggle('ios-keyboard-open', keyboardInset >= KEYBOARD_OPEN_THRESHOLD)
       if (keyboardInset < KEYBOARD_OPEN_THRESHOLD) {
-        window.scrollTo({ left: 0, top: window.scrollY, behavior: 'auto' })
-        root.scrollLeft = 0
-        document.body.scrollLeft = 0
+        resetHorizontalViewport()
+        // iOS may commit the keyboard dismissal one or two frames after the
+        // visualViewport resize event. Repeat the correction after that
+        // commit so a fixed drawer cannot leave the app horizontally shifted.
+        window.requestAnimationFrame(() => {
+          resetHorizontalViewport()
+          window.requestAnimationFrame(resetHorizontalViewport)
+        })
       }
     })
   }
@@ -59,5 +72,13 @@ export function installMobileViewportGuards() {
   viewport.addEventListener('scroll', update)
   window.addEventListener('orientationchange', update)
   document.addEventListener('focusin', revealFocusedControl)
+  document.addEventListener('focusout', (event) => {
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    if (!target.closest('[data-agent-sidebar]')) return
+    window.setTimeout(resetHorizontalViewport, 0)
+    window.setTimeout(resetHorizontalViewport, 180)
+    window.setTimeout(resetHorizontalViewport, 420)
+  })
   update()
 }
