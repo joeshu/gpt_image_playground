@@ -7,7 +7,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write
 
 # Keep every prompt-feature change behind the same full unsigned IPA gate.
 concurrency:
@@ -108,3 +108,40 @@ jobs:
             build/xcodebuild.log
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish tagged Unsigned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          IPA_PATH="build/GPT-Image-Playground-${{ github.run_number }}-unsigned.ipa"
+          APP_ZIP_PATH="build/GPT-Image-Playground-${{ github.run_number }}-unsigned.app.zip"
+          REPORT_PATH="build/report/build-info.json"
+          cat > build/release-notes.md <<EOF
+          # GPT Image Playground $RELEASE_TAG — Unsigned IPA
+
+          - Commit: ${{ github.sha }}
+          - Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Variant: Unsigned iOS IPA
+          - The IPA is unsigned and intended for supported sideloading or later re-signing environments.
+          EOF
+
+          if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --title "GPT Image Playground $RELEASE_TAG — Unsigned IPA" \
+              --notes-file build/release-notes.md
+            gh release upload "$RELEASE_TAG" \
+              "$IPA_PATH" "$APP_ZIP_PATH" "$REPORT_PATH" \
+              --repo "${{ github.repository }}" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              "$IPA_PATH" "$APP_ZIP_PATH" "$REPORT_PATH" \
+              --repo "${{ github.repository }}" \
+              --title "GPT Image Playground $RELEASE_TAG — Unsigned IPA" \
+              --notes-file build/release-notes.md \
+              --verify-tag
+          fi
