@@ -33,6 +33,7 @@ const surfaceNavigation = read('src/lib/surfaceNavigation.ts')
 const agentListClass = agent.match(/data-agent-message-list[\s\S]{0,180}?className="([^"]+)"/)?.[1]
 if (!agentListClass) fail('Agent message list marker or class is missing')
 else if (agentListClass.split(/\s+/).includes('flex')) fail('Agent message list must remain a vertical block, not a horizontal flex row')
+else if (!agentListClass.split(/\s+/).includes('overflow-y-auto')) fail('Agent message history must own its vertical scroll boundary')
 
 for (const [name, source, marker] of [
   ['Creation Workbench', workbench, 'data-creation-content'],

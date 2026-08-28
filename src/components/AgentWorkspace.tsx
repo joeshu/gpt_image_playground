@@ -174,22 +174,31 @@ export default function AgentWorkspace() {
   )
 
   const updateIsScrolledToBottom = useCallback(() => {
+    const container = scrollContainerRef.current
     const sentinel = bottomSentinelRef.current
-    if (appMode !== 'agent' || !sentinel) {
+    if (appMode !== 'agent' || !container || !sentinel) {
       setIsScrolledToBottom(true)
       return
     }
 
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-    setIsScrolledToBottom(sentinel.getBoundingClientRect().top <= viewportHeight + 24)
+    setIsScrolledToBottom(sentinel.offsetTop <= container.scrollTop + container.clientHeight + 24)
   }, [appMode])
 
   const scrollToAgentBottom = useCallback(() => {
-    const scrollingElement = document.scrollingElement ?? document.documentElement
-    window.scrollTo({ top: scrollingElement.scrollHeight, behavior: 'smooth' })
+    const container = scrollContainerRef.current
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+      return
+    }
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
   }, [])
 
   const scrollToAgentTop = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (container) {
+      container.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
@@ -211,11 +220,13 @@ export default function AgentWorkspace() {
 
     let ticking = false
 
+    const container = scrollContainerRef.current
+    if (!container) return
     const handleScroll = () => {
       if (ticking) return
 
       window.requestAnimationFrame(() => {
-        const currentScrollY = window.scrollY
+        const currentScrollY = container.scrollTop
         setIsScrolledFromTop(currentScrollY > Math.max(window.innerHeight * 0.8, 480))
         updateIsScrolledToBottom()
 
@@ -225,17 +236,17 @@ export default function AgentWorkspace() {
     }
 
     const initialFrame = window.requestAnimationFrame(() => {
-      setIsScrolledFromTop(window.scrollY > Math.max(window.innerHeight * 0.8, 480))
+      setIsScrolledFromTop(container.scrollTop > Math.max(container.clientHeight * 0.8, 480))
       updateIsScrolledToBottom()
     })
     const visualViewport = window.visualViewport
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    container.addEventListener('scroll', handleScroll, { passive: true })
     window.addEventListener('resize', updateIsScrolledToBottom)
     visualViewport?.addEventListener('resize', updateIsScrolledToBottom)
 
     return () => {
       window.cancelAnimationFrame(initialFrame)
-      window.removeEventListener('scroll', handleScroll)
+      container.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', updateIsScrolledToBottom)
       visualViewport?.removeEventListener('resize', updateIsScrolledToBottom)
     }
@@ -316,13 +327,23 @@ export default function AgentWorkspace() {
   }, [activeMessages, activeRounds, updateIsScrolledToBottom])
 
   useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      updateIsScrolledToBottom()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [conversation?.id, updateIsScrolledToBottom])
+
+  useEffect(() => {
     if (!scrollTargetRoundId) return
     const id = window.requestAnimationFrame(() => {
       const target = messageRefs.current.get(scrollTargetRoundId)
-      if (target) {
-        const targetTop = target.getBoundingClientRect().top + window.scrollY
-        const centeredTop = Math.max(0, targetTop - (window.innerHeight - target.offsetHeight) / 2)
-        window.scrollTo({ top: centeredTop, left: 0, behavior: 'auto' })
+      const container = scrollContainerRef.current
+      if (target && container) {
+        const centeredTop = Math.max(0, target.offsetTop - (container.clientHeight - target.offsetHeight) / 2)
+        container.scrollTo({ top: centeredTop, left: 0, behavior: 'auto' })
       }
       setScrollTargetRoundId(null)
     })
@@ -719,7 +740,7 @@ export default function AgentWorkspace() {
         <div 
           ref={scrollContainerRef}
           data-agent-message-list
-          className="min-w-0 w-full max-w-full flex-1 space-y-4 overflow-visible px-1 lg:px-4 lg:pt-14"
+          className="min-h-0 min-w-0 w-full max-w-full flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 lg:px-4 lg:pt-14"
         >
           {!conversation ? (
             <div className="flex min-h-[min(32rem,55dvh)] flex-col items-center justify-center px-6 text-center text-gray-400">
