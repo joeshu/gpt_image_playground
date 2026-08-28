@@ -3,7 +3,7 @@ name: Build Unsigned iOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [ios-mobile]
+    branches: [main, ios-mobile]
     tags: ['v*']
 
 permissions:
