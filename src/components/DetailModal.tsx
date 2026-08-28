@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask } from '../store'
+import { useStore, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask, submitTask, updateTaskInStore } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { useTooltip } from '../hooks/useTooltip'
@@ -12,9 +12,18 @@ import { dismissAllTooltips } from '../lib/tooltipDismiss'
 import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { replaceImageMentionsForApi } from '../lib/promptImageMentions'
-import { getApiProviderLabel } from '../lib/apiProfiles'
+import { getAgentTextApiProfile, getApiProviderLabel, isAgentTextApiProfile } from '../lib/apiProfiles'
+import { getTaskComparisonImageIds, getTaskLineage } from '../lib/taskLineage'
+import { buildProtectedTextPrompt, getProtectableTexts, normalizeProtectedTexts } from '../lib/protectedText'
+import { buildTextRepairPrompt } from '../lib/textRepair'
+import { verifyImageText } from '../lib/textVerification'
+import { analyzeVisualDifference } from '../lib/visualDifference'
+import { getCommercialDeliveryCheck } from '../lib/commercialDeliveryCheck'
 import { CloseIcon, CodeIcon, CopyIcon, DownloadIcon, EditIcon, LinkIcon, TrashIcon } from './icons'
 
+import ImageCompareModal from './ImageCompareModal'
+import TextVerificationOverlayModal from './TextVerificationOverlayModal'
+import VisualDifferenceOverlayModal from './VisualDifferenceOverlayModal'
 import ViewportTooltip from './ViewportTooltip'
 
 export default function DetailModal() {
@@ -39,10 +48,20 @@ export default function DetailModal() {
   const [now, setNow] = useState(Date.now())
   const [showRawUrlsModal, setShowRawUrlsModal] = useState(false)
   const [showRawResponseModal, setShowRawResponseModal] = useState(false)
+  const [showImageComparison, setShowImageComparison] = useState(false)
+  const [showTextVerificationOverlay, setShowTextVerificationOverlay] = useState(false)
+  const [showVisualDifferenceOverlay, setShowVisualDifferenceOverlay] = useState(false)
+  const [isAnalyzingVisualDifference, setIsAnalyzingVisualDifference] = useState(false)
+  const [isRunningCommercialCheck, setIsRunningCommercialCheck] = useState(false)
+  const [visualDifferenceError, setVisualDifferenceError] = useState('')
+  const [isVerifyingText, setIsVerifyingText] = useState(false)
+  const [isStartingTextRepair, setIsStartingTextRepair] = useState(false)
+  const [textVerificationError, setTextVerificationError] = useState('')
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
   const rawUrlsModalRef = useRef<HTMLDivElement>(null)
   const rawResponseModalRef = useRef<HTMLDivElement>(null)
+  const commercialCheckImageIdRef = useRef<string | null>(null)
 
   const rawUrlsBackdropPointerDownRef = useRef(false)
   const rawResponseBackdropPointerDownRef = useRef(false)
@@ -64,6 +83,10 @@ export default function DetailModal() {
   const task = useMemo(
     () => tasks.find((t) => t.id === detailTaskId) ?? null,
     [tasks, detailTaskId],
+  )
+  const lineage = useMemo(
+    () => task ? getTaskLineage(task, tasks) : { parent: null, children: [] },
+    [task, tasks],
   )
   const streamPreviewItems = useMemo(() => {
     const slotEntries = streamPreviewSlots
@@ -104,6 +127,15 @@ export default function DetailModal() {
   // Reset index when task changes
   useEffect(() => {
     setImageIndex(0)
+    setShowImageComparison(false)
+    setShowTextVerificationOverlay(false)
+    setShowVisualDifferenceOverlay(false)
+    setIsAnalyzingVisualDifference(false)
+    setIsRunningCommercialCheck(false)
+    setVisualDifferenceError('')
+    setIsVerifyingText(false)
+    setIsStartingTextRepair(false)
+    setTextVerificationError('')
   }, [detailTaskId])
 
   useEffect(() => {
@@ -180,6 +212,29 @@ export default function DetailModal() {
   const currentOutputError = currentOutputSlot?.error || ''
   const currentOriginalOutputImageId = currentOutputImageIndex >= 0 ? task?.transparentOriginalImages?.[currentOutputImageIndex] || '' : ''
   const currentOutputPreviewSrc = currentOutputImageId ? outputPreviewSrcs[currentOutputImageId] || '' : ''
+  const comparisonImageIds = task
+    ? getTaskComparisonImageIds(task, lineage.parent, currentOutputImageId)
+    : null
+  const verificationSourceImageId = comparisonImageIds?.beforeImageId ?? task?.inputImageIds[0] ?? ''
+  const canVerifyText = Boolean(verificationSourceImageId && currentOutputImageId && verificationSourceImageId !== currentOutputImageId)
+  const textVerificationReport = currentOutputImageId
+    ? task?.textVerificationByImage?.[currentOutputImageId]
+    : undefined
+  const visualDifferenceReport = currentOutputImageId
+    ? task?.visualDifferenceByImage?.[currentOutputImageId]
+    : undefined
+  const commercialDeliveryCheck = getCommercialDeliveryCheck(textVerificationReport, visualDifferenceReport)
+
+  useEffect(() => {
+    if (commercialCheckImageIdRef.current && commercialCheckImageIdRef.current !== currentOutputImageId) {
+      commercialCheckImageIdRef.current = null
+      setIsRunningCommercialCheck(false)
+    }
+  }, [currentOutputImageId])
+  const protectedTextCandidates = textVerificationReport ? getProtectableTexts(textVerificationReport) : []
+  const protectedTexts = currentOutputImageId
+    ? task?.protectedTextsByImage?.[currentOutputImageId] ?? []
+    : []
 
   useEffect(() => {
     const outputImageIds = task?.outputImages ?? []
@@ -445,19 +500,177 @@ export default function DetailModal() {
     setDetailTaskId(null)
   }
 
+  const handleOpenRelatedTask = (taskId: string) => {
+    setDetailTaskId(taskId)
+    window.requestAnimationFrame(() => {
+      modalRef.current?.querySelector<HTMLElement>('[data-detail-info]')?.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+  }
+
+  const handleAnalyzeVisualDifference = async () => {
+    if (!task || !canVerifyText || !currentOutputImageId) return
+    const profile = getAgentTextApiProfile(settings)
+    if (!profile || !isAgentTextApiProfile(profile) || !profile.apiKey) {
+      showToast('请先在 Agent 配置中选择支持图像理解的 Responses API', 'error')
+      return
+    }
+
+    setIsAnalyzingVisualDifference(true)
+    setVisualDifferenceError('')
+    try {
+      const [sourceDataUrl, resultDataUrl] = await Promise.all([
+        ensureImageCached(verificationSourceImageId),
+        ensureImageCached(currentOutputImageId),
+      ])
+      if (!sourceDataUrl || !resultDataUrl) throw new Error('差异检测图片加载失败')
+
+      const report = await analyzeVisualDifference({
+        profile,
+        sourceImageId: verificationSourceImageId,
+        sourceDataUrl,
+        resultImageId: currentOutputImageId,
+        resultDataUrl,
+        prompt: task.prompt,
+      })
+      updateTaskInStore(task.id, {
+        visualDifferenceByImage: {
+          ...(task.visualDifferenceByImage ?? {}),
+          [currentOutputImageId]: report,
+        },
+      })
+      showToast(report.status === 'passed' ? '视觉忠实度检测通过' : '视觉差异检测完成，发现需检查项', report.status === 'passed' ? 'success' : 'info')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '视觉差异检测失败'
+      setVisualDifferenceError(message)
+      showToast(message, 'error')
+    } finally {
+      setIsAnalyzingVisualDifference(false)
+    }
+  }
+
+  const saveProtectedTexts = (values: string[]) => {
+    if (!task || !currentOutputImageId) return
+    const normalized = normalizeProtectedTexts(values)
+    updateTaskInStore(task.id, {
+      protectedTextsByImage: {
+        ...(task.protectedTextsByImage ?? {}),
+        [currentOutputImageId]: normalized,
+      },
+    })
+  }
+
+  const toggleProtectedText = (text: string) => {
+    saveProtectedTexts(
+      protectedTexts.includes(text)
+        ? protectedTexts.filter((item) => item !== text)
+        : [...protectedTexts, text],
+    )
+  }
+
+  const handleAutomaticTextRepair = async () => {
+    if (!task || !currentOutputImageId || !textVerificationReport || textVerificationReport.status !== 'warning') return
+    setIsStartingTextRepair(true)
+    try {
+      const dataUrl = await ensureImageCached(currentOutputImageId)
+      if (!dataUrl) throw new Error('待修复图片加载失败')
+      const state = useStore.getState()
+      state.clearMaskDraft()
+      state.setInputImages([{ id: currentOutputImageId, dataUrl }])
+      state.setParams({ ...task.params, n: 1 })
+      state.setPrompt(buildTextRepairPrompt(task.prompt, textVerificationReport, protectedTexts))
+      setDetailTaskId(null)
+      showToast('已创建文字修复任务，完成后将自动再次核验', 'info')
+      await submitTask()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '创建文字修复任务失败'
+      showToast(message, 'error')
+    } finally {
+      setIsStartingTextRepair(false)
+    }
+  }
+
+  const handleProtectedRework = async () => {
+    if (!task || !currentOutputImageId || protectedTexts.length === 0) return
+    await editOutputs({ ...task, outputImages: [currentOutputImageId] })
+    useStore.getState().setPrompt(buildProtectedTextPrompt(task.prompt, protectedTexts))
+    setDetailTaskId(null)
+    showToast(`已带入结果图并锁定 ${protectedTexts.length} 条文字`, 'success')
+  }
+
+  const handleVerifyText = async () => {
+    if (!task || !canVerifyText || !currentOutputImageId) return
+    const profile = getAgentTextApiProfile(settings)
+    if (!profile || !isAgentTextApiProfile(profile) || !profile.apiKey) {
+      showToast('请先在 Agent 配置中选择支持图像理解的 Responses API', 'error')
+      return
+    }
+
+    setIsVerifyingText(true)
+    setTextVerificationError('')
+    try {
+      const [sourceDataUrl, resultDataUrl] = await Promise.all([
+        ensureImageCached(verificationSourceImageId),
+        ensureImageCached(currentOutputImageId),
+      ])
+      if (!sourceDataUrl || !resultDataUrl) throw new Error('核验图片加载失败')
+
+      const report = await verifyImageText({
+        profile,
+        sourceImageId: verificationSourceImageId,
+        sourceDataUrl,
+        resultImageId: currentOutputImageId,
+        resultDataUrl,
+        prompt: task.prompt,
+      })
+      updateTaskInStore(task.id, {
+        textVerificationByImage: {
+          ...(task.textVerificationByImage ?? {}),
+          [currentOutputImageId]: report,
+        },
+      })
+      showToast(report.status === 'passed' ? '文字核验通过' : '文字核验完成，发现需检查项', report.status === 'passed' ? 'success' : 'info')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '文字核验失败'
+      setTextVerificationError(message)
+      showToast(message, 'error')
+    } finally {
+      setIsVerifyingText(false)
+    }
+  }
+
+  const handleRunCommercialCheck = async () => {
+    const imageId = currentOutputImageId
+    if (!task || !canVerifyText || !imageId || isRunningCommercialCheck) return
+    commercialCheckImageIdRef.current = imageId
+    setIsRunningCommercialCheck(true)
+    try {
+      const rerunAll = Boolean(textVerificationReport && visualDifferenceReport)
+      if (rerunAll || !textVerificationReport) await handleVerifyText()
+      if (rerunAll || !visualDifferenceReport) await handleAnalyzeVisualDifference()
+    } finally {
+      if (commercialCheckImageIdRef.current === imageId) {
+        commercialCheckImageIdRef.current = null
+        setIsRunningCommercialCheck(false)
+      }
+    }
+  }
+
   return (
     <div
       data-no-drag-select
+      data-ios-sheet-backdrop
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={() => setDetailTaskId(null)}
     >
       <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-md animate-overlay-in" />
       <div
         ref={modalRef}
+        data-ios-sheet
+        data-detail-sheet
         className="relative bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/50 dark:border-white/[0.08] rounded-3xl shadow-[0_8px_40px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_40px_rgb(0,0,0,0.4)] max-w-4xl w-full ios-modal-height-tall overflow-hidden flex flex-col md:flex-row z-10 ring-1 ring-black/5 dark:ring-white/10 animate-modal-in ios-safe-bottom"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex h-14 items-center justify-end px-4 md:hidden">
+        <div data-detail-mobile-header className="flex h-14 items-center justify-end px-4 md:hidden">
           <button
             onClick={() => setDetailTaskId(null)}
              className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-white/[0.06] transition text-gray-400"
@@ -468,7 +681,7 @@ export default function DetailModal() {
         </div>
 
         {/* 左侧：图片 */}
-        <div className="md:w-1/2 w-full h-64 md:h-auto bg-gray-100 dark:bg-black/20 relative flex items-center justify-center flex-shrink-0 min-h-[16rem]">
+        <div data-detail-media className="md:w-1/2 w-full h-64 md:h-auto bg-gray-100 dark:bg-black/20 relative flex items-center justify-center flex-shrink-0 min-h-[16rem]">
           {task.status === 'done' && outputLen > 0 && (currentOutputImageId || task.outputImages.length > 0) && (
             <div className="absolute right-3 top-[15px] z-20 flex items-center gap-1.5">
               {currentOutputImageId && (
@@ -845,7 +1058,7 @@ export default function DetailModal() {
         </div>
 
         {/* 右侧：信息 */}
-        <div className="md:w-1/2 w-full p-5 overflow-y-auto overscroll-contain flex flex-col">
+        <div data-detail-info className="md:w-1/2 w-full p-5 overflow-y-auto overscroll-contain flex flex-col">
           <button
             onClick={() => setDetailTaskId(null)}
             className="absolute top-3 right-3 hidden p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/[0.06] transition text-gray-400 z-10 md:block"
@@ -959,6 +1172,404 @@ export default function DetailModal() {
               </div>
             )}
 
+            {(lineage.parent || lineage.children.length > 0) && (
+              <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <LinkIcon className="h-4 w-4 shrink-0 text-blue-500" />
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">版本链</h3>
+                  </div>
+                  {comparisonImageIds && (
+                    <button
+                      type="button"
+                      onClick={() => setShowImageComparison(true)}
+                      className="flex h-9 shrink-0 items-center rounded-lg border border-blue-200 bg-white/85 px-3 text-xs font-medium text-blue-600 transition hover:bg-white active:scale-[0.98] dark:border-blue-500/25 dark:bg-white/[0.06] dark:text-blue-300 dark:hover:bg-white/[0.1]"
+                    >
+                      对比版本
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {lineage.parent && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRelatedTask(lineage.parent!.id)}
+                      className="flex w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-left transition hover:bg-white dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+                    >
+                      <span className="shrink-0 rounded-md bg-blue-100 px-2 py-1 text-[10px] font-medium text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">上一版本</span>
+                      <span className="min-w-0 truncate text-xs text-gray-600 dark:text-gray-300">{lineage.parent.prompt || '(无提示词)'}</span>
+                    </button>
+                  )}
+                  {lineage.children.map((child, index) => (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => handleOpenRelatedTask(child.id)}
+                      className="flex w-full items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-left transition hover:bg-white dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+                    >
+                      <span className="shrink-0 rounded-md bg-green-100 px-2 py-1 text-[10px] font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">后续 {index + 1}</span>
+                      <span className="min-w-0 truncate text-xs text-gray-600 dark:text-gray-300">{child.prompt || '(无提示词)'}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {canVerifyText && (
+              <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-500/15 dark:bg-emerald-500/[0.06]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">商业交付检查</h3>
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">汇总文字准确性与视觉忠实度</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRunCommercialCheck}
+                    disabled={isRunningCommercialCheck || isVerifyingText || isAnalyzingVisualDifference}
+                    className="flex min-h-9 shrink-0 items-center rounded-lg bg-emerald-700 px-3 text-xs font-medium text-white transition hover:bg-emerald-800 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isRunningCommercialCheck
+                      ? '检查中…'
+                      : commercialDeliveryCheck.completedChecks === 2
+                        ? '重新完整检查'
+                        : '一键完整检查'}
+                  </button>
+                </div>
+
+                <div className="mt-3 rounded-xl bg-white/80 p-3 dark:bg-white/[0.05]">
+                  {commercialDeliveryCheck.score === null ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                          已完成 {commercialDeliveryCheck.completedChecks}/{commercialDeliveryCheck.totalChecks} 项
+                        </div>
+                        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                          {!textVerificationReport && !visualDifferenceReport
+                            ? '运行完整检查后生成综合评分'
+                            : !textVerificationReport
+                              ? '还需完成文字准确性检查'
+                              : '还需完成视觉忠实度检查'}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500 dark:bg-white/[0.07] dark:text-gray-300">
+                        {commercialDeliveryCheck.status === 'pending' ? '待检查' : '检查未完整'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-end gap-1">
+                          <span className="text-3xl font-semibold tabular-nums text-gray-900 dark:text-white">{commercialDeliveryCheck.score}</span>
+                          <span className="pb-1 text-xs text-gray-400">/ 100</span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">文字 60% · 视觉 40%</p>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        commercialDeliveryCheck.status === 'passed'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                      }`}>
+                        {commercialDeliveryCheck.status === 'passed' ? '可交付' : '建议复核'}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-violet-50 px-3 py-2 dark:bg-violet-500/[0.08]">
+                      <div className="text-[11px] text-violet-500 dark:text-violet-300">文字准确性</div>
+                      <div className="mt-0.5 text-lg font-semibold tabular-nums text-violet-700 dark:text-violet-200">
+                        {commercialDeliveryCheck.textScore ?? '待检查'}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-cyan-50 px-3 py-2 dark:bg-cyan-500/[0.08]">
+                      <div className="text-[11px] text-cyan-600 dark:text-cyan-300">视觉忠实度</div>
+                      <div className="mt-0.5 text-lg font-semibold tabular-nums text-cyan-700 dark:text-cyan-200">
+                        {commercialDeliveryCheck.visualScore ?? '待检查'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {commercialDeliveryCheck.completedChecks === 2 && commercialDeliveryCheck.issues.length === 0 && (
+                    <div className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-500/10 dark:text-green-300">
+                      未发现需要修复的文字或视觉问题
+                    </div>
+                  )}
+                  {commercialDeliveryCheck.issues.length > 0 && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                        <span>待修复清单</span>
+                        <span>{commercialDeliveryCheck.issues.length} 项</span>
+                      </div>
+                      <div className="mt-1.5 space-y-1.5">
+                        {commercialDeliveryCheck.issues.slice(0, 6).map((issue, index) => (
+                          <div key={`${issue.category}-${issue.label}-${index}`} className="flex items-start gap-2 rounded-lg bg-white/80 px-2.5 py-2 text-xs dark:bg-white/[0.05]">
+                            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                              issue.category === 'text'
+                                ? 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300'
+                                : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300'
+                            }`}>
+                              {issue.category === 'text' ? '文字' : '视觉'}
+                            </span>
+                            <span className="min-w-0 break-words text-gray-700 dark:text-gray-200">{issue.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {commercialDeliveryCheck.issues.length > 6 && (
+                        <p className="mt-1.5 text-[11px] text-gray-400">另有 {commercialDeliveryCheck.issues.length - 6} 项，请查看下方分项报告</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {canVerifyText && (
+              <div className="mb-4 rounded-xl border border-cyan-100 bg-cyan-50/60 p-3 dark:border-cyan-500/15 dark:bg-cyan-500/[0.06]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-cyan-700 dark:text-cyan-300">视觉差异</h3>
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">检查布局、颜色、关键元素、裁切与风格</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeVisualDifference}
+                    disabled={isAnalyzingVisualDifference}
+                    className="flex h-9 shrink-0 items-center rounded-lg bg-cyan-700 px-3 text-xs font-medium text-white transition hover:bg-cyan-800 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isAnalyzingVisualDifference ? '检测中…' : visualDifferenceReport ? '重新检测' : '开始检测'}
+                  </button>
+                </div>
+
+                {visualDifferenceError && (
+                  <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{visualDifferenceError}</p>
+                )}
+
+                {visualDifferenceReport && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        visualDifferenceReport.status === 'passed'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                      }`}>
+                        {visualDifferenceReport.status === 'passed' ? '忠实' : '需检查'} · {visualDifferenceReport.fidelityScore} 分
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-gray-500 dark:text-gray-400">{visualDifferenceReport.summary || '检测完成'}</span>
+                      {visualDifferenceReport.regions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowVisualDifferenceOverlay(true)}
+                          className="flex h-9 shrink-0 items-center rounded-lg border border-cyan-200 bg-white/90 px-3 text-xs font-medium text-cyan-700 transition active:scale-[0.98] dark:border-cyan-500/25 dark:bg-white/[0.06] dark:text-cyan-300"
+                        >
+                          查看热区 {visualDifferenceReport.regions.length}
+                        </button>
+                      )}
+                    </div>
+                    {visualDifferenceReport.changes.length > 0 && (
+                      <div className="rounded-lg bg-white/80 px-3 py-2 dark:bg-white/[0.05]">
+                        <div className="text-[11px] font-medium text-cyan-700 dark:text-cyan-300">主要变化</div>
+                        <ul className="mt-1 space-y-1 text-xs text-gray-700 dark:text-gray-200">
+                          {visualDifferenceReport.changes.map((change, index) => (
+                            <li key={`${change}-${index}`} className="flex gap-1.5">
+                              <span className="text-cyan-500">•</span>
+                              <span>{change}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {canVerifyText && (
+              <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/60 p-3 dark:border-violet-500/15 dark:bg-violet-500/[0.06]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">文字核验</h3>
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">对照来源图检查中文、数字和单位</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleVerifyText}
+                    disabled={isVerifyingText}
+                    className="flex h-9 shrink-0 items-center rounded-lg bg-violet-600 px-3 text-xs font-medium text-white transition hover:bg-violet-700 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isVerifyingText ? '核验中…' : textVerificationReport ? '重新核验' : '开始核验'}
+                  </button>
+                </div>
+
+                {textVerificationError && (
+                  <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-300">{textVerificationError}</p>
+                )}
+
+                {task.autoTextVerificationStatus && task.autoTextVerificationStatus !== 'done' && (
+                  <div className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+                    task.autoTextVerificationStatus === 'error'
+                      ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300'
+                      : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300'
+                  }`}>
+                    {task.autoTextVerificationStatus === 'error'
+                      ? `自动复核失败：${task.autoTextVerificationError || '请手动重新核验'}`
+                      : task.autoTextVerificationStatus === 'running'
+                        ? '修复图片已生成，正在自动复核文字…'
+                        : '等待自动文字复核…'}
+                  </div>
+                )}
+
+                {textVerificationReport && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        textVerificationReport.status === 'passed'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                      }`}>
+                        {textVerificationReport.status === 'passed' ? '通过' : '需检查'} · {textVerificationReport.score} 分
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-gray-500 dark:text-gray-400">{textVerificationReport.summary || '核验完成'}</span>
+                      {(textVerificationReport.regions?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTextVerificationOverlay(true)}
+                          className="flex h-9 shrink-0 items-center rounded-lg border border-violet-200 bg-white/90 px-3 text-xs font-medium text-violet-600 transition active:scale-[0.98] dark:border-violet-500/25 dark:bg-white/[0.06] dark:text-violet-300"
+                        >
+                          图上定位 {textVerificationReport.regions!.length} 处
+                        </button>
+                      )}
+                    </div>
+
+                    {textVerificationReport.missingTexts.length > 0 && (
+                      <div className="rounded-lg bg-white/80 px-3 py-2 dark:bg-white/[0.05]">
+                        <div className="text-[11px] font-medium text-red-600 dark:text-red-300">缺失文字</div>
+                        <div className="mt-1 text-xs text-gray-700 dark:text-gray-200">{textVerificationReport.missingTexts.join('、')}</div>
+                      </div>
+                    )}
+
+                    {[...textVerificationReport.changedTexts, ...textVerificationReport.numericChanges].length > 0 && (
+                      <div className="rounded-lg bg-white/80 px-3 py-2 dark:bg-white/[0.05]">
+                        <div className="text-[11px] font-medium text-amber-600 dark:text-amber-300">文字与数字变化</div>
+                        <div className="mt-1 space-y-1">
+                          {[...textVerificationReport.changedTexts, ...textVerificationReport.numericChanges].map((change, index) => (
+                            <div key={`${change.expected}-${change.actual}-${index}`} className="flex min-w-0 items-center gap-1.5 text-xs">
+                              <span className="min-w-0 truncate text-red-600 line-through dark:text-red-300">{change.expected || '(缺失)'}</span>
+                              <span className="shrink-0 text-gray-400">→</span>
+                              <span className="min-w-0 truncate font-medium text-green-700 dark:text-green-300">{change.actual || '(缺失)'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {textVerificationReport.status === 'warning' && (
+                      <div className="rounded-xl border border-orange-200 bg-orange-50/80 p-3 dark:border-orange-500/20 dark:bg-orange-500/[0.08]">
+                        <div className="text-xs font-medium text-orange-700 dark:text-orange-300">自动文字修复</div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+                          仅修复核验发现的文字和数字问题，保持其他版式不变；生成完成后自动再次核验。
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleAutomaticTextRepair}
+                          disabled={isStartingTextRepair}
+                          className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-medium text-white transition hover:bg-orange-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {isStartingTextRepair ? '正在创建修复任务…' : '一键修复并自动复核'}
+                        </button>
+                      </div>
+                    )}
+
+                    {task.autoTextVerificationStatus && task.autoTextVerificationStatus !== 'done' && (
+                      <div className={`rounded-lg px-3 py-2 text-xs ${
+                        task.autoTextVerificationStatus === 'error'
+                          ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300'
+                          : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300'
+                      }`}>
+                        {task.autoTextVerificationStatus === 'error'
+                          ? `自动复核失败：${task.autoTextVerificationError || '请手动重新核验'}`
+                          : task.autoTextVerificationStatus === 'running'
+                            ? '修复图片已生成，正在自动复核文字…'
+                            : '等待自动文字复核…'}
+                      </div>
+                    )}
+
+                    {protectedTextCandidates.length > 0 && (
+                      <details className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
+                        <summary className="cursor-pointer font-medium text-blue-600 dark:text-blue-300">
+                          不可修改文字锁定 · 已选 {protectedTexts.length}/{protectedTextCandidates.length}
+                        </summary>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => saveProtectedTexts(protectedTextCandidates)}
+                            className="min-h-9 rounded-lg bg-white px-3 text-[11px] font-medium text-blue-600 shadow-sm dark:bg-white/[0.07] dark:text-blue-300"
+                          >
+                            全部锁定
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveProtectedTexts([])}
+                            disabled={protectedTexts.length === 0}
+                            className="min-h-9 rounded-lg bg-white px-3 text-[11px] text-gray-500 shadow-sm disabled:opacity-40 dark:bg-white/[0.07] dark:text-gray-300"
+                          >
+                            清空
+                          </button>
+                        </div>
+                        <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+                          {protectedTextCandidates.map((text, index) => {
+                            const selected = protectedTexts.includes(text)
+                            return (
+                              <button
+                                key={`${text}-${index}`}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => toggleProtectedText(text)}
+                                className={`flex min-h-11 w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition ${
+                                  selected
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white/85 text-gray-700 dark:bg-white/[0.05] dark:text-gray-200'
+                                }`}
+                              >
+                                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                                  selected ? 'border-white/70 bg-white/20' : 'border-gray-300 dark:border-gray-500'
+                                }`}>
+                                  {selected ? '✓' : ''}
+                                </span>
+                                <span className="min-w-0 break-words">{text}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {protectedTexts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleProtectedRework}
+                            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-medium text-white transition hover:bg-blue-700 active:scale-[0.99]"
+                          >
+                            带 {protectedTexts.length} 条锁定文字返工
+                          </button>
+                        )}
+                      </details>
+                    )}
+
+                    <details className="rounded-lg bg-white/70 px-3 py-2 text-xs dark:bg-white/[0.04]">
+                      <summary className="cursor-pointer text-gray-500 dark:text-gray-400">查看 OCR 提取全文</summary>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <div className="text-[11px] font-medium text-gray-400">来源图</div>
+                          <p className="mt-1 whitespace-pre-wrap text-gray-700 dark:text-gray-200">{textVerificationReport.sourceTexts.join('\n') || '(未识别到文字)'}</p>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-medium text-gray-400">结果图</div>
+                          <p className="mt-1 whitespace-pre-wrap text-gray-700 dark:text-gray-200">{textVerificationReport.resultTexts.join('\n') || '(未识别到文字)'}</p>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 参数 */}
             <h3 className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
               参数配置
@@ -1044,7 +1655,7 @@ export default function DetailModal() {
           </div>
 
           {/* 操作按钮 */}
-          <div className="grid grid-cols-4 sm:flex gap-2 pt-4 border-t border-gray-100 dark:border-white/[0.08]">
+          <div data-detail-actions className="grid grid-cols-4 sm:flex gap-2 pt-4 border-t border-gray-100 dark:border-white/[0.08]">
             <button
               onClick={handleReuse}
               className="col-span-2 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition text-sm font-medium whitespace-nowrap"
@@ -1216,6 +1827,30 @@ export default function DetailModal() {
             </div>
           </div>
         </div>
+      )}
+
+      {showImageComparison && comparisonImageIds && (
+        <ImageCompareModal
+          beforeImageId={comparisonImageIds.beforeImageId}
+          afterImageId={comparisonImageIds.afterImageId}
+          onClose={() => setShowImageComparison(false)}
+        />
+      )}
+
+      {showTextVerificationOverlay && currentOutputImageId && textVerificationReport && (textVerificationReport.regions?.length ?? 0) > 0 && (
+        <TextVerificationOverlayModal
+          imageId={currentOutputImageId}
+          report={textVerificationReport}
+          onClose={() => setShowTextVerificationOverlay(false)}
+        />
+      )}
+
+      {showVisualDifferenceOverlay && currentOutputImageId && visualDifferenceReport && visualDifferenceReport.regions.length > 0 && (
+        <VisualDifferenceOverlayModal
+          imageId={currentOutputImageId}
+          report={visualDifferenceReport}
+          onClose={() => setShowVisualDifferenceOverlay(false)}
+        />
       )}
     </div>
   )

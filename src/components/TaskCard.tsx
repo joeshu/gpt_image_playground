@@ -6,7 +6,8 @@ import { formatImageRatio } from '../lib/size'
 import { getParamDisplay, ActualValueBadge } from '../lib/paramDisplay'
 import { DEFAULT_IMAGES_MODEL, DEFAULT_FAL_MODEL } from '../lib/apiProfiles'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
-import { CodeIcon, TransparentBgIcon } from './icons'
+import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
+import { CodeIcon, DownloadIcon, TransparentBgIcon } from './icons'
 import ViewportTooltip from './ViewportTooltip'
 
 interface Props {
@@ -46,6 +47,7 @@ function TaskActionButton({
         type="button"
         onClick={onClick}
         className={className}
+        data-haptic="selection"
         disabled={disabled}
         aria-label={tooltip}
       >
@@ -76,9 +78,11 @@ export default function TaskCard({
   const [swipeActionActive, setSwipeActionActive] = useState(false)
   const [swipeDirection, setSwipeDirection] = useState<-1 | 0 | 1>(0)
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const toggleTaskSelection = useStore((s) => s.toggleTaskSelection)
   const settings = useStore((s) => s.settings)
   const openFavoritePicker = useStore((s) => s.openFavoritePicker)
+  const showToast = useStore((s) => s.showToast)
   const streamPreviewSrc = useStore((s) => s.streamPreviews[task.id] || '')
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const swipeResetTimerRef = useRef<number | null>(null)
@@ -304,6 +308,31 @@ export default function TaskCard({
       : 'bg-blue-500'
     : 'bg-gray-200 dark:bg-gray-700'
 
+  const handleDownload = async () => {
+    if (!task.outputImages.length || isDownloading) return
+    setIsDownloading(true)
+    try {
+      const fileNameBase = `task-${task.id}`
+      const result = settings.zipDownloadRoutes.includes('task-detail-all') && task.outputImages.length > 1
+        ? await downloadImageEntriesAsZip(getImageZipEntries(task.outputImages, fileNameBase), fileNameBase)
+        : await downloadImageIds(task.outputImages, fileNameBase)
+      if (result.cancelled) {
+        showToast(result.locationHint ?? '已取消保存', 'info')
+      } else if (result.successCount === 0) {
+        showToast('下载失败', 'error')
+      } else if (result.failCount > 0) {
+        showToast(`部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`, 'error')
+      } else {
+        showToast(result.locationHint ?? `下载成功：${result.successCount} 张图片`, 'success')
+      }
+    } catch (err) {
+      console.error(err)
+      showToast('下载失败', 'error')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   const qualityDisplay = getParamDisplay(task, 'quality')
   const showQuality = task.params.quality !== 'auto' || qualityDisplay.isMismatch
 
@@ -328,10 +357,10 @@ export default function TaskCard({
   const isInterrupted = task.status === 'error' && task.error === '已停止生成。'
 
   return (
-    <div className="relative rounded-xl">
+    <div className="relative rounded-2xl sm:rounded-xl">
       {/* 侧滑底图 */}
       <div
-        className={`absolute inset-0 rounded-xl flex items-center transition-opacity duration-200 pointer-events-none ${
+        className={`absolute inset-0 rounded-2xl sm:rounded-xl flex items-center transition-opacity duration-200 pointer-events-none ${
           isSwiping || swipeDirection !== 0 || swipeActionActive ? 'opacity-100' : 'opacity-0'
         } ${swipeBgClass} ${
           swipeDirection > 0 ? 'justify-start pl-6' : 'justify-end pr-6'
@@ -348,13 +377,17 @@ export default function TaskCard({
 
       <div
         ref={cardRef}
-        className={`relative bg-white dark:bg-gray-900 rounded-xl border overflow-hidden cursor-pointer touch-pan-y will-change-transform duration-200 hover:shadow-lg dark:hover:bg-gray-800/80 ${
+        className={`relative bg-white dark:bg-gray-900 rounded-2xl sm:rounded-xl border overflow-hidden cursor-pointer touch-pan-y will-change-transform duration-200 hover:shadow-lg dark:hover:bg-gray-800/80 ${
           isSwiping ? '!bg-white dark:!bg-gray-900' : ''
         } ${
           !isSwiping ? 'transition-[box-shadow,border-color,background-color,transform]' : 'transition-[box-shadow,border-color,background-color]'
         } ${
           task.status === 'running'
-            ? 'border-blue-400 generating'
+            ? 'border-blue-400 generating shadow-[0_0_0_1px_rgb(96_165_250_/_0.18)]'
+            : task.status === 'error' && !isInterrupted
+            ? 'border-red-300 dark:border-red-500/40'
+            : isInterrupted
+            ? 'border-amber-300 dark:border-amber-500/40'
             : isSelected
             ? 'border-blue-500 shadow-md ring-2 ring-blue-500/50'
             : 'border-gray-200 dark:border-white/[0.08] hover:border-gray-300 dark:hover:border-white/[0.18]'
@@ -399,9 +432,9 @@ export default function TaskCard({
           </svg>
         </div>
       )}
-      <div className="flex h-40">
+      <div className="flex min-h-0 flex-col sm:h-40 sm:flex-row">
         {/* 左侧图片区域 */}
-        <div className="w-40 min-w-[10rem] h-full bg-gray-100 dark:bg-black/20 relative flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div data-task-card-media className="relative flex h-52 w-full flex-shrink-0 items-center justify-center overflow-hidden bg-gray-100 sm:h-full sm:w-40 sm:min-w-[10rem] dark:bg-black/20">
           {task.status === 'running' && streamPreviewSrc && (
             <>
               <img
@@ -492,7 +525,7 @@ export default function TaskCard({
                 src={thumbSrc}
                 data-image-id={task.outputImages[0]}
                 data-output-image-ids={task.outputImages.join(',')}
-                className="saveable-image w-full h-full object-cover"
+                className="saveable-image h-full w-full object-cover sm:object-cover"
                 alt=""
               />
               {(hasPartialOutputFailure || task.outputImages.length > 1) && (
@@ -518,7 +551,7 @@ export default function TaskCard({
             </svg>
           )}
           {/* 运行中显示耗时，完成后显示封面图比例与分辨率标签 */}
-          <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
+          <div data-task-card-media-meta className="absolute top-1.5 left-1.5 flex items-center gap-1">
             {showRunningTimer || task.status !== 'done' || !coverRatio || !coverSize ? (
               <span className="flex items-center gap-1 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -540,7 +573,7 @@ export default function TaskCard({
         </div>
 
         {/* 右侧信息区域 */}
-        <div className="flex-1 p-3 flex flex-col min-w-0">
+        <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-3">
           <div className="flex-1 min-h-0 mb-2 overflow-hidden">
             {showPendingPrompt ? (
               <div className="leading-relaxed">
@@ -548,7 +581,7 @@ export default function TaskCard({
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">输入内容将在响应完成时接收</p>
               </div>
             ) : (
-              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-3">
+              <p className="line-clamp-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300 sm:line-clamp-3">
                 {task.prompt || '(无提示词)'}
               </p>
             )}
@@ -634,6 +667,7 @@ export default function TaskCard({
             {/* 操作按钮 */}
             <div
               data-tag-scroll-area
+              data-task-card-actions
               className="flex items-center gap-1 flex-shrink-0 mt-0.5 ml-auto max-w-full overflow-x-auto hide-scrollbar mask-edge-r pr-2"
               onClick={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
@@ -650,6 +684,16 @@ export default function TaskCard({
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
+                </TaskActionButton>
+              )}
+              {task.status === 'done' && task.outputImages.length > 0 && (
+                <TaskActionButton
+                  tooltip={isDownloading ? '正在准备下载' : task.outputImages.length > 1 ? `下载全部 ${task.outputImages.length} 张图片` : '下载图片'}
+                  onClick={() => { void handleDownload() }}
+                  className="p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-950/30 text-gray-400 hover:text-green-500 transition disabled:opacity-40"
+                  disabled={isDownloading}
+                >
+                  <DownloadIcon className={`h-4 w-4 ${isDownloading ? 'animate-pulse' : ''}`} />
                 </TaskActionButton>
               )}
               <TaskActionButton

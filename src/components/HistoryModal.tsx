@@ -97,6 +97,9 @@ export default function HistoryModal({ onClose, ignoreOutsideClickRef }: History
   const setEditingId = useStore((s) => s.setAgentEditingConversationId)
 
   const [editingTitle, setEditingTitle] = useState('')
+  const renameCompositionRef = useRef(false)
+  const renameBlurTimerRef = useRef<number | null>(null)
+  const renameBlurPendingRef = useRef(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
@@ -138,18 +141,45 @@ export default function HistoryModal({ onClose, ignoreOutsideClickRef }: History
   }
 
   const confirmRename = () => {
+    if (renameCompositionRef.current) {
+      renameBlurPendingRef.current = true
+      return
+    }
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+    renameBlurTimerRef.current = null
+    renameBlurPendingRef.current = false
     if (editingId && editingTitle.trim() && !agentGeneratingTitleIds[editingId]) {
       renameConversation(editingId, editingTitle.trim())
     }
     setEditingId(null)
   }
 
+  const handleRenameCompositionStart = () => {
+    renameCompositionRef.current = true
+    renameBlurPendingRef.current = false
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+  }
+
+  const handleRenameCompositionEnd = () => {
+    renameCompositionRef.current = false
+    if (renameBlurPendingRef.current) renameBlurTimerRef.current = window.setTimeout(confirmRename, 0)
+  }
+
+  const handleRenameBlur = () => {
+    renameBlurPendingRef.current = true
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+    renameBlurTimerRef.current = window.setTimeout(confirmRename, 120)
+  }
+
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
+      if (e.nativeEvent.isComposing || renameCompositionRef.current) return
       confirmRename()
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+      renameBlurPendingRef.current = false
       setEditingId(null)
     }
   }
@@ -253,10 +283,12 @@ export default function HistoryModal({ onClose, ignoreOutsideClickRef }: History
                       className="h-7 flex-1 bg-white dark:bg-black/20 border border-blue-400/50 dark:border-white/20 rounded px-1.5 py-0 text-sm leading-7 outline-none text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-white/40 shadow-sm min-w-0"
                       value={editingTitle}
                       onChange={(e) => setEditingTitle(e.target.value)}
+                      onCompositionStart={handleRenameCompositionStart}
+                      onCompositionEnd={handleRenameCompositionEnd}
                       onKeyDown={handleRenameKeyDown}
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      onBlur={confirmRename}
+                      onBlur={handleRenameBlur}
                     />
                   ) : (
                     <div className="min-w-0 flex-1">

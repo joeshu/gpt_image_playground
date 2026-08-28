@@ -19,7 +19,7 @@ import type {
   StoredImageThumbnail,
 } from './types'
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_PARAMS } from './types'
-import { DEFAULT_SETTINGS, getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, getCustomProviderDefinition, mergeImportedSettings, mergePresetImportedSettings, normalizeSettings, validateApiProfile } from './lib/apiProfiles'
+import { DEFAULT_SETTINGS, getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, getCustomProviderDefinition, isAgentTextApiProfile, mergeImportedSettings, mergePresetImportedSettings, normalizeSettings, validateApiProfile } from './lib/apiProfiles'
 import { enforcePresetConfigPolicy, getPresetConfig, getPresetProfileIds, getPresetProviderIds, isPresetConfigDeletionPrevented, isPresetConfigOnlyEnabled, isPresetConfigParamsLocked, isPresetProfile, isPresetProviderDeletionPrevented } from './lib/presetConfig'
 import { dismissAllTooltips } from './lib/tooltipDismiss'
 import { remapImageMentionsForOrder, replaceImageMentionsForApi } from './lib/promptImageMentions'
@@ -69,6 +69,10 @@ import { createPersistedState, mergePersistedAgentConversations, migratePersiste
 import { addImageSizeParam, createTaskDonePatch, createTaskErrorPatch, deriveAgentImageActualParams, deriveGalleryActualParams, firstActualParams, hasActualParams, hasActualSizeParam, mapActualParamsByImage, mapRevisedPromptsByImage, markInterruptedOpenAIRunningTasks } from './lib/taskState'
 import { stripInjectedCodexCliSizePrompt } from './lib/size'
 import { StorageQuotaError } from './lib/storage'
+import { getApiKeySignature, hydrateNativeApiKeys, markNativeSecretStorageReady, persistNativeApiKeys, redactSettingsApiKeys, shouldRedactPersistedApiKeys } from './lib/nativeSecretStorage'
+import { isNativeApp } from './lib/platform'
+import { isAutoTextRepairPrompt } from './lib/textRepair'
+import { verifyImageText } from './lib/textVerification'
 
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
@@ -146,10 +150,10 @@ function isAgentTask(task: TaskRecord) {
   return task.sourceMode === 'agent' || Boolean(task.agentConversationId || task.agentRoundId)
 }
 
-function showTaskCompletionNotification(title: string, body: string) {
+function showTaskCompletionNotification(title: string, body: string, target: { taskId?: string; conversationId?: string }) {
   const settings = normalizeSettings(useStore.getState().settings)
   if (!settings.taskCompletionNotification) return
-  showBrowserNotification(title, { body })
+  showBrowserNotification(title, { body }, target)
 }
 
 function countSuccessfulOutputImages(tasks: TaskRecord[]) {
@@ -325,7 +329,6 @@ interface AppState {
   agentSidebarCollapsed: boolean
   agentAssetTab: 'references' | 'outputs'
   agentAssetPanelCollapsed: boolean
-  agentMobileHeaderVisible: boolean
   agentEditingRoundId: string | null
   agentEditingConversationId: string | null
   agentGeneratingTitleIds: Record<string, true>
@@ -339,7 +342,6 @@ interface AppState {
   setAgentSidebarCollapsed: (collapsed: boolean) => void
   setAgentAssetTab: (tab: 'references' | 'outputs') => void
   setAgentAssetPanelCollapsed: (collapsed: boolean) => void
-  setAgentMobileHeaderVisible: (visible: boolean) => void
   setAgentEditingRoundId: (id: string | null) => void
   setAgentEditingConversationId: (id: string | null) => void
 
@@ -503,7 +505,6 @@ export const useStore = create<AppState>()(
             appMode,
             agentInputDrafts,
             galleryInputDraft,
-            agentMobileHeaderVisible: true,
             selectedTaskIds: [],
             selectedFavoriteCollectionIds: [],
             agentEditingRoundId: null,
@@ -522,7 +523,6 @@ export const useStore = create<AppState>()(
           set((state) => ({
             appMode: 'agent',
             galleryInputDraft,
-            agentMobileHeaderVisible: false,
             agentSidebarCollapsed: true,
             agentAssetPanelCollapsed: true,
             selectedTaskIds: [],
@@ -780,7 +780,6 @@ export const useStore = create<AppState>()(
       agentSidebarCollapsed: true,
       agentAssetTab: 'outputs',
       agentAssetPanelCollapsed: false,
-      agentMobileHeaderVisible: false,
       agentEditingRoundId: null,
       agentEditingConversationId: null,
       agentGeneratingTitleIds: {},
@@ -864,7 +863,6 @@ export const useStore = create<AppState>()(
       setAgentSidebarCollapsed: (agentSidebarCollapsed) => set({ agentSidebarCollapsed }),
       setAgentAssetTab: (agentAssetTab) => set({ agentAssetTab }),
       setAgentAssetPanelCollapsed: (agentAssetPanelCollapsed) => set({ agentAssetPanelCollapsed }),
-      setAgentMobileHeaderVisible: (agentMobileHeaderVisible) => set({ agentMobileHeaderVisible }),
       setAgentEditingRoundId: (agentEditingRoundId) => set({ agentEditingRoundId }),
       setAgentEditingConversationId: (agentEditingConversationId) => set({ agentEditingConversationId }),
 
@@ -1026,6 +1024,7 @@ export const useStore = create<AppState>()(
 let lastStoredAgentConversations = useStore.getState().agentConversations
 let agentConversationPersistRunning = false
 let agentConversationPersistQueued = false
+let agentConversationPersistTimer: ReturnType<typeof setTimeout> | null = null
 
 async function flushAgentConversationsToIndexedDB() {
   if (agentConversationPersistRunning) {
@@ -1046,13 +1045,59 @@ async function flushAgentConversationsToIndexedDB() {
   }
 }
 
+function scheduleAgentConversationPersistence() {
+  if (agentConversationPersistTimer) return
+  // Streaming Agent responses can update the conversation many times per
+  // second. Persist the latest snapshot in a short quiet window instead of
+  // rewriting the entire conversation store for every token.
+  agentConversationPersistTimer = setTimeout(() => {
+    agentConversationPersistTimer = null
+    void flushAgentConversationsToIndexedDB()
+  }, 250)
+}
+
+function flushScheduledAgentConversationPersistence() {
+  if (agentConversationPersistTimer) {
+    clearTimeout(agentConversationPersistTimer)
+    agentConversationPersistTimer = null
+  }
+  if (agentConversationPersistenceReady && useStore.getState().agentConversations !== lastStoredAgentConversations) {
+    void flushAgentConversationsToIndexedDB()
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushScheduledAgentConversationPersistence()
+  })
+}
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flushScheduledAgentConversationPersistence)
+
 useStore.subscribe((state) => {
   if (state.agentConversations === lastStoredAgentConversations) return
   if (!agentConversationPersistenceReady) {
     agentConversationPersistQueued = true
     return
   }
-  void flushAgentConversationsToIndexedDB()
+  scheduleAgentConversationPersistence()
+})
+
+let lastNativeApiKeySignature = JSON.stringify(getApiKeySignature(useStore.getState().settings))
+let lastNativeProfileIds = useStore.getState().settings.profiles.map((profile) => profile.id)
+useStore.subscribe((state) => {
+  if (!shouldRedactPersistedApiKeys()) return
+  const signature = JSON.stringify(getApiKeySignature(state.settings))
+  if (signature === lastNativeApiKeySignature) return
+
+  const profileIds = state.settings.profiles.map((profile) => profile.id)
+  const profileIdSet = new Set(profileIds)
+  const removedProfileIds = lastNativeProfileIds.filter((id) => !profileIdSet.has(id))
+  lastNativeApiKeySignature = signature
+  lastNativeProfileIds = profileIds
+  void persistNativeApiKeys(state.settings, removedProfileIds).catch((err) => {
+    console.error('Failed to update native Keychain storage:', err)
+    state.showToast('API 密钥未能写入系统钥匙串，请重试', 'error')
+  })
 })
 
 // ===== Actions =====
@@ -1407,7 +1452,7 @@ async function completeRecoveredFalTask(task: TaskRecord, result: Awaited<Return
     falRecoverable: false,
   })
   useStore.getState().showToast(`fal.ai 任务已恢复，共 ${outputIds.length} 张图片`, 'success')
-  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `fal.ai 任务已恢复，共 ${outputIds.length} 张图片。`)
+  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `fal.ai 任务已恢复，共 ${outputIds.length} 张图片。`, { taskId: task.id })
   else void continueRecoveredAgentRound(task.id)
 }
 
@@ -1446,6 +1491,18 @@ async function recoverFalTask(taskId: string) {
 
 /** 初始化：从 IndexedDB 加载任务，按需恢复输入图片，并清理孤立图片 */
 async function initStoreInternal() {
+  if (isNativeApp() && !shouldRedactPersistedApiKeys()) {
+    try {
+      const settings = await hydrateNativeApiKeys(useStore.getState().settings)
+      useStore.setState({ settings })
+      markNativeSecretStorageReady()
+      // Keychain 写入全部成功后，立即重写持久化状态以移除明文密钥。
+      useStore.setState({})
+    } catch (err) {
+      console.warn('Failed to initialize native Keychain storage; keeping existing persisted credentials:', err)
+    }
+  }
+
   const legacyAgentConversations = normalizeAgentConversations(useStore.getState().agentConversations)
   const storedTasks = await getAllTasks()
   const storedAgentConversations = normalizeAgentConversations(await getAllAgentConversations())
@@ -3524,6 +3581,7 @@ async function executeAgentRound(
     showTaskCompletionNotification(
       outputIds.length > 0 ? 'Agent 已生成图片' : 'Agent 已回复',
       outputIds.length > 0 ? `Agent 回复已结束，共生成 ${outputIds.length} 张图片。` : 'Agent 回复已结束。',
+      { conversationId },
     )
   } catch (err) {
     if (controller.signal.aborted) {
@@ -3598,6 +3656,71 @@ async function executeAgentRound(
         if (deletedActiveAgentTasks.get(task.id)?.controller === controller) deletedActiveAgentTasks.delete(task.id)
       }
     }
+  }
+}
+
+async function runAutomaticTextVerification(opts: {
+  taskId: string
+  sourceImageId: string
+  sourceDataUrl: string
+  outputIds: string[]
+  outputDataUrls: string[]
+  prompt: string
+}) {
+  const { taskId, sourceImageId, sourceDataUrl, outputIds, outputDataUrls, prompt } = opts
+  updateTaskInStore(taskId, { autoTextVerificationStatus: 'running', autoTextVerificationError: undefined })
+
+  try {
+    const state = useStore.getState()
+    const profile = getAgentTextApiProfile(state.settings)
+    if (!profile || !isAgentTextApiProfile(profile) || !profile.apiKey) {
+      throw new Error('自动复核需要先配置支持图像理解的 Agent Responses API')
+    }
+
+    const reports: NonNullable<TaskRecord['textVerificationByImage']> = {}
+    for (let index = 0; index < outputIds.length; index += 1) {
+      const resultImageId = outputIds[index]
+      const resultDataUrl = outputDataUrls[index]
+      if (!resultImageId || !resultDataUrl) continue
+      reports[resultImageId] = await verifyImageText({
+        profile,
+        sourceImageId,
+        sourceDataUrl,
+        resultImageId,
+        resultDataUrl,
+        prompt,
+      })
+    }
+
+    const latestTask = useStore.getState().tasks.find((item) => item.id === taskId)
+    const sourceTask = useStore.getState().tasks.find((item) => item.outputImages.includes(sourceImageId))
+    const inheritedProtectedTexts = sourceTask?.protectedTextsByImage?.[sourceImageId] ?? []
+    const protectedTextsByImage = inheritedProtectedTexts.length > 0
+      ? Object.fromEntries(outputIds.map((imageId) => [imageId, inheritedProtectedTexts]))
+      : latestTask?.protectedTextsByImage
+    updateTaskInStore(taskId, {
+      textVerificationByImage: {
+        ...(latestTask?.textVerificationByImage ?? {}),
+        ...reports,
+      },
+      protectedTextsByImage,
+      autoTextVerificationStatus: 'done',
+      autoTextVerificationError: undefined,
+    })
+
+    const reportValues = Object.values(reports)
+    const warningCount = reportValues.filter((report) => report.status === 'warning').length
+    useStore.getState().showToast(
+      warningCount > 0 ? `自动文字复核完成：${warningCount} 张仍需检查` : '自动文字复核通过',
+      warningCount > 0 ? 'info' : 'success',
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '自动文字复核失败'
+    updateTaskInStore(taskId, {
+      autoTextVerificationStatus: 'error',
+      autoTextVerificationError: message,
+    })
+    useStore.getState().showToast(message, 'error')
   }
 }
 
@@ -3713,6 +3836,7 @@ async function executeTask(taskId: string) {
     }
 
     // 更新任务
+    const shouldAutoVerifyText = isAutoTextRepairPrompt(task.prompt) && Boolean(task.inputImageIds[0] && inputDataUrls[0] && outputIds.length)
     const latestBeforeUpdate = useStore.getState().tasks.find((t) => t.id === taskId)
     if (!latestBeforeUpdate || latestBeforeUpdate.status !== 'running') {
       useStore.getState().setTaskStreamPreview(taskId)
@@ -3734,6 +3858,8 @@ async function executeTask(taskId: string) {
       ...createTaskDonePatch(task, Date.now()),
       falRecoverable: false,
       customRecoverable: false,
+      autoTextVerificationStatus: shouldAutoVerifyText ? 'pending' : undefined,
+      autoTextVerificationError: undefined,
     })
     void deleteUnreferencedImageIds(partialImageIdsToClean)
 
@@ -3742,7 +3868,17 @@ async function executeTask(taskId: string) {
       ? `生成完成：成功 ${outputIds.length} 张，失败 ${failedCount} 张`
       : `生成完成，共 ${outputIds.length} 张图片`
     useStore.getState().showToast(completionMessage, failedCount > 0 ? 'error' : 'success')
-    if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `${completionMessage}。`)
+    if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `${completionMessage}。`, { taskId })
+    if (shouldAutoVerifyText) {
+      void runAutomaticTextVerification({
+        taskId,
+        sourceImageId: task.inputImageIds[0],
+        sourceDataUrl: inputDataUrls[0],
+        outputIds,
+        outputDataUrls,
+        prompt: task.prompt,
+      })
+    }
     const currentMask = useStore.getState().maskDraft
     if (
       maskDataUrl &&
@@ -4349,7 +4485,7 @@ async function completeRecoveredCustomTask(task: TaskRecord, result: Awaited<Ret
     customRecoverable: false,
   })
   useStore.getState().showToast(`自定义异步任务已恢复，共 ${outputIds.length} 张图片`, 'success')
-  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `自定义异步任务已恢复，共 ${outputIds.length} 张图片。`)
+  if (!isAgentTask(task)) showTaskCompletionNotification('图像生成完成', `自定义异步任务已恢复，共 ${outputIds.length} 张图片。`, { taskId: task.id })
   else void continueRecoveredAgentRound(task.id)
 }
 
@@ -4399,7 +4535,7 @@ export async function exportData(options: ExportOptions = { exportConfig: true, 
     const params = {
       options,
       exportedAt,
-      settings,
+      settings: redactSettingsApiKeys(settings),
       tasks,
       imageTasks: tasks,
       favoriteCollections,

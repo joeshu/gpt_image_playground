@@ -53,6 +53,9 @@ export function FavoriteCollectionOverviewCard({
   editingName,
   setEditingName,
   confirmRename,
+  handleRenameCompositionStart,
+  handleRenameCompositionEnd,
+  handleRenameBlur,
   handleRenameKeyDown,
   startRename,
   handleSetDefault,
@@ -71,6 +74,9 @@ export function FavoriteCollectionOverviewCard({
   editingName: string
   setEditingName: (value: string) => void
   confirmRename: () => void
+  handleRenameCompositionStart: () => void
+  handleRenameCompositionEnd: () => void
+  handleRenameBlur: () => void
   handleRenameKeyDown: (e: React.KeyboardEvent) => void
   startRename: (e: React.MouseEvent, collection: FavoriteCollection) => void
   handleSetDefault: (collection: FavoriteCollection) => void
@@ -242,10 +248,12 @@ export function FavoriteCollectionOverviewCard({
                     className="h-6 min-w-0 flex-1 rounded border border-blue-400/50 bg-white px-1.5 py-0 text-[14px] leading-6 text-gray-900 shadow-sm outline-none focus:border-blue-500 dark:border-white/20 dark:bg-black/20 dark:text-white dark:focus:border-white/40"
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
+                    onCompositionStart={handleRenameCompositionStart}
+                    onCompositionEnd={handleRenameCompositionEnd}
                     onKeyDown={handleRenameKeyDown}
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
-                    onBlur={confirmRename}
+                    onBlur={handleRenameBlur}
                   />
                 ) : (
                   <span className="truncate" title={card.name}>{card.name}</span>

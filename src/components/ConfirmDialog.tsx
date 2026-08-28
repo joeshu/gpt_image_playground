@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
@@ -50,6 +50,7 @@ export default function ConfirmDialog() {
   const [canConfirm, setCanConfirm] = useState(true)
   const [checkboxChecked, setCheckboxChecked] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const delay = confirmDialog?.minConfirmDelayMs ?? 0
@@ -78,7 +79,7 @@ export default function ConfirmDialog() {
   }
 
   useCloseOnEscape(Boolean(confirmDialog) && canConfirm, handleClose)
-  usePreventBackgroundScroll(Boolean(confirmDialog))
+  usePreventBackgroundScroll(Boolean(confirmDialog), modalRef)
 
   if (!confirmDialog) return null
   const isDestructive = confirmDialog.title.includes('删除') || confirmDialog.title.includes('清空')
@@ -87,16 +88,18 @@ export default function ConfirmDialog() {
   const confirmText = confirmDialog.confirmText ?? (isDestructive ? '确认删除' : '确认')
   const cancelText = confirmDialog.cancelText ?? '取消'
   const customButtons = confirmDialog.buttons?.filter((button) => button.label.trim()) ?? []
-
   return (
     <div
       data-no-drag-select
+      data-ios-sheet-backdrop
       className="fixed inset-0 z-[110] flex items-center justify-center p-4"
       onClick={handleClose}
     >
       <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-md animate-overlay-in" />
       <div
-        className="relative bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/50 dark:border-white/[0.08] rounded-3xl shadow-[0_8px_40px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_40px_rgb(0,0,0,0.4)] max-w-sm w-full p-6 z-10 ring-1 ring-black/5 dark:ring-white/10 animate-confirm-in"
+        data-ios-confirm-sheet
+        ref={modalRef}
+        className="relative max-h-[min(92dvh,600px)] overflow-y-auto overscroll-contain touch-pan-y bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/50 dark:border-white/[0.08] rounded-3xl shadow-[0_8px_40px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_40px_rgb(0,0,0,0.4)] max-w-sm w-full p-6 z-10 ring-1 ring-black/5 dark:ring-white/10 animate-confirm-in"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-2 flex items-center gap-2 text-base font-bold text-gray-800 dark:text-gray-100">
@@ -147,6 +150,7 @@ export default function ConfirmDialog() {
             {confirmDialog.showCancel !== false && (
               <button
                 onClick={handleCancel}
+                data-haptic="light"
                 disabled={isSubmitting}
                  className="min-h-11 flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 dark:border-white/[0.08] dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -154,6 +158,7 @@ export default function ConfirmDialog() {
               </button>
             )}
             <button
+              data-haptic={confirmTone === 'danger' ? 'warning' : 'success'}
               onClick={() => {
                 if (!canConfirm || isSubmitting) return
                 if (!confirmDialog.awaitAction) {

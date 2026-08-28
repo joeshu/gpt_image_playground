@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { initStore, restoreExplicitPresetConfig, useStore } from './store'
 import { buildSettingsFromUrlParams, clearUrlSettingParams, getExplicitUrlSettingsIds, hasUrlSettingParams } from './lib/urlSettings'
 import { createDefaultOpenAIProfile, hasDefaultPresetConfig, isAgentTextApiProfile, normalizeSettings } from './lib/apiProfiles'
@@ -18,40 +18,160 @@ import ConfirmDialog from './components/ConfirmDialog'
 import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
+import CreationWorkbench from './components/CreationWorkbench'
+import PromptStudioModal from './components/PromptStudioModal'
+import ResultsCenter from './components/ResultsCenter'
 import SupportPromptModal from './components/SupportPromptModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
+import { subscribeNativeLifecycle } from './lib/nativeLifecycle'
+import { clearImageCaches } from './lib/imageCache'
+import { subscribeNotificationActions } from './lib/browserNotification'
+import { resetSurfaceScroll } from './lib/surfaceNavigation'
 
 let defaultConfigImportStarted = false
+let resolveStoreReady: (() => void) | null = null
+const storeReady = new Promise<void>((resolve) => { resolveStoreReady = resolve })
+
+type AppSurface = 'home' | 'creation' | 'results'
+const SURFACE_HISTORY_KEY = 'gptImagePlaygroundSurface'
+
+function isAppSurface(value: unknown): value is AppSurface {
+  return value === 'home' || value === 'creation' || value === 'results'
+}
+
+function getInitialSurface(): AppSurface {
+  if (typeof window === 'undefined') return 'home'
+  return isAppSurface(window.history.state?.[SURFACE_HISTORY_KEY]) ? window.history.state[SURFACE_HISTORY_KEY] : 'home'
+}
 
 export default function App() {
   const appMode = useStore((s) => s.appMode)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
   const showToast = useStore((s) => s.showToast)
+  const [activeSurface, setActiveSurface] = useState<AppSurface>(getInitialSurface)
+  const [promptStudioOpen, setPromptStudioOpen] = useState(false)
+  const [promptStudioApplyToken, setPromptStudioApplyToken] = useState(0)
+  const [creationBatchBusy, setCreationBatchBusy] = useState(false)
   useDockerApiUrlMigrationNotice()
   useGlobalClickSuppression()
 
-  useEffect(() => {
-    const handleOffline = () => showToast('当前处于离线状态，已保留输入内容，暂时无法提交新请求', 'info')
-    const handleOnline = () => {
-      showToast('网络已恢复，正在检查未完成任务', 'success')
-      void initStore().catch((error) => console.warn('Failed to refresh local tasks after reconnect:', error))
+  const canNavigateToSurface = (surface: AppSurface) => {
+    if (creationBatchBusy && surface !== 'creation') {
+      showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
+      return false
     }
+    return true
+  }
+
+  const navigateToSurface = (surface: AppSurface) => {
+    if (surface === activeSurface) {
+      resetSurfaceScroll()
+      return
+    }
+    setActiveSurface(surface)
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ ...window.history.state, [SURFACE_HISTORY_KEY]: surface }, '', window.location.href)
+    }
+    resetSurfaceScroll()
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.history.replaceState({ ...window.history.state, [SURFACE_HISTORY_KEY]: activeSurface }, '', window.location.href)
+    const handlePopState = (event: PopStateEvent) => {
+      const nextSurface = isAppSurface(event.state?.[SURFACE_HISTORY_KEY]) ? event.state[SURFACE_HISTORY_KEY] : 'home'
+      setActiveSurface(nextSurface)
+      resetSurfaceScroll()
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [activeSurface])
+
+  useEffect(() => {
+    let disposed = false
+    let removeNativeListeners: (() => void) | null = null
+    let lastRefreshAt = 0
+    let pausedAt = 0
+
+    const refreshAfterInterruption = (reason: 'network' | 'resume') => {
+      const now = Date.now()
+      if (now - lastRefreshAt < 1500) return
+      lastRefreshAt = now
+
+      // 活跃请求仍由原 Promise/恢复计时器负责，重新载入 IndexedDB 会覆盖内存中的最新状态。
+      if (useStore.getState().tasks.some((task) => task.status === 'running')) {
+        if (reason === 'network') showToast('网络已恢复，正在继续当前任务', 'success')
+        return
+      }
+
+      if (reason === 'network') showToast('网络已恢复，正在检查未完成任务', 'success')
+      void initStore().catch((error) => console.warn(`Failed to refresh local tasks after ${reason}:`, error))
+    }
+
+    const handleOffline = () => showToast('当前处于离线状态，已保留输入内容，暂时无法提交新请求', 'info')
+    const handleOnline = () => refreshAfterInterruption('network')
     const handleVisibility = () => {
-      if (document.visibilityState !== 'visible') return
-      void initStore().catch((error) => console.warn('Failed to refresh local tasks after resume:', error))
+      if (document.visibilityState === 'visible') refreshAfterInterruption('resume')
     }
 
     window.addEventListener('offline', handleOffline)
     window.addEventListener('online', handleOnline)
     document.addEventListener('visibilitychange', handleVisibility)
+
+    void subscribeNativeLifecycle({
+      onPause: () => {
+        pausedAt = Date.now()
+      },
+      onResume: () => {
+        if (pausedAt && Date.now() - pausedAt < 1500) return
+        refreshAfterInterruption('resume')
+      },
+      onMemoryWarning: () => {
+        clearImageCaches()
+        console.warn('Released transient image caches after iOS memory warning')
+      },
+    }).then((remove) => {
+      if (disposed) remove()
+      else removeNativeListeners = remove
+    }).catch((error) => {
+      console.warn('Failed to subscribe to native lifecycle events:', error)
+    })
+
     return () => {
+      disposed = true
+      removeNativeListeners?.()
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('online', handleOnline)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [showToast])
+
+  useEffect(() => {
+    let disposed = false
+    let removeNotificationActions: (() => void) | null = null
+
+    void subscribeNotificationActions(async (target) => {
+      await storeReady
+      const state = useStore.getState()
+      if (target.conversationId) {
+        state.setActiveAgentConversationId(target.conversationId)
+        state.setAppMode('agent')
+        window.requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight }))
+        return
+      }
+      if (target.taskId) state.setDetailTaskId(target.taskId)
+    }).then((remove) => {
+      if (disposed) remove()
+      else removeNotificationActions = remove
+    }).catch((error) => console.warn('Failed to subscribe to notification actions:', error))
+
+    return () => {
+      disposed = true
+      removeNotificationActions?.()
+    }
+  }, [])
 
   useEffect(() => {
     if (defaultConfigImportStarted) return
@@ -87,6 +207,8 @@ export default function App() {
 
     void initStore()
       .then(async () => {
+        resolveStoreReady?.()
+        resolveStoreReady = null
         const importedSettings = embeddedDefaultConfig || customProviderConfigUrl
           ? await loadDefaultConfig()
           : hasDefaultPresetConfig()
@@ -135,6 +257,8 @@ export default function App() {
         clearAppliedUrlSettings()
       })
       .catch((error) => {
+        resolveStoreReady?.()
+        resolveStoreReady = null
         console.warn('Failed to import preset config:', error)
         setPresetConfig(null)
         const state = useStore.getState()
@@ -158,18 +282,68 @@ export default function App() {
 
   return (
     <>
-      <Header />
-      {appMode === 'agent' ? (
+      <Header
+        activeSurface={activeSurface}
+        onOpenHome={(mode) => {
+          if (!canNavigateToSurface('home')) return
+          setPromptStudioOpen(false)
+          navigateToSurface('home')
+          useStore.getState().setAppMode(mode)
+        }}
+        onOpenCreationWorkbench={() => {
+          setPromptStudioOpen(false)
+          navigateToSurface('creation')
+        }}
+        onOpenResultsCenter={() => {
+          if (!canNavigateToSurface('results')) return
+          setPromptStudioOpen(false)
+          navigateToSurface('results')
+        }}
+        onOpenSettings={() => {
+          if (creationBatchBusy) {
+            showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
+            return
+          }
+          useStore.getState().setShowSettings(true)
+        }}
+      />
+      {activeSurface === 'results' ? (
+        <ResultsCenter
+          onClose={() => {
+            if (!canNavigateToSurface('home')) return
+            navigateToSurface('home')
+          }}
+          onOpenCreationWorkbench={() => {
+            setPromptStudioOpen(false)
+            navigateToSurface('creation')
+          }}
+        />
+      ) : activeSurface === 'home' && appMode === 'agent' ? (
         <AgentWorkspace />
-      ) : (
-        <main data-home-main data-drag-select-surface className="pb-48">
+      ) : activeSurface === 'home' ? (
+        <main data-home-main data-drag-select-surface className="home-main-content">
           <div className="safe-area-x max-w-7xl mx-auto">
             <SearchBar />
             {filterFavorite && !activeFavoriteCollectionId ? <FavoriteCollectionsView /> : <TaskGrid />}
           </div>
         </main>
-      )}
-      <InputBar />
+      ) : null}
+      <CreationWorkbench
+        visible={activeSurface === 'creation'}
+        onBatchBusyChange={setCreationBatchBusy}
+        onPromptApplied={() => setPromptStudioApplyToken((value) => value + 1)}
+        onClose={() => {
+          setPromptStudioOpen(false)
+          navigateToSurface('home')
+        }}
+        onOpenPromptStudio={() => setPromptStudioOpen(true)}
+      />
+      {activeSurface === 'home' && <InputBar onOpenPromptStudio={() => setPromptStudioOpen(true)} promptStudioApplyToken={promptStudioApplyToken} />}
+      <PromptStudioModal
+        open={promptStudioOpen}
+        onClose={() => setPromptStudioOpen(false)}
+        onPromptApplied={() => setPromptStudioApplyToken((value) => value + 1)}
+      />
       <DetailModal />
       <Lightbox />
       <SettingsModal />

@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { useRef } from 'react'
 import { useStore } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
@@ -17,9 +18,10 @@ export default function SupportPromptModal() {
     confirmDialog || detailTaskId || lightboxImageId || showSettings || maskEditorImageId,
   )
   const visible = supportPromptOpen && !blockedByHigherPriorityModal
+  const modalRef = useRef<HTMLDivElement>(null)
 
   useCloseOnEscape(visible, dismissSupportPrompt)
-  usePreventBackgroundScroll(visible)
+  usePreventBackgroundScroll(visible, modalRef)
 
   if (!visible) return null
 
@@ -31,7 +33,8 @@ export default function SupportPromptModal() {
     >
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-overlay-in" />
       <div
-        className="relative z-10 w-full max-w-sm rounded-[2rem] border border-white/50 bg-white/95 p-6 pb-7 shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10 flex flex-col"
+        ref={modalRef}
+        className="relative z-10 max-h-[min(92dvh,600px)] w-full max-w-sm overflow-y-auto overscroll-contain touch-pan-y rounded-[2rem] border border-white/50 bg-white/95 p-6 pb-7 shadow-2xl ring-1 ring-black/5 animate-modal-in dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10 flex flex-col"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="absolute right-4 top-4">

@@ -2,6 +2,25 @@ import type { ApiProfile, TaskParams } from '../../types'
 import { dismissAllTooltips } from '../../lib/tooltipDismiss'
 import Select from '../Select'
 import ButtonTooltip from './buttonTooltip'
+import { ChevronDownIcon } from '../icons'
+
+function AutoValueField() {
+  return (
+    <div
+      role="status"
+      aria-disabled="true"
+      aria-label="自动（当前服务商固定设置）"
+      title="当前服务商固定使用自动设置，无需手动调整"
+      data-auto-value-field
+      className="flex min-h-[34px] w-full min-w-0 cursor-not-allowed items-center justify-between gap-2 rounded-xl border border-dashed border-gray-200/60 bg-gray-100/60 px-3 py-1.5 text-base text-gray-500 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-gray-400 sm:text-xs"
+    >
+      <span className="truncate font-mono">auto</span>
+      <span className="shrink-0 rounded-md bg-gray-200/70 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-white/[0.08] dark:text-gray-400">
+        自动
+      </span>
+    </div>
+  )
+}
 
 interface HintTooltipState {
   visible: boolean
@@ -93,7 +112,7 @@ export default function InputParamsPanel({
   onOpenSizePicker: () => void
 }) {
   return (
-    <div className={`grid ${cols} gap-2 text-xs flex-1`}>
+    <div className={`grid ${cols} min-w-0 w-full gap-2 text-xs flex-1`}>
       <label
         className="relative flex flex-col gap-0.5"
         onMouseEnter={sizeHint.show}
@@ -107,9 +126,10 @@ export default function InputParamsPanel({
         <button
           type="button"
           onClick={() => { dismissAllTooltips(); onOpenSizePicker() }}
-          className="px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03] hover:bg-white dark:hover:bg-white/[0.06] focus:outline-none text-xs text-left transition-all duration-200 shadow-sm font-mono"
+          className="flex w-full min-w-0 items-center justify-between gap-1 rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 text-left text-xs font-mono shadow-sm transition-all duration-200 hover:bg-white focus:outline-none dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
         >
-          {displaySize}
+          <span className="truncate">{displaySize}</span>
+          <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" />
         </button>
         <ButtonTooltip
           visible={(isFalTextToImage || activeProfile.codexCli) && sizeHint.visible}
@@ -128,18 +148,22 @@ export default function InputParamsPanel({
         onClick={qualityHint.show}
       >
         <span className="text-gray-400 dark:text-gray-500 ml-1">质量</span>
-        <Select
-          value={activeProfile.codexCli ? 'auto' : isFalProvider && params.quality === 'auto' ? 'high' : params.quality}
-          onChange={(val) => {
-            if (!activeProfile.codexCli) setParams({ quality: val as TaskParams['quality'] })
-          }}
-          options={qualityOptions}
-          disabled={activeProfile.codexCli}
-          showValueTooltips={false}
-          className={activeProfile.codexCli
-            ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
-            : selectClass}
-        />
+        {activeProfile.codexCli ? (
+          <AutoValueField />
+        ) : (
+          <Select
+            value={activeProfile.codexCli ? 'auto' : isFalProvider && params.quality === 'auto' ? 'high' : params.quality}
+            onChange={(val) => {
+              if (!activeProfile.codexCli) setParams({ quality: val as TaskParams['quality'] })
+            }}
+            options={qualityOptions}
+            disabled={activeProfile.codexCli}
+            showValueTooltips={false}
+            className={activeProfile.codexCli
+              ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
+              : selectClass}
+          />
+        )}
         <ButtonTooltip
           visible={(activeProfile.codexCli || isFalProvider) && qualityHint.visible}
           text={isFalProvider ? <>fal.ai 不支持 <code className="rounded bg-white/10 px-1 py-0.5 font-mono">auto</code> 质量参数</> : 'Codex CLI 不支持质量参数'}
@@ -219,7 +243,7 @@ export default function InputParamsPanel({
             min={0}
             max={100}
             placeholder="0-100"
-             className={`px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] focus:outline-none text-base sm:text-xs transition-all duration-200 shadow-sm ${
+              className={`w-full min-w-0 px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] focus:outline-none text-base sm:text-xs transition-all duration-200 shadow-sm ${
               compressionDisabled
                 ? 'bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed'
                 : 'bg-white/50 dark:bg-white/[0.03]'
@@ -241,21 +265,25 @@ export default function InputParamsPanel({
         onClick={moderationHint.show}
       >
         <span className="text-gray-400 dark:text-gray-500 ml-1">审核</span>
-        <Select
-          value={moderationDisabled ? 'auto' : params.moderation}
-          onChange={(val) => {
-            if (!moderationDisabled) setParams({ moderation: val as TaskParams['moderation'] })
-          }}
-          options={[
-            { label: 'auto', value: 'auto' },
-            { label: 'low', value: 'low' },
-          ]}
-          disabled={moderationDisabled}
-          showValueTooltips={false}
-          className={moderationDisabled
-            ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
-            : selectClass}
-        />
+        {moderationDisabled ? (
+          <AutoValueField />
+        ) : (
+          <Select
+            value={moderationDisabled ? 'auto' : params.moderation}
+            onChange={(val) => {
+              if (!moderationDisabled) setParams({ moderation: val as TaskParams['moderation'] })
+            }}
+            options={[
+              { label: 'auto', value: 'auto' },
+              { label: 'low', value: 'low' },
+            ]}
+            disabled={moderationDisabled}
+            showValueTooltips={false}
+            className={moderationDisabled
+              ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
+              : selectClass}
+          />
+        )}
         <ButtonTooltip
           visible={moderationDisabled && moderationHint.visible}
           text="fal.ai 不支持审核参数"
@@ -275,34 +303,38 @@ export default function InputParamsPanel({
         onClick={() => { showAgentNHint(); streamConcurrentHint.show() }}
       >
         <span className="text-gray-400 dark:text-gray-500 ml-1">数量</span>
-        <input
-          value={nInput}
-          onChange={(e) => handleNInputChange(e.target.value)}
-          onFocus={() => setNInputFocused(true)}
-          onBlur={() => {
-            setNInputFocused(false)
-            commitN()
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowUp') {
-              handleNLimitIncreaseAttempt(() => e.preventDefault())
-            }
-          }}
-          onWheel={(e) => {
-            if (e.deltaY < 0) {
-              handleNLimitIncreaseAttempt(() => e.preventDefault())
-            }
-          }}
-          disabled={agentAutoImageCount}
-          type={agentAutoImageCount ? 'text' : 'number'}
-          min={agentAutoImageCount ? undefined : 1}
-          max={agentAutoImageCount ? undefined : outputImageLimit}
-           className={`px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] focus:outline-none text-base sm:text-xs transition-all duration-200 shadow-sm ${
-            agentAutoImageCount
-              ? 'bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed'
-              : 'bg-white/50 dark:bg-white/[0.03]'
-          }`}
-        />
+        {agentAutoImageCount ? (
+          <AutoValueField />
+        ) : (
+          <input
+            value={nInput}
+            onChange={(e) => handleNInputChange(e.target.value)}
+            onFocus={() => setNInputFocused(true)}
+            onBlur={() => {
+              setNInputFocused(false)
+              commitN()
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp') {
+                handleNLimitIncreaseAttempt(() => e.preventDefault())
+              }
+            }}
+            onWheel={(e) => {
+              if (e.deltaY < 0) {
+                handleNLimitIncreaseAttempt(() => e.preventDefault())
+              }
+            }}
+            disabled={agentAutoImageCount}
+            type={agentAutoImageCount ? 'text' : 'number'}
+            min={agentAutoImageCount ? undefined : 1}
+            max={agentAutoImageCount ? undefined : outputImageLimit}
+             className={`w-full min-w-0 px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] focus:outline-none text-base sm:text-xs transition-all duration-200 shadow-sm ${
+              agentAutoImageCount
+                ? 'bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed'
+                : 'bg-white/50 dark:bg-white/[0.03]'
+            }`}
+          />
+        )}
         <ButtonTooltip visible={nLimitHint.visible} text={nLimitHintText} />
         <ButtonTooltip visible={streamConcurrentByN && streamConcurrentHint.visible && !nLimitHint.visible} text="数量大于 1 时会将多图生成拆分为并发单图" />
       </label>

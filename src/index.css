@@ -28,6 +28,7 @@
 
 html {
   overflow-y: scroll;
+  overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -35,8 +36,39 @@ html {
 body {
   padding: 0;
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   -webkit-user-select: none;
   user-select: none;
+}
+
+#root {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Keep the global chrome out of the document scroll transform. iOS WebViews
+   can otherwise move a sticky header when a fixed drawer releases focus. The
+   matching flow slot is measured by Header at layout time. */
+[data-global-header] {
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+[data-global-header-spacer] {
+  box-sizing: border-box;
+  height: calc(var(--safe-area-top) + 3.5rem);
+}
+
+@media (max-width: 639px) {
+  [data-global-header-spacer] {
+    height: calc(max(0.5rem, var(--safe-area-top)) + 6.375rem);
+  }
+
+  [data-agent-mobile-top-bar] {
+    top: var(--global-header-height, 6.375rem);
+  }
 }
 
 .ios-modal-height {
@@ -417,8 +449,79 @@ input[type="number"] {
 }
 
 .safe-area-x {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding-left: max(1rem, var(--safe-area-left));
   padding-right: max(1rem, var(--safe-area-right));
+}
+
+/* 独立工作台和 Agent 在手机上不能把长文本/固定按钮撑出视口。 */
+[data-creation-workbench],
+[data-agent-workspace] {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* iOS WebView can resolve width:100% before padded safe-area containers. Keep
+   the surface content inside the padded content box instead of clipping its
+   right edge. */
+[data-creation-content],
+[data-results-content] {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+[data-creation-content] > *,
+[data-results-content] > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-creation-layout],
+[data-creation-layout] > *,
+[data-creation-layout] .overflow-x-auto {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-creation-actions] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 639px) {
+  [data-creation-actions] {
+    padding-bottom: calc(0.75rem + var(--safe-area-bottom));
+    scroll-margin-bottom: calc(1rem + var(--safe-area-bottom));
+  }
+}
+
+[data-agent-message-list] {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  /* The composer is fixed outside this flow. Keep the last message above its
+     measured box, including when iOS changes the visual viewport for the keyboard. */
+  padding-bottom: max(12rem, calc(var(--input-bar-clearance, 12rem) + 1.5rem));
+  scroll-padding-bottom: max(12rem, calc(var(--input-bar-clearance, 12rem) + 1.5rem));
+}
+
+[data-agent-message-list] > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-results-center] {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 /* 长历史记录中只布局接近视口的卡片，保留占位高度避免滚动跳动。 */
@@ -538,4 +641,398 @@ input[type="number"] {
 .ios-rounded-scroll-fix {
   isolation: isolate;
   -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+
+
+/* iPhone composer: dock to the Home Indicator and reserve its measured height in the gallery. */
+.home-main-content {
+  padding-bottom: max(12rem, calc(var(--input-bar-clearance, 11rem) + var(--safe-area-bottom) + 1rem));
+  scroll-padding-bottom: max(12rem, calc(var(--input-bar-clearance, 11rem) + var(--safe-area-bottom) + 1rem));
+}
+
+@media (max-width: 639px) {
+  /* Fixed composer width must follow the visual viewport after an iOS
+     keyboard/drawer transition; centering a 100% element can retain the
+     drawer's stale layout width for one render. */
+  [data-input-bar] {
+    left: var(--visual-viewport-left, 0px) !important;
+    right: auto !important;
+    width: var(--visual-viewport-width, 100%) !important;
+    max-width: var(--visual-viewport-width, 100%) !important;
+    transform: none !important;
+  }
+
+  [data-input-bar] {
+    bottom: 0 !important;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: var(--visual-viewport-width, 100%);
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  [data-agent-sidebar],
+  [data-agent-sidebar-backdrop] {
+    left: var(--visual-viewport-left, 0px) !important;
+  }
+
+  [data-agent-sidebar] {
+    top: var(--visual-viewport-top, 0px) !important;
+    bottom: auto !important;
+    height: var(--visual-viewport-height, 100dvh) !important;
+  }
+
+  [data-agent-sidebar-backdrop] {
+    top: var(--visual-viewport-top, 0px) !important;
+    width: var(--visual-viewport-width, 100%) !important;
+    height: var(--visual-viewport-height, 100dvh) !important;
+  }
+
+  [data-input-bar] > div:last-child {
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow-x: clip;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: calc(0.375rem + var(--safe-area-bottom));
+    box-shadow: 0 -10px 35px rgb(15 23 42 / 0.12);
+  }
+
+  [data-input-bar] button,
+  [data-input-bar] [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  [data-task-grid-root] {
+    padding-top: 0.25rem;
+  }
+
+  .task-card-wrapper {
+    contain-intrinsic-size: 360px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-input-bar],
+  [data-input-bar] *,
+  .task-card-wrapper,
+  .collapse-section {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+
+/* Mobile parameters use one explicit horizontal boundary so the composer never clips the third control. */
+@media (max-width: 639px) {
+  .mobile-param-scroll {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 0 calc(3rem + var(--safe-area-right));
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-param-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-param-grid {
+    min-width: 100%;
+  }
+
+  .mobile-param-strip {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    gap: 0.5rem;
+    overflow: visible;
+    padding-inline: 0;
+  }
+
+  .mobile-param-strip > label {
+    width: 100%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .mobile-param-strip button,
+  .mobile-param-strip input,
+  .mobile-param-strip [role="button"] {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.75rem;
+  }
+}
+
+
+
+/* Prompt template sheets expose independent touch boundaries on iOS. */
+@media (max-width: 639px) {
+  [data-prompt-template-categories] {
+    scroll-padding-inline: 1.25rem calc(1.25rem + var(--safe-area-right));
+    scrollbar-width: none;
+  }
+
+  [data-prompt-template-categories]::-webkit-scrollbar,
+  [data-prompt-template-list]::-webkit-scrollbar,
+  [data-prompt-template-editor]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-prompt-template-list],
+  [data-prompt-template-editor] {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Mobile task cards prioritize the generated image and provide thumb-sized action targets. */
+@media (max-width: 639px) {
+  [data-task-card-media] {
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+
+  [data-task-card-media] > img {
+    object-fit: contain;
+  }
+
+  [data-task-card-media-meta] {
+    display: none;
+  }
+
+  [data-task-card-actions] {
+    width: 100%;
+    justify-content: flex-end;
+    border-top: 1px solid hsl(var(--border));
+    padding-top: 0.375rem;
+    padding-right: 0;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  [data-task-card-actions] button {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.625rem;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+
+@keyframes ios-sheet-in {
+  from { opacity: 0; transform: translateY(2rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Native-feeling phone sheets keep primary controls near the thumb and respect the Home Indicator. */
+@media (max-width: 639px) {
+  [data-ios-sheet-backdrop] {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  [data-ios-sheet],
+  [data-ios-confirm-sheet] {
+    width: 100%;
+    max-width: none;
+    max-height: calc(94dvh - var(--safe-area-top));
+    border-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: var(--safe-area-bottom);
+    animation: ios-sheet-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  [data-ios-sheet]::before,
+  [data-ios-confirm-sheet]::before {
+    content: "";
+    position: absolute;
+    z-index: 20;
+    top: 0.375rem;
+    left: 50%;
+    width: 2.25rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background: rgb(148 163 184 / 0.55);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  [data-ios-confirm-sheet] {
+    padding: 1.5rem;
+    padding-bottom: calc(1.5rem + var(--safe-area-bottom));
+  }
+
+  [data-ios-confirm-sheet] button {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ios-sheet],
+  [data-ios-confirm-sheet] {
+    animation: none;
+  }
+}
+
+
+/* Settings becomes a compact, scroll-independent tab workspace on iPhone. */
+@media (max-width: 639px) {
+  [data-settings-header] {
+    min-height: 3.5rem;
+    padding: 0.875rem 1rem 0.625rem;
+    padding-top: 1.25rem;
+  }
+
+  [data-settings-tabs] {
+    position: relative;
+    background: hsl(var(--muted) / 0.55);
+  }
+
+  [data-settings-tabs]::after {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2rem;
+    background: linear-gradient(to right, transparent, hsl(var(--muted) / 0.92));
+    pointer-events: none;
+  }
+
+  [data-settings-tab-strip] {
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    scroll-padding-inline: 0.75rem;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-settings-tab-strip]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-settings-tab-strip] > button {
+    min-height: 2.75rem;
+    scroll-snap-align: start;
+    touch-action: manipulation;
+  }
+
+  [data-settings-scroll] {
+    padding: 1rem;
+  }
+
+  [data-settings-content] :where(input, textarea, select, button[role="switch"]) {
+    min-height: 2.75rem;
+  }
+}
+
+
+/* Task detail keeps the output prominent while pinning primary actions above the Home Indicator. */
+@media (max-width: 767px) {
+  [data-detail-sheet] {
+    padding-bottom: 0;
+  }
+
+  [data-detail-mobile-header] {
+    min-height: 3.25rem;
+    height: 3.25rem;
+    padding-top: 0.25rem;
+  }
+
+  [data-detail-media] {
+    height: clamp(18rem, 38dvh, 24rem);
+    min-height: 18rem;
+  }
+
+  [data-detail-info] {
+    flex: 1 1 0%;
+    min-height: 0;
+    padding: 1rem;
+    padding-bottom: 0;
+  }
+
+  [data-detail-actions] {
+    position: sticky;
+    z-index: 15;
+    bottom: 0;
+    margin: 0 -1rem;
+    padding: 0.75rem 1rem calc(0.75rem + var(--safe-area-bottom));
+    background: rgb(255 255 255 / 0.92);
+    box-shadow: 0 -8px 24px rgb(15 23 42 / 0.06);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  [data-detail-actions] button {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 767px) and (prefers-color-scheme: dark) {
+  [data-detail-actions] {
+    background: rgb(17 24 39 / 0.92);
+    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2);
+  }
+}
+
+
+/* VisualViewport-driven keyboard avoidance for iOS Safari and Capacitor WebViews. */
+@media (max-width: 639px) {
+  html.ios-keyboard-open [data-input-bar] {
+    bottom: var(--keyboard-inset, 0px) !important;
+  }
+
+  [data-agent-scroll-bottom],
+  [data-agent-scroll-top] {
+    right: max(1rem, var(--safe-area-right));
+  }
+
+  [data-agent-scroll-top] {
+    top: calc(5rem + var(--safe-area-top));
+  }
+
+  html.ios-keyboard-open [data-ios-sheet],
+  html.ios-keyboard-open [data-ios-confirm-sheet] {
+    max-height: var(--visual-viewport-height, 100dvh);
+  }
+
+  html.ios-keyboard-open [data-input-bar] > div:last-child {
+    padding-bottom: 0.75rem;
+  }
+
+  html.ios-keyboard-open [data-detail-actions] {
+    padding-bottom: 0.75rem;
+  }
+}
+
+
+/* iOS keeps :hover after a tap; destructive actions must return to their neutral state. */
+@media (hover: none) and (pointer: coarse) {
+  [data-agent-delete-action]:hover {
+    color: inherit;
+    background: transparent;
+  }
 }

@@ -10,10 +10,11 @@ import { getAgentAssistantBlocks, getAgentAssistantCopyContent, getRoundTaskSlot
 import { sanitizeAgentText } from '../lib/agentApi'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { downloadImageEntriesAsZip, downloadImageIds, getImageZipEntries } from '../lib/downloadImages'
+import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import TaskCard from './TaskCard'
 import MarkdownRenderer from './MarkdownRenderer'
 import { TooltipButton as AgentActionButton } from './TooltipButton'
-import { TrashIcon, DownloadIcon, EditIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, SidebarLeftIcon, FavoriteIcon, CloseIcon, CopyIcon, RefreshIcon, ArrowDownIcon } from './icons'
+import { TrashIcon, DownloadIcon, EditIcon, ChevronLeftIcon, ChevronRightIcon, SidebarLeftIcon, FavoriteIcon, CloseIcon, CopyIcon, RefreshIcon, ArrowDownIcon } from './icons'
 
 function ChatImageThumb({ imageId, imageIndex, maskImageId }: { imageId: string; imageIndex: number; maskImageId?: string | null }) {
   const [src, setSrc] = useState<string>(() => getCachedImage(imageId) || '')
@@ -102,12 +103,19 @@ function AgentWebSearchStatusLines({ statuses }: { statuses: AgentWebSearchStatu
   )
 }
 
-const MOBILE_HEADER_PULL_THRESHOLD = 24
-const MOBILE_HEADER_PULL_MAX_OFFSET = 48
-const MOBILE_HEADER_EDGE_GUARD = 24
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(false)
 
-function getPageScrollTop() {
-  return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const mediaQuery = window.matchMedia('(max-width: 639px)')
+    const sync = () => setIsMobile(mediaQuery.matches)
+    sync()
+    mediaQuery.addEventListener?.('change', sync)
+    return () => mediaQuery.removeEventListener?.('change', sync)
+  }, [])
+
+  return isMobile
 }
 
 export default function AgentWorkspace() {
@@ -122,8 +130,6 @@ export default function AgentWorkspace() {
   const deleteAgentAssistantMessage = useStore((s) => s.deleteAgentAssistantMessage)
   const sidebarCollapsed = useStore((s) => s.agentSidebarCollapsed)
   const setSidebarCollapsed = useStore((s) => s.setAgentSidebarCollapsed)
-  const agentMobileHeaderVisible = useStore((s) => s.agentMobileHeaderVisible)
-  const setAgentMobileHeaderVisible = useStore((s) => s.setAgentMobileHeaderVisible)
   const appMode = useStore((s) => s.appMode)
   const tasks = useStore((s) => s.tasks)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
@@ -144,91 +150,57 @@ export default function AgentWorkspace() {
   const agentGeneratingTitleIds = useStore((s) => s.agentGeneratingTitleIds)
   const conversation = conversations.find((item) => item.id === activeConversationId) ?? null
   const [editingConversationTitle, setEditingConversationTitle] = useState('')
+  const renameCompositionRef = useRef(false)
+  const renameBlurTimerRef = useRef<number | null>(null)
+  const renameBlurPendingRef = useRef(false)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const bottomSentinelRef = useRef<HTMLDivElement>(null)
   const messageRefs = useRef(new Map<string, HTMLElement>())
   const [scrollTargetRoundId, setScrollTargetRoundId] = useState<string | null>(null)
-  const [pullDownOffset, setPullDownOffset] = useState(0)
-  const [mobileTopBarVisible, setMobileTopBarVisible] = useState(true)
   const [conversationSearchQuery, setConversationSearchQuery] = useState('')
   const [conversationActionsId, setConversationActionsId] = useState<string | null>(null)
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
   const [isScrolledFromTop, setIsScrolledFromTop] = useState(false)
-  const touchStartY = useRef(-1)
   const conversationLongPressTimer = useRef<number | null>(null)
   const autoScrollStateRef = useRef<{ conversationId: string | null; lastUserMessageSignature: string | null }>({ conversationId: null, lastUserMessageSignature: null })
   const errorCopyPointerDownRef = useRef<{ x: number; y: number } | null>(null)
+  const agentSidebarRef = useRef<HTMLElement>(null)
+  const isMobileViewport = useIsMobileViewport()
+
+  usePreventBackgroundScroll(
+    appMode === 'agent' && isMobileViewport && !sidebarCollapsed,
+    agentSidebarRef,
+  )
 
   const updateIsScrolledToBottom = useCallback(() => {
+    const container = scrollContainerRef.current
     const sentinel = bottomSentinelRef.current
-    if (appMode !== 'agent' || !sentinel) {
+    if (appMode !== 'agent' || !container || !sentinel) {
       setIsScrolledToBottom(true)
       return
     }
 
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-    setIsScrolledToBottom(sentinel.getBoundingClientRect().top <= viewportHeight + 24)
+    setIsScrolledToBottom(sentinel.offsetTop <= container.scrollTop + container.clientHeight + 24)
   }, [appMode])
 
   const scrollToAgentBottom = useCallback(() => {
-    const scrollingElement = document.scrollingElement ?? document.documentElement
-    window.scrollTo({ top: scrollingElement.scrollHeight, behavior: 'smooth' })
+    const container = scrollContainerRef.current
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+      return
+    }
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
   }, [])
 
   const scrollToAgentTop = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (container) {
+      container.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
-    setAgentMobileHeaderVisible(true)
-  }, [setAgentMobileHeaderVisible])
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const touchY = e.touches[0]?.clientY ?? -1
-    if (
-      appMode !== 'agent' ||
-      agentMobileHeaderVisible ||
-      getPageScrollTop() > 0 ||
-      touchY < MOBILE_HEADER_EDGE_GUARD
-    ) {
-      touchStartY.current = -1
-      setPullDownOffset(0)
-      return
-    }
-
-    touchStartY.current = touchY
-  }
-
-  const handleHeaderTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
-  }
-   
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartY.current <= 0 || agentMobileHeaderVisible) return
-
-    const diff = e.touches[0].clientY - touchStartY.current
-    if (diff <= 0) {
-      setPullDownOffset(0)
-      return
-    }
-
-    if (e.cancelable) e.preventDefault()
-    if (diff >= MOBILE_HEADER_PULL_THRESHOLD) {
-      setAgentMobileHeaderVisible(true)
-      setPullDownOffset(0)
-      touchStartY.current = -1
-      return
-    }
-
-    setPullDownOffset(Math.min(diff, MOBILE_HEADER_PULL_MAX_OFFSET))
-  }
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartY.current > 0 && !agentMobileHeaderVisible) {
-      const touchEndY = e.changedTouches[0].clientY
-      if (touchEndY - touchStartY.current >= MOBILE_HEADER_PULL_THRESHOLD) setAgentMobileHeaderVisible(true)
-    }
-    setPullDownOffset(0)
-    touchStartY.current = -1
-  }
+  }, [])
 
   useEffect(() => {
     if (sidebarCollapsed) {
@@ -244,64 +216,37 @@ export default function AgentWorkspace() {
   }, [appMode])
 
   useEffect(() => {
-    if (!agentMobileHeaderVisible || appMode !== 'agent') return
-
-    const handleInteract = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as HTMLElement
-      if (target.closest('header[data-no-drag-select]')) return
-      setAgentMobileHeaderVisible(false)
-    }
-
-    document.addEventListener('mousedown', handleInteract, { capture: true })
-    document.addEventListener('touchstart', handleInteract, { capture: true })
-
-    return () => {
-      document.removeEventListener('mousedown', handleInteract, { capture: true })
-      document.removeEventListener('touchstart', handleInteract, { capture: true })
-    }
-  }, [agentMobileHeaderVisible, appMode, setAgentMobileHeaderVisible])
-
-  useEffect(() => {
     if (appMode !== 'agent') return
 
-    setMobileTopBarVisible(true)
-    let lastScrollY = window.scrollY
     let ticking = false
 
+    const container = scrollContainerRef.current
+    if (!container) return
     const handleScroll = () => {
       if (ticking) return
 
       window.requestAnimationFrame(() => {
-        const currentScrollY = window.scrollY
-        if (currentScrollY < 20) {
-          setMobileTopBarVisible(true)
-        } else if (currentScrollY > lastScrollY + 10) {
-          setMobileTopBarVisible(false)
-        } else if (currentScrollY < lastScrollY - 10) {
-          setMobileTopBarVisible(true)
-        }
-
+        const currentScrollY = container.scrollTop
         setIsScrolledFromTop(currentScrollY > Math.max(window.innerHeight * 0.8, 480))
         updateIsScrolledToBottom()
 
-        lastScrollY = currentScrollY
         ticking = false
       })
       ticking = true
     }
 
     const initialFrame = window.requestAnimationFrame(() => {
-      setIsScrolledFromTop(window.scrollY > Math.max(window.innerHeight * 0.8, 480))
+      setIsScrolledFromTop(container.scrollTop > Math.max(container.clientHeight * 0.8, 480))
       updateIsScrolledToBottom()
     })
     const visualViewport = window.visualViewport
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    container.addEventListener('scroll', handleScroll, { passive: true })
     window.addEventListener('resize', updateIsScrolledToBottom)
     visualViewport?.addEventListener('resize', updateIsScrolledToBottom)
 
     return () => {
       window.cancelAnimationFrame(initialFrame)
-      window.removeEventListener('scroll', handleScroll)
+      container.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', updateIsScrolledToBottom)
       visualViewport?.removeEventListener('resize', updateIsScrolledToBottom)
     }
@@ -382,9 +327,24 @@ export default function AgentWorkspace() {
   }, [activeMessages, activeRounds, updateIsScrolledToBottom])
 
   useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      updateIsScrolledToBottom()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [conversation?.id, updateIsScrolledToBottom])
+
+  useEffect(() => {
     if (!scrollTargetRoundId) return
     const id = window.requestAnimationFrame(() => {
-      messageRefs.current.get(scrollTargetRoundId)?.scrollIntoView({ block: 'center' })
+      const target = messageRefs.current.get(scrollTargetRoundId)
+      const container = scrollContainerRef.current
+      if (target && container) {
+        const centeredTop = Math.max(0, target.offsetTop - (container.clientHeight - target.offsetHeight) / 2)
+        container.scrollTo({ top: centeredTop, left: 0, behavior: 'auto' })
+      }
       setScrollTargetRoundId(null)
     })
     return () => window.cancelAnimationFrame(id)
@@ -446,18 +406,45 @@ export default function AgentWorkspace() {
   }
 
   const confirmRenameConversation = () => {
+    if (renameCompositionRef.current) {
+      renameBlurPendingRef.current = true
+      return
+    }
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+    renameBlurTimerRef.current = null
+    renameBlurPendingRef.current = false
     if (agentEditingConversationId && editingConversationTitle.trim() && !agentGeneratingTitleIds[agentEditingConversationId]) {
       renameConversation(agentEditingConversationId, editingConversationTitle.trim())
     }
     setAgentEditingConversationId(null)
   }
 
+  const handleRenameCompositionStart = () => {
+    renameCompositionRef.current = true
+    renameBlurPendingRef.current = false
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+  }
+
+  const handleRenameCompositionEnd = () => {
+    renameCompositionRef.current = false
+    if (renameBlurPendingRef.current) renameBlurTimerRef.current = window.setTimeout(confirmRenameConversation, 0)
+  }
+
+  const handleRenameBlur = () => {
+    renameBlurPendingRef.current = true
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+    renameBlurTimerRef.current = window.setTimeout(confirmRenameConversation, 120)
+  }
+
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
+      if (e.nativeEvent.isComposing || renameCompositionRef.current) return
       confirmRenameConversation()
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+      renameBlurPendingRef.current = false
       setAgentEditingConversationId(null)
     }
   }
@@ -613,27 +600,24 @@ export default function AgentWorkspace() {
   return (
     <main 
       data-agent-workspace 
-      className="safe-area-x mx-auto flex min-h-[calc(100vh-100px)] min-h-[calc(100dvh-100px)] flex-col lg:flex-row max-w-7xl lg:gap-3 px-3 lg:px-0 relative overflow-visible text-sm transition-all duration-300"
+      className="safe-area-x mx-auto flex min-h-[calc(100vh-100px)] min-h-[calc(100dvh-100px)] w-full min-w-0 max-w-full flex-col overflow-x-clip text-sm transition-all duration-300 lg:flex-row lg:gap-3 lg:max-w-7xl lg:px-0"
     >
-      {/* Pull Down Indicator */}
-      {pullDownOffset > 0 && !agentMobileHeaderVisible && (
-        <div 
-          className="fixed top-0 left-0 right-0 z-50 flex justify-center items-end pointer-events-none sm:hidden"
-          style={{ height: `${pullDownOffset + 10}px`, opacity: pullDownOffset / MOBILE_HEADER_PULL_MAX_OFFSET }}
-        >
-          <div className="bg-black/60 backdrop-blur-sm text-white rounded-full p-1 mb-2 shadow-lg">
-            <ChevronDownIcon className="w-4 h-4" />
-          </div>
-        </div>
-      )}
-
       {/* Mobile Left Sidebar Overlay Backdrop */}
       {!sidebarCollapsed && (
-        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarCollapsed(true)} />
+        <div data-agent-sidebar-backdrop className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarCollapsed(true)} />
       )}
       
       {/* Left Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-[320px] flex-col border-r border-gray-200 bg-white/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-white/[0.08] dark:bg-gray-950/95 lg:hidden ${!sidebarCollapsed ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside
+        ref={agentSidebarRef}
+        data-agent-sidebar
+        data-scroll-boundary="agent-sidebar"
+        role="dialog"
+        aria-modal={!sidebarCollapsed}
+        aria-hidden={sidebarCollapsed}
+        aria-label="Agent 对话列表"
+        className={`fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-[320px] flex-col border-r border-gray-200 bg-white/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-white/[0.08] dark:bg-gray-950/95 lg:hidden ${!sidebarCollapsed ? 'translate-x-0' : '-translate-x-full'}`}
+      >
         <div className="pl-[max(1rem,env(safe-area-inset-left))] flex h-full min-h-0 w-full flex-col pb-[env(safe-area-inset-bottom)]">
           <div className="safe-area-top shrink-0">
             <div className="flex h-14 items-center justify-between gap-2 px-4">
@@ -680,10 +664,12 @@ export default function AgentWorkspace() {
                       className="h-7 flex-1 bg-white dark:bg-black/20 border border-blue-400/50 dark:border-white/20 rounded px-1.5 py-0 text-sm leading-7 outline-none text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-white/40 shadow-sm min-w-0"
                       value={editingConversationTitle}
                       onChange={(e) => setEditingConversationTitle(e.target.value)}
+                      onCompositionStart={handleRenameCompositionStart}
+                      onCompositionEnd={handleRenameCompositionEnd}
                       onKeyDown={handleRenameKeyDown}
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      onBlur={confirmRenameConversation}
+                      onBlur={handleRenameBlur}
                     />
                   </div>
                 ) : (
@@ -709,7 +695,7 @@ export default function AgentWorkspace() {
                       <AgentActionButton tooltip="编辑标题" className="p-1.5 text-gray-400 hover:text-gray-700 disabled:text-gray-300 disabled:hover:text-gray-300 disabled:cursor-not-allowed dark:hover:text-gray-200 dark:disabled:text-gray-600 dark:disabled:hover:text-gray-600" onClick={(e) => startRenameConversation(e, item.id, item.title)} disabled={isGeneratingTitle}>
                         <EditIcon className="w-4 h-4" />
                       </AgentActionButton>
-                      <AgentActionButton tooltip="删除" className="p-1.5 text-gray-400 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleDeleteConversation(item.id) }}>
+                      <AgentActionButton agentDeleteAction tooltip="删除" className="p-1.5 text-gray-400 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleDeleteConversation(item.id) }}>
                         <TrashIcon className="w-4 h-4" />
                       </AgentActionButton>
                     </>
@@ -723,14 +709,11 @@ export default function AgentWorkspace() {
       </aside>
 
       {/* Center Chat Area */}
-      <section className="min-w-0 flex-1 flex flex-col relative">
+      <section className="relative flex min-w-0 w-full max-w-full flex-1 flex-col">
         {/* Mobile Header Toggles */}
-        <div className={`sticky top-0 z-20 lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${mobileTopBarVisible ? 'max-h-16 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0 pointer-events-none'}`}>
+        <div data-agent-mobile-top-bar className="sticky top-[var(--global-header-height,6.375rem)] z-20 mb-2 lg:hidden">
           <div
             className="safe-area-x flex h-14 items-center justify-between border-b border-gray-200 bg-white/80 px-2 backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/80"
-            onTouchStart={handleHeaderTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
           >
             <button type="button" onClick={() => setSidebarCollapsed(false)} className="flex h-11 w-11 items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.04] rounded-lg transition-colors" title="展开对话列表" aria-label="展开对话列表">
               <SidebarLeftIcon className="w-5 h-5" />
@@ -756,10 +739,8 @@ export default function AgentWorkspace() {
 
         <div 
           ref={scrollContainerRef}
-          className="flex-1 space-y-4 overflow-visible pb-[calc(var(--input-bar-clearance,12rem)+1.5rem)] px-1 lg:pt-14 lg:px-4"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
+          data-agent-message-list
+          className="min-h-0 min-w-0 w-full max-w-full flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 lg:px-4 lg:pt-14"
         >
           {!conversation ? (
             <div className="flex min-h-[min(32rem,55dvh)] flex-col items-center justify-center px-6 text-center text-gray-400">
@@ -992,7 +973,7 @@ export default function AgentWorkspace() {
                              }}>
                                <DownloadIcon className="w-4 h-4" />
                              </AgentActionButton>
-                             <AgentActionButton tooltip="删除消息" className="flex h-10 w-10 items-center justify-center hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-colors" onClick={() => {
+                             <AgentActionButton agentDeleteAction tooltip="删除消息" className="flex h-10 w-10 items-center justify-center hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-colors" onClick={() => {
                               if (round) handleDeleteMessage(message, round);
                             }}>
                               <TrashIcon className="w-4 h-4" />
@@ -1059,8 +1040,9 @@ export default function AgentWorkspace() {
         </div>
 
         <button
+          data-agent-scroll-bottom
           onClick={scrollToAgentBottom}
-          className={`fixed bottom-[calc(var(--input-bar-clearance,12rem)+var(--bottom-safe-space))] left-1/2 -translate-x-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow-[0_2px_12px_rgba(0,0,0,0.1)] border border-gray-200/50 text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
+          className={`fixed bottom-[calc(var(--input-bar-clearance,12rem)+0.75rem)] right-4 z-30 flex h-10 w-10 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow-[0_2px_12px_rgba(0,0,0,0.1)] border border-gray-200/50 text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
             !isScrolledToBottom && activeMessages.length > 0 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'
           }`}
           aria-label="滚动到底部"
@@ -1068,6 +1050,7 @@ export default function AgentWorkspace() {
           <ArrowDownIcon className="h-5 w-5" />
         </button>
         <button
+          data-agent-scroll-top
           onClick={scrollToAgentTop}
           className={`fixed right-4 top-20 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-gray-200/50 bg-white/90 text-gray-500 shadow-[0_2px_12px_rgba(0,0,0,0.1)] backdrop-blur transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 ${
             isScrolledFromTop && activeMessages.length > 0 ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'

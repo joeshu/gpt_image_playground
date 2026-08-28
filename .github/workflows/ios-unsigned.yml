@@ -3,12 +3,13 @@ name: Build Unsigned iOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [ios-mobile]
     tags: ['v*']
 
 permissions:
   contents: read
 
+# Keep every prompt-feature change behind the same full unsigned IPA gate.
 concurrency:
   group: ios-unsigned-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-14
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -26,30 +28,44 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install JavaScript dependencies
+      - name: Install web dependencies
         run: npm ci
 
-      - name: Add Capacitor iOS platform
-        run: npx cap add ios
+      - name: Run web tests
+        run: npm test
 
-      - name: Build web app and sync iOS project
-        run: npm run ios:sync
+      - name: Build production web app
+        run: npm run build
+
+      - name: Verify mobile layout contract
+        run: |
+          set -euo pipefail
+          node scripts/check-mobile-surface-layout.mjs
+          node scripts/check-agent-mobile-interaction.mjs
+          grep -Fq "padding-bottom: calc(0.375rem + var(--safe-area-bottom))" src/index.css
+          grep -Fq "flex: 1 1 0%" src/index.css
+          grep -Fq "[data-detail-actions]" src/index.css
+          grep -Fq "@media (hover: none) and (pointer: coarse)" src/index.css
+          grep -Fq "mobile-composer-collapsed" src/components/InputBar.tsx
+          grep -Fq "bottom-[calc(var(--input-bar-clearance,12rem)+0.75rem)] right-4" src/components/AgentWorkspace.tsx
+
+      - name: Generate and sync Capacitor iOS project
+        run: |
+          set -euo pipefail
+          npx cap add ios
+          npx cap sync ios
 
       - name: Install CocoaPods dependencies
         working-directory: ios/App
         run: pod install
 
-      - name: Verify Apple build tools
-        run: |
-          set -euo pipefail
-          xcode-select -p
-          xcodebuild -version
-          pod --version
-          test -f ios/App/App.xcworkspace/contents.xcworkspacedata
+      - name: Configure native iOS project
+        run: bash scripts/configure-ios.sh
 
       - name: Build unsigned iOS app
         run: |
           set -euo pipefail
+          mkdir -p build
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
@@ -59,19 +75,36 @@ jobs:
             CONFIGURATION_BUILD_DIR="$PWD/build/ios-app" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build
+            build | tee build/xcodebuild.log
 
-      - name: Package unsigned IPA
+      - name: Package artifacts and build report
         run: |
           set -euo pipefail
           test -d build/ios-app/App.app
-          mkdir -p build/Payload
+          mkdir -p build/Payload build/report
           cp -R build/ios-app/App.app build/Payload/App.app
-          ditto -c -k --sequesterRsrc --keepParent build/Payload build/GPT-Image-Playground-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent build/Payload build/GPT-Image-Playground-${{ github.run_number }}-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent build/ios-app/App.app build/GPT-Image-Playground-${{ github.run_number }}-unsigned.app.zip
+          cat > build/report/build-info.json <<EOF
+          {
+            "variant": "unsigned",
+            "version": "${{ github.ref_name }}",
+            "runNumber": "${{ github.run_number }}",
+            "commit": "${{ github.sha }}",
+            "repository": "${{ github.repository }}",
+            "xcode": "$(xcodebuild -version | tr '\n' ' ')",
+            "builtAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: gpt-image-playground-ios-unsigned
-          path: build/GPT-Image-Playground-unsigned.ipa
+          name: gpt-image-playground-ios-unsigned-${{ github.run_number }}
+          path: |
+            build/*.ipa
+            build/*.app.zip
+            build/report/build-info.json
+            build/xcodebuild.log
           if-no-files-found: error
+          retention-days: 30

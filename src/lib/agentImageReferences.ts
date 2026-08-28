@@ -1,6 +1,12 @@
 import type { AgentRound, TaskRecord } from '../types'
 import { replaceImageMentionsForApi, stripImageMentionMarkers } from './promptImageMentions'
 
+export interface AgentPromptImageReference {
+  imageId: string
+  /** 视觉模型看到的可追踪引用标签，例如 @第1轮图2。 */
+  label: string
+}
+
 const AGENT_ROUND_IMAGE_REFERENCE_RE = /@(?:第)?(\d+)轮图(\d+)/g
 const AGENT_REF_TAG_RE = /<ref\b[^>]*\bid=(["'])(round-(\d+)-(?:image|reference)-(\d+))\1[^>]*\/?>/g
 
@@ -49,6 +55,30 @@ export function resolveAgentPromptImageReferences(prompt: string, rounds: AgentR
     if (imageId) refs.push(imageId)
   }
   return refs
+}
+
+/**
+ * 将当前 Agent 提示词中的历史图片引用解析为去重后的图片条目。
+ * 既保留首次出现顺序，也保留可展示给视觉模型的原始 @ 标签。
+ */
+export function resolveAgentPromptImageReferenceEntries(prompt: string, rounds: AgentRound[], tasks: TaskRecord[]): AgentPromptImageReference[] {
+  const entries: AgentPromptImageReference[] = []
+  const seenImageIds = new Set<string>()
+  for (const match of prompt.matchAll(AGENT_ROUND_IMAGE_REFERENCE_RE)) {
+    const roundIndex = Number(match[1]) - 1
+    const imageIndex = Number(match[2]) - 1
+    const round = rounds[roundIndex]
+    if (!round || imageIndex < 0) continue
+
+    const imageId = collectAgentRoundOutputImageSlots(round, tasks)[imageIndex]
+    if (!imageId || seenImageIds.has(imageId)) continue
+    seenImageIds.add(imageId)
+    entries.push({
+      imageId,
+      label: stripImageMentionMarkers(match[0]),
+    })
+  }
+  return entries
 }
 
 export function replaceAgentPromptImageReferencesForApi(

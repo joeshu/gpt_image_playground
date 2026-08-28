@@ -21,6 +21,10 @@ import ButtonTooltip from './input/buttonTooltip'
 import DragUploadOverlay from './input/dragUploadOverlay'
 import InputBatchBars from './input/inputBatchBars'
 import InputParamsPanel from './input/inputParamsPanel'
+import PromptPreflightModal from './PromptPreflightModal'
+import { runPromptPreflight, type PromptPreflightResult } from '../lib/promptPreflight'
+import { savePromptVersion } from '../lib/promptVersionHistory'
+import { validateImageFile } from '../lib/imageUploadValidation'
 
 /** API 支持的最大参考图数量 */
 const API_MAX_IMAGES = 16
@@ -82,7 +86,12 @@ function AtImageOptionThumb({ option }: { option: AtImageOption }) {
   )
 }
 
-export default function InputBar() {
+interface InputBarProps {
+  onOpenPromptStudio?: () => void
+  promptStudioApplyToken?: number
+}
+
+export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 0 }: InputBarProps) {
   const prompt = useStore((s) => s.prompt)
   const appMode = useStore((s) => s.appMode)
   const setPrompt = useStore((s) => s.setPrompt)
@@ -353,8 +362,10 @@ export default function InputBar() {
   const [submitHover, setSubmitHover] = useState(false)
   const [attachHover, setAttachHover] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
-  const [mobileCollapsed, setMobileCollapsed] = useState(false)
+  const [mobileCollapsed, setMobileCollapsed] = useState(() => localStorage.getItem(`mobile-composer-collapsed-${appMode}`) !== 'false')
   const [showSizePicker, setShowSizePicker] = useState(false)
+  const [showPromptPreflight, setShowPromptPreflight] = useState(false)
+  const [promptPreflightResult, setPromptPreflightResult] = useState<PromptPreflightResult | null>(null)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
   const [imageDragIndex, setImageDragIndex] = useState<number | null>(null)
@@ -438,6 +449,22 @@ export default function InputBar() {
   const dragCounter = useRef(0)
   const isMobile = useIsMobile()
 
+  const lastPromptStudioApplyTokenRef = useRef(0)
+  useEffect(() => {
+    if (lastPromptStudioApplyTokenRef.current === promptStudioApplyToken) return
+    lastPromptStudioApplyTokenRef.current = promptStudioApplyToken
+    setPromptExpanded(true)
+    setMobileCollapsed(false)
+  }, [promptStudioApplyToken])
+
+  useEffect(() => {
+    if (isMobile) localStorage.setItem(`mobile-composer-collapsed-${appMode}`, String(mobileCollapsed))
+  }, [appMode, isMobile, mobileCollapsed])
+
+  useEffect(() => {
+    setMobileCollapsed(localStorage.getItem(`mobile-composer-collapsed-${appMode}`) !== 'false')
+  }, [appMode])
+
   const settingsActiveProfile = useMemo(() => getActiveApiProfile(settings), [settings])
   const currentActiveProfile = useMemo(() => (
     appMode === 'agent'
@@ -461,19 +488,37 @@ export default function InputBar() {
   const hasSubmitApiConfig = Boolean(activeProfile.apiKey)
   const canSubmit = Boolean(prompt.trim() && hasSubmitApiConfig && !activeAgentIsRunning)
   const submitButtonAriaLabel = activeAgentIsRunning
-    ? '停止生成'
+    ? '停止响应'
     : hasSubmitApiConfig
-    ? maskDraft ? '遮罩编辑' : '生成图像'
+    ? appMode === 'agent' ? '发送消息' : maskDraft ? '遮罩编辑' : '生成图像'
     : '请先配置 API'
-  const submitTooltipText = activeAgentIsRunning ? '停止生成' : '尚未完成 API 配置，请在右上角设置中进行'
-  const promptPlaceholder = '描述你想生成的图片，可输入 @ 来指定参考图...'
-  const submitCurrentMode = useCallback(() => {
+  const submitTooltipText = activeAgentIsRunning ? '停止响应' : '尚未完成 API 配置，请在右上角设置中进行'
+  const promptPlaceholder = appMode === 'agent'
+    ? '描述要完成的任务，可输入 @ 来引用图片...'
+    : '描述你想生成的图片，可输入 @ 来指定参考图...'
+  const executeSubmitCurrentMode = useCallback(() => {
+    savePromptVersion({ prompt, source: 'generated' })
     if (appMode === 'agent') {
       void submitAgentMessage()
     } else {
       void submitTask()
     }
-  }, [appMode])
+  }, [appMode, prompt])
+
+  const submitCurrentMode = useCallback(() => {
+    const result = runPromptPreflight({
+      prompt,
+      inputImageCount: inputImages.length,
+      params,
+      provider: activeProfile.provider,
+    })
+    if (result.issues.length > 0) {
+      setPromptPreflightResult(result)
+      setShowPromptPreflight(true)
+      return
+    }
+    executeSubmitCurrentMode()
+  }, [activeProfile.provider, executeSubmitCurrentMode, inputImages.length, params, prompt])
   const stopActiveAgentResponse = useCallback(() => {
     stopAgentResponse(activeAgentConversationId)
   }, [activeAgentConversationId])
@@ -840,7 +885,15 @@ export default function InputBar() {
       const discarded = accepted.length - toAdd.length
 
       for (const file of toAdd) {
-        await addImageFromFile(file)
+        try {
+          await validateImageFile(file)
+          await addImageFromFile(file)
+        } catch (error) {
+          useStore.getState().showToast(
+            `${file.name || '图片'}：${error instanceof Error ? error.message : String(error)}`,
+            'error',
+          )
+        }
       }
 
       if (discarded > 0) {
@@ -866,6 +919,12 @@ export default function InputBar() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // 兼容某些输入法：用 Enter 确认候选字时会额外派发 Enter keydown，
+    // 组字期间忽略该事件，避免重复插入或误触发提交/换行。
+    if (e.key === 'Enter' && (e.nativeEvent.isComposing || isComposingRef.current || e.nativeEvent.keyCode === 229)) {
+      return
+    }
+
     if (showAtImageMenu) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -1626,8 +1685,9 @@ export default function InputBar() {
 
       <div
         data-input-bar
-        className={`fixed bottom-[var(--bottom-safe-space)] left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-3 sm:px-4 transition-all duration-300${promptExpanded ? ' flex flex-col' : ''}`}
-        style={promptExpanded ? { top: `${promptExpandedTop}px`, transitionProperty: 'none' } : undefined}
+        data-scroll-boundary="composer"
+        className={`fixed bottom-[var(--bottom-safe-space)] left-1/2 z-30 min-w-0 w-full max-w-4xl max-h-[calc(100dvh-var(--safe-area-top))] -translate-x-1/2 touch-pan-y overscroll-contain overflow-y-auto px-3 transition-all duration-300 sm:px-4${promptExpanded ? ' flex flex-col' : ''}`}
+        style={promptExpanded ? { top: `max(${promptExpandedTop}px, var(--safe-area-top))`, transitionProperty: 'none' } : undefined}
       >
         <InputBatchBars
           showFavoriteCollectionBatchBar={showFavoriteCollectionBatchBar}
@@ -1646,7 +1706,7 @@ export default function InputBar() {
           onDownloadSelected={handleDownloadSelected}
           onDeleteSelected={handleDeleteSelected}
         />
-        <div ref={cardRef} className={`bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10${promptExpanded ? ' flex min-h-0 flex-1 flex-col' : ''}`}>
+        <div ref={cardRef} className={`min-w-0 overflow-hidden bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10${promptExpanded ? ' flex min-h-0 flex-1 flex-col' : ''}`}>
           {/* 移动端拖动条 */}
           <div
             ref={handleRef}
@@ -1823,6 +1883,17 @@ export default function InputBar() {
             )}
           </div>
 
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => onOpenPromptStudio?.()}
+              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-100 active:scale-[0.98] dark:border-blue-500/20 dark:bg-blue-500/[0.08] dark:text-blue-300"
+            >
+              <span aria-hidden="true">✦</span>
+              提示词工作室
+            </button>
+          </div>
+
           {/* 参数 + 按钮 */}
           <div className="mt-3">
             {/* 桌面端布局 */}
@@ -1867,6 +1938,7 @@ export default function InputBar() {
                         : 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed'
                     }`}
                     aria-label={submitButtonAriaLabel}
+                    data-haptic={activeAgentIsRunning ? 'warning' : 'medium'}
                   >
                     {activeAgentIsRunning ? (
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -1886,7 +1958,9 @@ export default function InputBar() {
             <div className="sm:hidden flex flex-col gap-2">
               <div className={`collapse-section${mobileCollapsed ? ' collapsed' : ''}`}>
                 <div className="collapse-inner">
-                  {renderParams('grid-cols-2')}
+                  <div data-mobile-param-scroll className="mobile-param-scroll">
+                    {renderParams('mobile-param-grid mobile-param-strip')}
+                  </div>
                   <div className="h-2" />
                 </div>
               </div>
@@ -1984,7 +2058,7 @@ export default function InputBar() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                       </svg>
                     )}
-                    {activeAgentIsRunning ? '停止生成' : maskDraft ? '遮罩编辑' : '生成图像'}
+                    {activeAgentIsRunning ? '停止响应' : appMode === 'agent' ? '发送消息' : maskDraft ? '遮罩编辑' : '生成图像'}
                   </button>
                 </div>
               </div>
@@ -2009,6 +2083,17 @@ export default function InputBar() {
           />
         </div>
       </div>
+
+      <PromptPreflightModal
+        open={showPromptPreflight}
+        result={promptPreflightResult}
+        onCancel={() => setShowPromptPreflight(false)}
+        onConfirm={() => {
+          setShowPromptPreflight(false)
+          executeSubmitCurrentMode()
+        }}
+      />
+
     </>
   )
 }

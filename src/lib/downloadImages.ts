@@ -4,6 +4,7 @@ import { getNumberedFileNameBase, sanitizeFileNamePart } from './exportFileName'
 import { ensureImageCached } from './imageCache'
 import { addExportHistory } from './exportHistory'
 import { isNativeApp } from './platform'
+import { shareNativeBlob } from './nativeExport'
 
 const NATIVE_EXPORT_BATCH_SIZE = 8
 
@@ -240,6 +241,15 @@ function triggerDownload(blob: Blob, fileName: string) {
 }
 
 async function shareDownload(blob: Blob, fileName: string): Promise<{ cancelled: boolean; method: DownloadMethod }> {
+  if (isNativeApp()) {
+    try {
+      const result = await shareNativeBlob(blob, fileName)
+      return { cancelled: result.cancelled, method: 'share' }
+    } catch (err) {
+      console.warn('Native file sharing failed, falling back to Web Share:', err)
+    }
+  }
+
   if (typeof navigator.share !== 'function') {
     triggerDownload(blob, fileName)
     return { cancelled: false, method: 'download' }

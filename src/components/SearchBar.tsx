@@ -130,8 +130,8 @@ export default function SearchBar() {
   }
 
   return (
-    <div ref={rootRef} data-no-drag-select className="mt-6 mb-4 flex gap-3">
-      <div className="flex gap-2 flex-shrink-0 z-20">
+    <div ref={rootRef} data-no-drag-select className="mt-3 mb-3 flex flex-col gap-2 sm:mt-6 sm:mb-4 sm:flex-row sm:gap-3">
+      <div className="order-2 flex w-full min-w-0 gap-2 overflow-x-auto hide-scrollbar pb-0.5 sm:order-none sm:w-auto sm:flex-shrink-0 sm:overflow-visible sm:pb-0 z-20">
         <SearchActionButton
           tooltip={favoriteTooltip}
           onClick={handleFavoriteClick}
@@ -154,7 +154,7 @@ export default function SearchBar() {
         )}
         {!inCollectionOverview && (
           <>
-            <div className="relative w-[88px]">
+            <div className="relative min-w-[104px] flex-1 sm:w-[88px] sm:min-w-0 sm:flex-none">
               <Select
                 value={filterStatus}
                 onChange={handleStatusChange}
@@ -182,7 +182,7 @@ export default function SearchBar() {
           </>
         )}
       </div>
-      <div className="relative z-10 flex-1">
+      <div className="order-1 relative z-10 flex-1 sm:order-none">
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
           fill="none"

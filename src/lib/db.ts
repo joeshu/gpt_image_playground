@@ -186,6 +186,10 @@ export function getAllImages(): Promise<StoredImage[]> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.getAll())
 }
 
+export function getAllImageThumbnails(): Promise<StoredImageThumbnail[]> {
+  return dbTransaction(STORE_THUMBNAILS, 'readonly', (s) => s.getAll())
+}
+
 export function getAllImageIds(): Promise<string[]> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.getAllKeys()).then((keys) =>
     keys.map(String),

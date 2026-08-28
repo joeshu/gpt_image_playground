@@ -172,6 +172,61 @@ export interface AgentInputDraft {
 
 export type TaskStatus = 'running' | 'done' | 'error'
 
+export interface VisualDifferenceRegion {
+  category: 'layout' | 'color' | 'element' | 'crop' | 'style'
+  severity: 'low' | 'medium' | 'high'
+  label: string
+  description: string
+  /** 结果图上的百分比坐标，范围 0-100 */
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface VisualDifferenceReport {
+  sourceImageId: string
+  resultImageId: string
+  checkedAt: number
+  fidelityScore: number
+  status: 'passed' | 'warning'
+  summary: string
+  changes: string[]
+  regions: VisualDifferenceRegion[]
+}
+
+export interface TextVerificationChange {
+  expected: string
+  actual: string
+}
+
+export interface TextVerificationRegion {
+  type: 'missing' | 'changed' | 'numeric'
+  label: string
+  expected: string
+  actual: string
+  /** 结果图上的百分比坐标，范围 0-100 */
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface TextVerificationReport {
+  sourceImageId: string
+  resultImageId: string
+  checkedAt: number
+  score: number
+  status: 'passed' | 'warning'
+  sourceTexts: string[]
+  resultTexts: string[]
+  missingTexts: string[]
+  changedTexts: TextVerificationChange[]
+  numericChanges: TextVerificationChange[]
+  regions?: TextVerificationRegion[]
+  summary: string
+}
+
 export interface TaskRecord {
   id: string
   prompt: string
@@ -202,6 +257,15 @@ export interface TaskRecord {
   actualParamsByImage?: Record<string, Partial<TaskParams>>
   /** 输出图片对应的 API 改写提示词，key 为 outputImages 中的图片 id */
   revisedPromptByImage?: Record<string, string>
+  /** 输出图片对应的视觉差异报告，key 为 outputImages 中的图片 id */
+  visualDifferenceByImage?: Record<string, VisualDifferenceReport>
+  /** 输出图片对应的文字核验报告，key 为 outputImages 中的图片 id */
+  textVerificationByImage?: Record<string, TextVerificationReport>
+  /** 输出图片对应的不可修改文字清单，key 为 outputImages 中的图片 id */
+  protectedTextsByImage?: Record<string, string[]>
+  /** 主动文字修复任务的自动复核状态 */
+  autoTextVerificationStatus?: 'pending' | 'running' | 'done' | 'error'
+  autoTextVerificationError?: string
   /** 是否启用透明背景后处理 */
   transparentOutput?: boolean
   /** 实际发送给 API 的透明背景辅助提示词 */
@@ -255,6 +319,95 @@ export interface FavoriteCollection {
   name: string
   createdAt: number
   updatedAt: number
+}
+
+// ===== 高级创作工作台 =====
+
+export type CreationWorkspaceModule = 'overview' | 'prompt' | 'brand' | 'style' | 'series'
+export type CreationAspectRatio = 'auto' | '1:1' | '16:9' | '9:16' | '4:3'
+
+export interface CreationBrandAssets {
+  name: string
+  slogan: string
+  primaryColor: string
+  secondaryColor: string
+  neutralColor: string
+  visualNotes: string
+  referenceImageIds: string[]
+}
+
+export interface CreationStyleLock {
+  enabled: boolean
+  visualDirection: string
+  keywords: string
+  avoid: string
+  layoutRules: string
+}
+
+export interface CreationVariable {
+  id: string
+  name: string
+  values: string[]
+}
+
+export interface CreationSeriesConfig {
+  name: string
+  subject: string
+  consistencyRules: string
+  aspectRatio: CreationAspectRatio
+  variables: CreationVariable[]
+}
+
+export interface CreationProject {
+  id: string
+  name: string
+  description: string
+  brand: CreationBrandAssets
+  style: CreationStyleLock
+  series: CreationSeriesConfig
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CreationWorkspaceState {
+  projects: CreationProject[]
+  activeProjectId: string | null
+}
+
+export type CreationBatchItemStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled'
+export type CreationBatchJobStatus = 'draft' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+
+export interface CreationBatchItem {
+  id: string
+  variableValues: Record<string, string>
+  taskId: string | null
+  status: CreationBatchItemStatus
+  attempts: number
+  error: string | null
+  createdAt: number
+  startedAt: number | null
+  finishedAt: number | null
+}
+
+export interface CreationBatchJob {
+  id: string
+  projectId: string
+  /** 提交时的项目快照，保证项目后续修改不影响当前批次。 */
+  projectSnapshot: CreationProject
+  basePrompt: string
+  inputImageIds: string[]
+  params: TaskParams
+  items: CreationBatchItem[]
+  status: CreationBatchJobStatus
+  /** 仅标记批次已归档，不删除任务、图片或检查报告。 */
+  archivedAt: number | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CreationBatchState {
+  jobs: CreationBatchJob[]
+  activeJobId: string | null
 }
 
 // ===== Agent 模式 =====

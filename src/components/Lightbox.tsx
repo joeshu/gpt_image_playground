@@ -6,8 +6,11 @@ import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import { suppressGlobalClicks } from '../lib/clickSuppression'
 import { ensureImageCached, getCachedImage } from '../lib/imageCache'
+import { downloadImageIds } from '../lib/downloadImages'
+import { clampImagePan, getImagePanBounds } from '../lib/imageViewerGeometry'
+import { getAdjacentImageIds } from '../lib/imageViewerPreload'
 import ButtonTooltip from './input/buttonTooltip'
-import { EditIcon, RefreshIcon } from './icons'
+import { CloseIcon, DownloadIcon, EditIcon, RefreshIcon } from './icons'
 
 const MIN_SCALE = 1
 const MAX_SCALE = 10
@@ -131,6 +134,13 @@ export default function Lightbox() {
   const total = lightboxImageList.length
   const showNav = total > 1
 
+  useEffect(() => {
+    if (!lightboxImageId) return
+    getAdjacentImageIds(lightboxImageList, lightboxImageId).forEach((id) => {
+      void ensureImageCached(id).catch(() => undefined)
+    })
+  }, [lightboxImageId, lightboxImageList])
+
   const goTo = useCallback((idx: number) => {
     if (lightboxImageList.length === 0) return
     const wrapped = ((idx % lightboxImageList.length) + lightboxImageList.length) % lightboxImageList.length
@@ -187,6 +197,23 @@ export default function Lightbox() {
     }
   }, [lightboxImageList, replaceInputImage, setLightboxImageId, showToast])
 
+  const exportImage = useCallback(async () => {
+    if (!lightboxImageId) return
+    try {
+      const result = await downloadImageIds([lightboxImageId], `image-${lightboxImageId.slice(0, 8)}`)
+      if (result.cancelled) {
+        showToast('已取消分享', 'info')
+      } else if (result.successCount > 0) {
+        showToast(result.locationHint ?? '图片已保存', 'success')
+      } else {
+        showToast('图片保存失败', 'error')
+      }
+    } catch (err) {
+      console.error(err)
+      showToast('图片保存失败', 'error')
+    }
+  }, [lightboxImageId, showToast])
+
   const editInputImage = useCallback(() => {
     if (!lightboxImageId || !isInputImage) return
     const imageId = lightboxImageId
@@ -223,6 +250,7 @@ export default function Lightbox() {
         editDisabled={Boolean(maskDraft && maskDraft.targetImageId !== lightboxImageId)}
         onReplace={openReplaceFilePicker}
         onEdit={editInputImage}
+        onExport={exportImage}
       />
       <input
         ref={replaceFileInputRef}
@@ -249,11 +277,13 @@ interface LightboxInnerProps {
   editDisabled: boolean
   onReplace: () => void
   onEdit: () => void
+  onExport: () => void
 }
 
 /** 内部组件：保证挂载时 DOM 已经存在，所有 ref / effect 都可靠 */
-function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext, showInputActions, editDisabled, onReplace, onEdit }: LightboxInnerProps) {
+function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext, showInputActions, editDisabled, onReplace, onEdit, onExport }: LightboxInnerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const imageRef = useRef<HTMLImageElement>(null)
   const openedAtRef = useRef(Date.now())
   const editHint = useHintTooltip({ enabled: () => editDisabled })
 
@@ -268,6 +298,17 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
 
   // 缩放倍率显示：2s 无操作后自动隐藏
   const [showZoomBadge, setShowZoomBadge] = useState(false)
+  const [showGestureHint, setShowGestureHint] = useState(() => localStorage.getItem('image-viewer-gesture-hint-seen') !== 'true')
+
+  useEffect(() => {
+    if (!showGestureHint) return
+    const timer = window.setTimeout(() => {
+      localStorage.setItem('image-viewer-gesture-hint-seen', 'true')
+      setShowGestureHint(false)
+    }, 4500)
+    return () => window.clearTimeout(timer)
+  }, [showGestureHint])
+
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 拖拽状态
   const dragRef = useRef({
@@ -356,9 +397,14 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
 
   const apply = useCallback((s: number, tx: number, ty: number) => {
     const ns = clamp(s, MIN_SCALE, MAX_SCALE)
+    const viewport = containerRef.current
+    const image = imageRef.current
+    const bounds = viewport && image
+      ? getImagePanBounds(image.offsetWidth, image.offsetHeight, viewport.clientWidth, viewport.clientHeight, ns)
+      : { maxX: Number.POSITIVE_INFINITY, maxY: Number.POSITIVE_INFINITY }
     scaleRef.current = ns
-    txRef.current = ns <= 1 ? 0 : tx
-    tyRef.current = ns <= 1 ? 0 : ty
+    txRef.current = ns <= 1 ? 0 : clampImagePan(tx, bounds.maxX)
+    tyRef.current = ns <= 1 ? 0 : clampImagePan(ty, bounds.maxY)
 
     // 显示缩放倍率并重置自动隐藏计时器
     if (ns > 1) {
@@ -696,6 +742,25 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
       onDoubleClick={onDoubleClick}
     >
       <div className="absolute inset-0 bg-black/35 dark:bg-black/70 backdrop-blur-md animate-fade-in" />
+
+      <div className="absolute right-[max(1rem,var(--safe-area-right))] top-[max(1rem,var(--safe-area-top))] z-20 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-md transition active:scale-95"
+          aria-label="分享或保存图片"
+          onClick={onExport}
+        >
+          <DownloadIcon className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-md transition active:scale-95"
+          aria-label="关闭图片查看器"
+          onClick={onClose}
+        >
+          <CloseIcon className="h-5 w-5" />
+        </button>
+      </div>
       <div className="relative animate-zoom-in">
         <div
           className="relative flex items-center justify-center"
@@ -706,6 +771,7 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
           }}
         >
           <img
+            ref={imageRef}
             src={src}
             data-image-id={imageId}
             decoding="async"
@@ -781,6 +847,20 @@ function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, current
             </button>
           </div>
         </div>
+      )}
+
+      {showGestureHint && (
+        <button
+          type="button"
+          className={`absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/15 bg-black/55 px-4 py-2 text-xs text-white/90 shadow-lg backdrop-blur-md ${showInputActions ? 'bottom-[calc(5.5rem+var(--safe-area-bottom))]' : 'bottom-[calc(1.25rem+var(--safe-area-bottom))]'}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            localStorage.setItem('image-viewer-gesture-hint-seen', 'true')
+            setShowGestureHint(false)
+          }}
+        >
+          双击放大 · 双指缩放 · 左右滑动
+        </button>
       )}
 
       {/* 指示器 */}
