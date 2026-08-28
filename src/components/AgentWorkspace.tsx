@@ -150,6 +150,9 @@ export default function AgentWorkspace() {
   const agentGeneratingTitleIds = useStore((s) => s.agentGeneratingTitleIds)
   const conversation = conversations.find((item) => item.id === activeConversationId) ?? null
   const [editingConversationTitle, setEditingConversationTitle] = useState('')
+  const renameCompositionRef = useRef(false)
+  const renameBlurTimerRef = useRef<number | null>(null)
+  const renameBlurPendingRef = useRef(false)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const bottomSentinelRef = useRef<HTMLDivElement>(null)
@@ -382,18 +385,45 @@ export default function AgentWorkspace() {
   }
 
   const confirmRenameConversation = () => {
+    if (renameCompositionRef.current) {
+      renameBlurPendingRef.current = true
+      return
+    }
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+    renameBlurTimerRef.current = null
+    renameBlurPendingRef.current = false
     if (agentEditingConversationId && editingConversationTitle.trim() && !agentGeneratingTitleIds[agentEditingConversationId]) {
       renameConversation(agentEditingConversationId, editingConversationTitle.trim())
     }
     setAgentEditingConversationId(null)
   }
 
+  const handleRenameCompositionStart = () => {
+    renameCompositionRef.current = true
+    renameBlurPendingRef.current = false
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+  }
+
+  const handleRenameCompositionEnd = () => {
+    renameCompositionRef.current = false
+    if (renameBlurPendingRef.current) renameBlurTimerRef.current = window.setTimeout(confirmRenameConversation, 0)
+  }
+
+  const handleRenameBlur = () => {
+    renameBlurPendingRef.current = true
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+    renameBlurTimerRef.current = window.setTimeout(confirmRenameConversation, 120)
+  }
+
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
+      if (e.nativeEvent.isComposing || renameCompositionRef.current) return
       confirmRenameConversation()
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+      renameBlurPendingRef.current = false
       setAgentEditingConversationId(null)
     }
   }
@@ -613,10 +643,12 @@ export default function AgentWorkspace() {
                       className="h-7 flex-1 bg-white dark:bg-black/20 border border-blue-400/50 dark:border-white/20 rounded px-1.5 py-0 text-sm leading-7 outline-none text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-white/40 shadow-sm min-w-0"
                       value={editingConversationTitle}
                       onChange={(e) => setEditingConversationTitle(e.target.value)}
+                      onCompositionStart={handleRenameCompositionStart}
+                      onCompositionEnd={handleRenameCompositionEnd}
                       onKeyDown={handleRenameKeyDown}
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      onBlur={confirmRenameConversation}
+                      onBlur={handleRenameBlur}
                     />
                   </div>
                 ) : (

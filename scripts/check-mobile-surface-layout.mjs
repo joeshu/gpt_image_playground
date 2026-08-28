@@ -12,6 +12,7 @@ const results = read('src/components/ResultsCenter.tsx')
 const app = read('src/App.tsx')
 const styles = read('src/index.css')
 const header = read('src/components/Header.tsx')
+const historyModal = read('src/components/HistoryModal.tsx')
 const inputBar = read('src/components/InputBar.tsx')
 const promptStudio = read('src/components/PromptStudioModal.tsx')
 const promptTemplate = read('src/components/PromptTemplateModal.tsx')
@@ -175,6 +176,12 @@ if (header.includes("'-translate-y-full sm:translate-y-0'") || header.includes('
 
 if (!agent.includes('data-agent-mobile-top-bar') || !styles.includes('top: var(--global-header-height')) {
   fail('Agent mobile header must stay below the fixed global header')
+}
+
+for (const [name, source] of [['Agent title editor', agent], ['History title editor', historyModal]]) {
+  if (!source.includes('onCompositionStart') || !source.includes('onCompositionEnd') || !source.includes('onBlur={handleRenameBlur}') || !source.includes('isComposing')) {
+    fail(`${name} must protect IME composition before committing on blur`)
+  }
 }
 
 if (!process.exitCode) console.log('Mobile surface layout contract passed')
