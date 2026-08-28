@@ -188,7 +188,8 @@ if (!imageUploadValidation.includes('MAX_UPLOAD_BYTES') || !imageUploadValidatio
   fail('image uploads must validate file size and decoded dimensions before reading data')
 }
 
-if (!agent.includes('scheduleAgentConversationPersistence') && !read('src/store.ts').includes('scheduleAgentConversationPersistence')) {
+const store = read('src/store.ts')
+if (!store.includes('scheduleAgentConversationPersistence') || !store.includes('visibilitychange') || !store.includes('pagehide')) {
   fail('Agent conversation persistence must be scheduled instead of writing every stream update')
 }
 

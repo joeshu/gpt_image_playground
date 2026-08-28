@@ -1056,6 +1056,23 @@ function scheduleAgentConversationPersistence() {
   }, 250)
 }
 
+function flushScheduledAgentConversationPersistence() {
+  if (agentConversationPersistTimer) {
+    clearTimeout(agentConversationPersistTimer)
+    agentConversationPersistTimer = null
+  }
+  if (agentConversationPersistenceReady && useStore.getState().agentConversations !== lastStoredAgentConversations) {
+    void flushAgentConversationsToIndexedDB()
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushScheduledAgentConversationPersistence()
+  })
+}
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flushScheduledAgentConversationPersistence)
+
 useStore.subscribe((state) => {
   if (state.agentConversations === lastStoredAgentConversations) return
   if (!agentConversationPersistenceReady) {
