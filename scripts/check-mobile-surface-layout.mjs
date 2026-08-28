@@ -61,6 +61,12 @@ if (!agent.includes('data-agent-sidebar') || !viewport.includes("active.closest(
   fail('fixed Agent drawer inputs must not scroll the document horizontally')
 }
 
+if (!viewport.includes("target.closest('[data-agent-sidebar]')") ||
+    !viewport.includes('window.setTimeout(resetHorizontalViewport, 420)') ||
+    !styles.includes('width: 100vw !important')) {
+  fail('drawer dismissal must restore the mobile visual viewport and composer width')
+}
+
 if (!workbench.includes("window.requestAnimationFrame") || !results.includes("window.requestAnimationFrame")) {
   fail('visible surfaces must reset iOS WebView scroll after they render')
 }
