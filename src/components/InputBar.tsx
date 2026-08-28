@@ -24,6 +24,7 @@ import InputParamsPanel from './input/inputParamsPanel'
 import PromptPreflightModal from './PromptPreflightModal'
 import { runPromptPreflight, type PromptPreflightResult } from '../lib/promptPreflight'
 import { savePromptVersion } from '../lib/promptVersionHistory'
+import { validateImageFile } from '../lib/imageUploadValidation'
 
 /** API 支持的最大参考图数量 */
 const API_MAX_IMAGES = 16
@@ -884,7 +885,15 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
       const discarded = accepted.length - toAdd.length
 
       for (const file of toAdd) {
-        await addImageFromFile(file)
+        try {
+          await validateImageFile(file)
+          await addImageFromFile(file)
+        } catch (error) {
+          useStore.getState().showToast(
+            `${file.name || '图片'}：${error instanceof Error ? error.message : String(error)}`,
+            'error',
+          )
+        }
       }
 
       if (discarded > 0) {

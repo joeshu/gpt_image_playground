@@ -30,6 +30,8 @@ export function FavoriteCollectionPickerModal() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const modalRef = useRef<HTMLDivElement>(null)
+  const renameCompositionRef = useRef(false)
+  const renameBlurTimerRef = useRef<number | null>(null)
   const open = Boolean(taskIds?.length)
 
   const [draggedId, setDraggedId] = useState<string | null>(null)
@@ -254,14 +256,26 @@ export function FavoriteCollectionPickerModal() {
   }
 
   const confirmRename = () => {
+    if (renameCompositionRef.current) return
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
     if (editingId && editingName.trim()) renameFavoriteCollection(editingId, editingName.trim())
     setEditingId(null)
     setEditingName('')
+  }
+  const handleRenameCompositionStart = () => { renameCompositionRef.current = true }
+  const handleRenameCompositionEnd = () => {
+    renameCompositionRef.current = false
+    if (renameBlurTimerRef.current != null) renameBlurTimerRef.current = window.setTimeout(confirmRename, 0)
+  }
+  const handleRenameBlur = () => {
+    if (renameBlurTimerRef.current != null) window.clearTimeout(renameBlurTimerRef.current)
+    renameBlurTimerRef.current = window.setTimeout(confirmRename, 120)
   }
 
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
+      if (e.nativeEvent.isComposing || renameCompositionRef.current) return
       confirmRename()
     } else if (e.key === 'Escape') {
       e.preventDefault()
@@ -389,10 +403,12 @@ export function FavoriteCollectionPickerModal() {
                       className="h-6 min-w-0 flex-1 rounded border border-blue-400/50 bg-white px-1.5 py-0 text-[15px] leading-6 text-gray-900 shadow-sm outline-none focus:border-blue-500 dark:border-white/20 dark:bg-black/20 dark:text-white dark:focus:border-white/40"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
+                      onCompositionStart={handleRenameCompositionStart}
+                      onCompositionEnd={handleRenameCompositionEnd}
                       onKeyDown={handleRenameKeyDown}
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      onBlur={confirmRename}
+                      onBlur={handleRenameBlur}
                     />
                   ) : (
                     <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-gray-700 dark:text-gray-200" title={collection.name}>{collection.name}</span>

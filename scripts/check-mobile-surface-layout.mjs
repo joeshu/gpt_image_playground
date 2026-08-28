@@ -14,11 +14,13 @@ const styles = read('src/index.css')
 const header = read('src/components/Header.tsx')
 const historyModal = read('src/components/HistoryModal.tsx')
 const inputBar = read('src/components/InputBar.tsx')
+const imageUploadValidation = read('src/lib/imageUploadValidation.ts')
 const promptStudio = read('src/components/PromptStudioModal.tsx')
 const promptTemplate = read('src/components/PromptTemplateModal.tsx')
 const select = read('src/components/Select.tsx')
 const inputParamsPanel = read('src/components/input/inputParamsPanel.tsx')
 const creationBatch = read('src/components/CreationBatchPanel.tsx')
+const adhocWorkflow = read('.github/workflows/ios-adhoc.yml')
 const promptEnhancer = read('src/components/PromptEnhancerModal.tsx')
 const promptPreflight = read('src/components/PromptPreflightModal.tsx')
 const promptVersions = read('src/components/PromptVersionHistoryModal.tsx')
@@ -176,6 +178,22 @@ if (header.includes("'-translate-y-full sm:translate-y-0'") || header.includes('
 
 if (!agent.includes('data-agent-mobile-top-bar') || !styles.includes('top: var(--global-header-height')) {
   fail('Agent mobile header must stay below the fixed global header')
+}
+
+if (agent.includes('agentMobileHeaderVisible') || agent.includes('setAgentMobileHeaderVisible')) {
+  fail('Agent mobile header visibility must not be controlled by stale global state')
+}
+
+if (!imageUploadValidation.includes('MAX_UPLOAD_BYTES') || !imageUploadValidation.includes('MAX_UPLOAD_DIMENSION') || !imageUploadValidation.includes('URL.createObjectURL') || !inputBar.includes('validateImageFile')) {
+  fail('image uploads must validate file size and decoded dimensions before reading data')
+}
+
+if (!agent.includes('scheduleAgentConversationPersistence') && !read('src/store.ts').includes('scheduleAgentConversationPersistence')) {
+  fail('Agent conversation persistence must be scheduled instead of writing every stream update')
+}
+
+if (!adhocWorkflow.includes('node scripts/check-mobile-surface-layout.mjs')) {
+  fail('Unsigned and Ad-hoc iOS builds must share the mobile layout contract')
 }
 
 for (const [name, source] of [['Agent title editor', agent], ['History title editor', historyModal]]) {

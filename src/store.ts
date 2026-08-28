@@ -329,7 +329,6 @@ interface AppState {
   agentSidebarCollapsed: boolean
   agentAssetTab: 'references' | 'outputs'
   agentAssetPanelCollapsed: boolean
-  agentMobileHeaderVisible: boolean
   agentEditingRoundId: string | null
   agentEditingConversationId: string | null
   agentGeneratingTitleIds: Record<string, true>
@@ -343,7 +342,6 @@ interface AppState {
   setAgentSidebarCollapsed: (collapsed: boolean) => void
   setAgentAssetTab: (tab: 'references' | 'outputs') => void
   setAgentAssetPanelCollapsed: (collapsed: boolean) => void
-  setAgentMobileHeaderVisible: (visible: boolean) => void
   setAgentEditingRoundId: (id: string | null) => void
   setAgentEditingConversationId: (id: string | null) => void
 
@@ -507,7 +505,6 @@ export const useStore = create<AppState>()(
             appMode,
             agentInputDrafts,
             galleryInputDraft,
-            agentMobileHeaderVisible: true,
             selectedTaskIds: [],
             selectedFavoriteCollectionIds: [],
             agentEditingRoundId: null,
@@ -526,7 +523,6 @@ export const useStore = create<AppState>()(
           set((state) => ({
             appMode: 'agent',
             galleryInputDraft,
-            agentMobileHeaderVisible: false,
             agentSidebarCollapsed: true,
             agentAssetPanelCollapsed: true,
             selectedTaskIds: [],
@@ -784,7 +780,6 @@ export const useStore = create<AppState>()(
       agentSidebarCollapsed: true,
       agentAssetTab: 'outputs',
       agentAssetPanelCollapsed: false,
-      agentMobileHeaderVisible: false,
       agentEditingRoundId: null,
       agentEditingConversationId: null,
       agentGeneratingTitleIds: {},
@@ -868,7 +863,6 @@ export const useStore = create<AppState>()(
       setAgentSidebarCollapsed: (agentSidebarCollapsed) => set({ agentSidebarCollapsed }),
       setAgentAssetTab: (agentAssetTab) => set({ agentAssetTab }),
       setAgentAssetPanelCollapsed: (agentAssetPanelCollapsed) => set({ agentAssetPanelCollapsed }),
-      setAgentMobileHeaderVisible: (agentMobileHeaderVisible) => set({ agentMobileHeaderVisible }),
       setAgentEditingRoundId: (agentEditingRoundId) => set({ agentEditingRoundId }),
       setAgentEditingConversationId: (agentEditingConversationId) => set({ agentEditingConversationId }),
 
@@ -1030,6 +1024,7 @@ export const useStore = create<AppState>()(
 let lastStoredAgentConversations = useStore.getState().agentConversations
 let agentConversationPersistRunning = false
 let agentConversationPersistQueued = false
+let agentConversationPersistTimer: ReturnType<typeof setTimeout> | null = null
 
 async function flushAgentConversationsToIndexedDB() {
   if (agentConversationPersistRunning) {
@@ -1050,13 +1045,24 @@ async function flushAgentConversationsToIndexedDB() {
   }
 }
 
+function scheduleAgentConversationPersistence() {
+  if (agentConversationPersistTimer) return
+  // Streaming Agent responses can update the conversation many times per
+  // second. Persist the latest snapshot in a short quiet window instead of
+  // rewriting the entire conversation store for every token.
+  agentConversationPersistTimer = setTimeout(() => {
+    agentConversationPersistTimer = null
+    void flushAgentConversationsToIndexedDB()
+  }, 250)
+}
+
 useStore.subscribe((state) => {
   if (state.agentConversations === lastStoredAgentConversations) return
   if (!agentConversationPersistenceReady) {
     agentConversationPersistQueued = true
     return
   }
-  void flushAgentConversationsToIndexedDB()
+  scheduleAgentConversationPersistence()
 })
 
 let lastNativeApiKeySignature = JSON.stringify(getApiKeySignature(useStore.getState().settings))

@@ -45,6 +45,7 @@ jobs:
           npm ci
           npm test
           npm run build
+          node scripts/check-mobile-surface-layout.mjs
 
       - name: Generate and sync Capacitor iOS project
         run: |
