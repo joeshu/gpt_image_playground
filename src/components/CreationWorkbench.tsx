@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getImage } from '../lib/db'
+import { getImage, storeImage } from '../lib/db'
 import {
   CREATION_ASPECT_RATIOS,
   MAX_CREATION_PROJECTS,
@@ -17,9 +17,20 @@ import {
   saveCreationWorkspace,
 } from '../lib/creationWorkspace'
 import { savePromptVersion } from '../lib/promptVersionHistory'
+import {
+  MAX_CREATION_REPLAY_SNAPSHOTS,
+  createCreationReplaySnapshot,
+  exportCreationReplaySnapshot,
+  getCreationReplayMissingImageIds,
+  loadCreationReplayState,
+  normalizeCreationReplayState,
+  parseCreationReplaySnapshot,
+  removeCreationReplaySnapshot,
+  saveCreationReplayState,
+} from '../lib/creationReplay'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useStore } from '../store'
-import type { CreationProject, CreationWorkspaceModule, CreationVariable } from '../types'
+import type { CreationProject, CreationReplaySnapshot, CreationWorkspaceModule, CreationVariable, InputImage } from '../types'
 import CreationBatchPanel from './CreationBatchPanel'
 import { PlusIcon } from './icons'
 
@@ -36,6 +47,15 @@ const smallFieldClass = 'min-h-11 w-full rounded-xl border border-gray-200 bg-wh
 
 function getModule(value: CreationWorkspaceModule) {
   return MODULES.find((item) => item.value === value) ?? MODULES[0]
+}
+
+function formatReplayTime(timestamp: number) {
+  return new Date(timestamp).toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function updateProjectInState(
@@ -110,9 +130,13 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
   const setPrompt = useStore((state) => state.setPrompt)
   const setConfirmDialog = useStore((state) => state.setConfirmDialog)
   const [workspace, setWorkspace] = useState(() => loadCreationWorkspace())
+  const [replayState, setReplayState] = useState(() => loadCreationReplayState())
   const [activeModule, setActiveModule] = useState<CreationWorkspaceModule>('overview')
   const [batchBusy, setBatchBusy] = useState(false)
+  const [replayBusy, setReplayBusy] = useState(false)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const replayImportInputRef = useRef<HTMLInputElement>(null)
+  const replayStateRef = useRef(replayState)
   const activeProject = useMemo(() => getActiveCreationProject(workspace), [workspace])
   const activeModuleInfo = getModule(activeModule)
 
@@ -139,6 +163,11 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
   useEffect(() => {
     saveCreationWorkspace(workspace)
   }, [workspace])
+
+  useEffect(() => {
+    replayStateRef.current = replayState
+    saveCreationReplayState(replayState)
+  }, [replayState])
 
   if (!activeProject) return null
 
@@ -307,6 +336,185 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
     showToast('已将创作规则应用到当前提示词', 'success')
   }
 
+  const handleSaveReplaySnapshot = async () => {
+    if (replayBusy) return
+    setReplayBusy(true)
+    try {
+      const state = useStore.getState()
+      const storedInputImages = await Promise.all(state.inputImages.map(async (image) => ({
+        sourceId: image.id,
+        storedId: image.dataUrl ? await storeImage(image.dataUrl, 'upload') : image.id,
+      })))
+      const imageIdMap = new Map(storedInputImages.map((image) => [image.sourceId, image.storedId]))
+      const inputImageIds = storedInputImages.map((image) => image.storedId)
+      const maskImageId = state.maskDraft?.maskDataUrl
+        ? await storeImage(state.maskDraft.maskDataUrl, 'mask')
+        : null
+      const activeProfile = state.settings.profiles.find((profile) => profile.id === state.settings.activeProfileId)
+        ?? state.settings.profiles[0]
+        ?? null
+      const snapshotProject = {
+        ...activeProject,
+        brand: {
+          ...activeProject.brand,
+          referenceImageIds: activeProject.brand.referenceImageIds.map((imageId) => imageIdMap.get(imageId) ?? imageId),
+        },
+      }
+      const snapshot = createCreationReplaySnapshot({
+        label: activeProject.name,
+        project: snapshotProject,
+        prompt: state.prompt,
+        inputImageIds,
+        maskTargetImageId: state.maskDraft?.targetImageId ? imageIdMap.get(state.maskDraft.targetImageId) ?? state.maskDraft.targetImageId : null,
+        maskImageId,
+        params: state.params,
+        sourceMode: state.appMode,
+        apiProfileId: activeProfile?.id ?? null,
+        apiProfileName: activeProfile?.name ?? null,
+        apiProvider: activeProfile?.provider ?? null,
+        apiMode: activeProfile?.apiMode ?? null,
+        apiModel: activeProfile?.model ?? null,
+      })
+      const nextState = normalizeCreationReplayState({
+        snapshots: [snapshot, ...replayStateRef.current.snapshots],
+        activeSnapshotId: snapshot.id,
+      })
+      replayStateRef.current = nextState
+      setReplayState(nextState)
+      showToast('已保存当前创作复现快照', 'success')
+    } catch (error) {
+      console.warn('Failed to save creation replay snapshot:', error)
+      showToast(error instanceof Error ? error.message : '复现快照保存失败', 'error')
+    } finally {
+      setReplayBusy(false)
+    }
+  }
+
+  const handleRestoreReplaySnapshot = async (snapshot: CreationReplaySnapshot) => {
+    if (replayBusy || batchBusy) {
+      showToast(batchBusy ? '批量生成进行中，请先暂停或等待当前任务完成' : '正在处理复现快照，请稍候', 'info')
+      return
+    }
+    setReplayBusy(true)
+    try {
+      const state = useStore.getState()
+      const restoredImages: InputImage[] = []
+      const availableImageIds = new Set<string>()
+      for (const imageId of snapshot.inputImageIds) {
+        const current = state.inputImages.find((image) => image.id === imageId)
+        if (current?.dataUrl) {
+          restoredImages.push(current)
+          availableImageIds.add(imageId)
+          continue
+        }
+        const stored = await getImage(imageId)
+        if (!stored?.dataUrl) continue
+        restoredImages.push({ id: stored.id, dataUrl: stored.dataUrl })
+        availableImageIds.add(stored.id)
+      }
+
+      const maskImage = snapshot.maskImageId ? await getImage(snapshot.maskImageId) : undefined
+      if (maskImage?.dataUrl) availableImageIds.add(snapshot.maskImageId!)
+      const missingImageIds = getCreationReplayMissingImageIds(snapshot, availableImageIds)
+      const targetImageAvailable = Boolean(snapshot.maskTargetImageId && restoredImages.some((image) => image.id === snapshot.maskTargetImageId))
+
+      state.setPrompt(snapshot.prompt)
+      state.setParams(snapshot.params)
+      state.clearMaskDraft()
+      state.setInputImages(restoredImages)
+      if (maskImage?.dataUrl && targetImageAvailable && snapshot.maskTargetImageId) {
+        state.setMaskDraft({
+          targetImageId: snapshot.maskTargetImageId,
+          maskDataUrl: maskImage.dataUrl,
+          updatedAt: Date.now(),
+        })
+      }
+      state.setAppMode(snapshot.sourceMode)
+
+      const profileAvailable = Boolean(snapshot.apiProfileId && state.settings.profiles.some((profile) => profile.id === snapshot.apiProfileId))
+      if (profileAvailable && snapshot.apiProfileId) state.setSettings({ activeProfileId: snapshot.apiProfileId })
+
+      setWorkspace((current) => {
+        const project = snapshot.projectSnapshot
+        const existingIndex = current.projects.findIndex((item) => item.id === project.id || item.id === snapshot.projectId)
+        if (existingIndex >= 0) {
+          const projects = [...current.projects]
+          projects[existingIndex] = project
+          return { projects, activeProjectId: project.id }
+        }
+        if (current.projects.length >= MAX_CREATION_PROJECTS) return current
+        return {
+          projects: [project, ...current.projects],
+          activeProjectId: project.id,
+        }
+      })
+      setReplayState((current) => ({ ...current, activeSnapshotId: snapshot.id }))
+      requestClose()
+      const notices = [
+        missingImageIds.length > 0 ? `缺少 ${missingImageIds.length} 张本机参考图` : '',
+        !profileAvailable && snapshot.apiProfileName ? `API 配置「${snapshot.apiProfileName}」不存在` : '',
+      ].filter(Boolean)
+      showToast(notices.length > 0 ? `已恢复快照；${notices.join('，')}，提交前请检查` : '已恢复快照，可直接复现当前创作', notices.length > 0 ? 'info' : 'success')
+    } catch (error) {
+      console.warn('Failed to restore creation replay snapshot:', error)
+      showToast(error instanceof Error ? error.message : '复现快照恢复失败', 'error')
+    } finally {
+      setReplayBusy(false)
+    }
+  }
+
+  const handleExportReplaySnapshot = (snapshot: CreationReplaySnapshot) => {
+    const blob = new Blob([exportCreationReplaySnapshot(snapshot)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${snapshot.label || '创作快照'}-复现快照.json`
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    showToast('复现快照已导出（不含 API Key 和图片原始数据）', 'success')
+  }
+
+  const handleImportReplaySnapshot = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (replayStateRef.current.snapshots.length >= MAX_CREATION_REPLAY_SNAPSHOTS) {
+      showToast(`最多保存 ${MAX_CREATION_REPLAY_SNAPSHOTS} 个复现快照，请先删除一个`, 'info')
+      return
+    }
+    try {
+      const imported = parseCreationReplaySnapshot(await file.text())
+      if (!imported) {
+        showToast('复现快照文件无效或已损坏', 'error')
+        return
+      }
+      const nextState = normalizeCreationReplayState({
+        snapshots: [imported, ...replayStateRef.current.snapshots],
+        activeSnapshotId: imported.id,
+      })
+      replayStateRef.current = nextState
+      setReplayState(nextState)
+      showToast('已导入复现快照；本机不存在的参考图将在恢复时提示', 'success')
+    } catch (error) {
+      console.warn('Failed to import creation replay snapshot:', error)
+      showToast('复现快照文件读取失败', 'error')
+    }
+  }
+
+  const handleDeleteReplaySnapshot = (snapshot: CreationReplaySnapshot) => {
+    setConfirmDialog({
+      title: '删除复现快照',
+      message: `确定删除「${snapshot.label}」吗？只会删除快照记录，不会删除任务或图片。`,
+      confirmText: '删除快照',
+      cancelText: '取消',
+      tone: 'danger',
+      action: () => {
+        setReplayState((current) => removeCreationReplaySnapshot(current, snapshot.id))
+        showToast('复现快照已删除', 'success')
+      },
+    })
+  }
+
   const updateVariable = (id: string, patch: Partial<CreationVariable>) => {
     updateSeries({ variables: activeProject.series.variables.map((variable) => variable.id === id ? { ...variable, ...patch } : variable) })
   }
@@ -360,7 +568,10 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
             </button>
             <button type="button" onClick={handleExportProject} className="min-h-11 rounded-xl border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.06]">导出配置</button>
             <button type="button" onClick={() => importInputRef.current?.click()} className="min-h-11 rounded-xl border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.06]">导入配置</button>
+            <button type="button" onClick={() => void handleSaveReplaySnapshot()} disabled={replayBusy} className="min-h-11 rounded-xl border border-violet-200 bg-violet-50 px-3 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/15">{replayBusy ? '处理中…' : '保存复现快照'}</button>
+            <button type="button" onClick={() => replayImportInputRef.current?.click()} disabled={replayBusy} className="min-h-11 rounded-xl border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.06]">导入快照</button>
             <input ref={importInputRef} type="file" accept="application/json,.json" onChange={(event) => void handleImportProject(event)} className="hidden" aria-label="导入创作项目配置" />
+            <input ref={replayImportInputRef} type="file" accept="application/json,.json" onChange={(event) => void handleImportReplaySnapshot(event)} className="hidden" aria-label="导入创作复现快照" />
           </div>
         </div>
 
@@ -435,6 +646,44 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
                     </div>
                     <button type="button" onClick={() => void handleApplyToPrompt()} className="min-h-11 w-full shrink-0 rounded-xl bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 sm:w-auto">应用规则</button>
                   </div>
+                </div>
+                <div data-creation-replay-panel className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 shadow-sm dark:border-violet-500/15 dark:bg-violet-500/[0.06]">
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-violet-900 dark:text-violet-100">复现快照</div>
+                        <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-white/[0.08] dark:text-violet-200">本机 {replayState.snapshots.length}/{MAX_CREATION_REPLAY_SNAPSHOTS}</span>
+                      </div>
+                      <p className="mt-1 max-w-2xl text-xs leading-relaxed text-gray-600 dark:text-gray-300">保存当前提示词、项目规则、参数、参考图、遮罩和 API 配置标识。以后可一键恢复到输入栏；快照不包含 API Key 或图片原始数据。</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button type="button" onClick={() => void handleSaveReplaySnapshot()} disabled={replayBusy} className="min-h-10 rounded-xl bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">{replayBusy ? '处理中…' : '保存当前快照'}</button>
+                      <button type="button" onClick={() => replayImportInputRef.current?.click()} disabled={replayBusy} className="min-h-10 rounded-xl bg-white px-3 text-xs font-medium text-violet-700 shadow-sm hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/[0.08] dark:text-violet-200 dark:hover:bg-violet-500/15">导入快照</button>
+                    </div>
+                  </div>
+                  {replayState.snapshots.length === 0 ? (
+                    <div className="mt-3 rounded-xl border border-dashed border-violet-200 bg-white/50 px-3 py-4 text-center text-xs text-violet-700/80 dark:border-violet-500/25 dark:bg-white/[0.03] dark:text-violet-200/80">还没有快照。完成一次可用的提示词、参考图和参数组合后，保存它作为可复现基线。</div>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {replayState.snapshots.map((snapshot) => (
+                        <div key={snapshot.id} data-creation-replay-item className="flex min-w-0 flex-col gap-3 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/15 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <div className="truncate text-xs font-semibold text-gray-800 dark:text-gray-100">{snapshot.label}</div>
+                              {snapshot.id === replayState.activeSnapshotId && <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">最近使用</span>}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-gray-500 dark:text-gray-400"><span>{formatReplayTime(snapshot.createdAt)}</span><span>{snapshot.inputImageIds.length} 张参考图</span><span>{snapshot.params.size}</span><span>{snapshot.apiModel || '未记录模型'}</span></div>
+                            <div className="mt-1 truncate text-[10px] text-gray-400 dark:text-gray-500">{snapshot.prompt.replace(/\s+/g, ' ').trim() || '未填写提示词'}</div>
+                          </div>
+                          <div className="flex shrink-0 flex-wrap gap-1">
+                            <button type="button" onClick={() => void handleRestoreReplaySnapshot(snapshot)} disabled={replayBusy || batchBusy} className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-[10px] font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">复现</button>
+                            <button type="button" onClick={() => handleExportReplaySnapshot(snapshot)} disabled={replayBusy} className="rounded-lg px-2.5 py-1.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-violet-200 dark:hover:bg-violet-500/15">导出</button>
+                            <button type="button" onClick={() => handleDeleteReplaySnapshot(snapshot)} disabled={replayBusy} className="rounded-lg px-2.5 py-1.5 text-[10px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-500/10">删除</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

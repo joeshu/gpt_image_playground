@@ -374,6 +374,32 @@ export interface CreationWorkspaceState {
   activeProjectId: string | null
 }
 
+/** 单次创作的可复现快照，不保存 API 密钥和图片原始数据。 */
+export interface CreationReplaySnapshot {
+  id: string
+  label: string
+  projectId: string
+  /** 保存快照时的项目规则，避免项目后续编辑改变复现结果。 */
+  projectSnapshot: CreationProject
+  prompt: string
+  inputImageIds: string[]
+  maskTargetImageId: string | null
+  maskImageId: string | null
+  params: TaskParams
+  sourceMode: AppMode
+  apiProfileId: string | null
+  apiProfileName: string | null
+  apiProvider: ApiProvider | null
+  apiMode: ApiMode | null
+  apiModel: string | null
+  createdAt: number
+}
+
+export interface CreationReplayState {
+  snapshots: CreationReplaySnapshot[]
+  activeSnapshotId: string | null
+}
+
 export type CreationBatchItemStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled'
 export type CreationBatchJobStatus = 'draft' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
 
