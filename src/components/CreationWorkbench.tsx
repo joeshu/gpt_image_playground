@@ -9,9 +9,9 @@ import {
   exportCreationProject,
   getActiveCreationProject,
   getCreationBatchCombinationCount,
+  getCreationLockSummary,
   getCreationProjectCompletion,
   loadCreationWorkspace,
-  normalizeCreationBrandColor,
   parseCreationProjectExport,
   removeCreationProject,
   saveCreationWorkspace,
@@ -31,6 +31,7 @@ import {
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useStore } from '../store'
 import type { CreationProject, CreationReplaySnapshot, CreationWorkspaceModule, CreationVariable, InputImage } from '../types'
+import CreationBrandLockPanel from './CreationBrandLockPanel'
 import CreationBatchPanel from './CreationBatchPanel'
 import { PlusIcon } from './icons'
 
@@ -138,6 +139,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
   const replayImportInputRef = useRef<HTMLInputElement>(null)
   const replayStateRef = useRef(replayState)
   const activeProject = useMemo(() => getActiveCreationProject(workspace), [workspace])
+  const lockSummary = useMemo(() => activeProject ? getCreationLockSummary(activeProject) : null, [activeProject])
   const activeModuleInfo = getModule(activeModule)
 
   const requestClose = () => {
@@ -619,7 +621,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
                   <ModuleCard title="品牌资产中心" description="先定义品牌事实和色彩，再在每次创作中复用。" onClick={() => setActiveModule('brand')}>
                     <div className="flex items-center gap-2">
                       {[activeProject.brand.primaryColor, activeProject.brand.secondaryColor, activeProject.brand.neutralColor].map((color) => <span key={color} className="h-7 w-7 rounded-full border border-white shadow-sm dark:border-gray-800" style={{ backgroundColor: color }} />)}
-                      <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">{activeProject.brand.referenceImageIds.length} 张参考图</span>
+                      <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">{activeProject.brand.referenceImageIds.length} 张参考图 · {lockSummary?.readyCount ?? 0}/{lockSummary?.lockedCount ?? 0} 层已填写</span>
                     </div>
                   </ModuleCard>
                   <ModuleCard title="提示词工作室" description="将增强、模板、版本和国企汇报结构卡集中到一个创作入口。" onClick={() => setActiveModule('prompt')}>
@@ -628,7 +630,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
                   <ModuleCard title="风格锁定" description="把视觉方向、版式和禁用项固定为项目级规则。" onClick={() => setActiveModule('style')}>
                     <div className="flex items-center gap-2 text-xs">
                       <span className={`rounded-full px-2 py-1 ${activeProject.style.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-white/[0.06]'}`}>{activeProject.style.enabled ? '已启用' : '未启用'}</span>
-                      <span className="truncate text-gray-500 dark:text-gray-400">{activeProject.style.visualDirection || '尚未填写视觉方向'}</span>
+                      <span className="truncate text-gray-500 dark:text-gray-400">{activeProject.style.visualDirection || `${lockSummary?.lockedCount ?? 0}/${lockSummary?.total ?? 0} 层已锁定`}</span>
                     </div>
                   </ModuleCard>
                   <ModuleCard title="系列一致性" description="锁定主体、比例和跨图规则，减少系列素材漂移。" onClick={() => setActiveModule('series')}>
@@ -702,42 +704,16 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
               </div>
             )}
 
-            {activeModule === 'brand' && (
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">品牌名称</span><input value={activeProject.brand.name} onChange={(event) => updateBrand({ name: event.target.value })} placeholder="例如：中国联通" className={smallFieldClass + ' mt-1'} /></label>
-                  <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">品牌口号 / 语气</span><input value={activeProject.brand.slogan} onChange={(event) => updateBrand({ slogan: event.target.value })} placeholder="例如：连接美好，共创未来" className={smallFieldClass + ' mt-1'} /></label>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[['primaryColor', '品牌主色'], ['secondaryColor', '辅助色'], ['neutralColor', '中性色']].map(([key, label]) => {
-                    const color = activeProject.brand[key as keyof typeof activeProject.brand] as string
-                    return <label key={key} className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">{label}</span><div className="mt-1 flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 dark:border-white/[0.1] dark:bg-white/[0.04]"><input type="color" value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#000000'} onChange={(event) => updateBrand({ [key]: event.target.value.toLowerCase() })} className="h-8 w-9 cursor-pointer rounded-lg border-0 bg-transparent p-0" aria-label={label} /><input value={color} onChange={(event) => updateBrand({ [key]: event.target.value })} onBlur={() => updateBrand({ [key]: normalizeCreationBrandColor(color, '#000000') })} inputMode="text" maxLength={7} spellCheck={false} className="min-w-0 flex-1 border-0 bg-transparent px-1 text-sm uppercase text-gray-700 outline-none focus:ring-0 dark:text-gray-200" /></div></label>
-                  })}
-                </div>
-                <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">视觉资产说明</span><textarea value={activeProject.brand.visualNotes} onChange={(event) => updateBrand({ visualNotes: event.target.value })} rows={5} placeholder="记录 Logo 使用方式、品牌图形、字体气质、图片中的固定元素等。只填写已经确认的品牌事实。" className={fieldClass} /></label>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-500/15 dark:bg-blue-500/[0.06]">
-                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0"><div className="text-sm font-semibold text-blue-800 dark:text-blue-200">品牌参考图</div><p className="mt-1 break-words text-xs leading-relaxed text-gray-600 dark:text-gray-300">绑定当前输入栏的图片。应用规则时会尝试从本机图片库恢复它们，不会上传或调用 AI。</p></div>
-                    <button type="button" onClick={handleBindCurrentImages} className="min-h-10 shrink-0 rounded-xl bg-white px-3 text-xs font-medium text-blue-700 shadow-sm hover:bg-blue-50 dark:bg-white/[0.08] dark:text-blue-200">绑定当前参考图</button>
-                  </div>
-                  <div className="mt-3 text-xs text-blue-700 dark:text-blue-300">已绑定 {activeProject.brand.referenceImageIds.length} 张</div>
-                </div>
-              </div>
-            )}
-
-            {activeModule === 'style' && (
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
-                  <input type="checkbox" checked={activeProject.style.enabled} onChange={(event) => updateStyle({ enabled: event.target.checked })} className="mt-0.5 h-4 w-4 accent-blue-600" id="creation-style-enabled" />
-                  <label htmlFor="creation-style-enabled" className="cursor-pointer"><div className="text-sm font-semibold text-gray-900 dark:text-white">启用风格锁定</div><p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">启用后，应用到提示词的规则会要求后续图片保持风格方向和版式约束。</p></label>
-                </div>
-                <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">视觉方向</span><textarea value={activeProject.style.visualDirection} onChange={(event) => updateStyle({ visualDirection: event.target.value })} rows={4} placeholder="例如：正式、克制、现代政企商务风；大面积留白，信息层级清晰" className={fieldClass} /></label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">必须保持的关键词</span><textarea value={activeProject.style.keywords} onChange={(event) => updateStyle({ keywords: event.target.value })} rows={5} placeholder="用逗号或换行填写：稳重、清晰、统一、留白…" className={fieldClass} /></label>
-                  <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">避免出现</span><textarea value={activeProject.style.avoid} onChange={(event) => updateStyle({ avoid: event.target.value })} rows={5} placeholder="例如：过度炫技、廉价渐变、无关装饰、拥挤排版…" className={fieldClass} /></label>
-                </div>
-                <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">版式规则</span><textarea value={activeProject.style.layoutRules} onChange={(event) => updateStyle({ layoutRules: event.target.value })} rows={5} placeholder="例如：标题优先，结论突出；数据与备注分层；四周保留安全区…" className={fieldClass} /></label>
-              </div>
+            {(activeModule === 'brand' || activeModule === 'style') && (
+              <CreationBrandLockPanel
+                project={activeProject}
+                activeModule={activeModule}
+                onBrandChange={updateBrand}
+                onStyleChange={updateStyle}
+                onBindCurrentImages={handleBindCurrentImages}
+                fieldClass={fieldClass}
+                smallFieldClass={smallFieldClass}
+              />
             )}
 
             {activeModule === 'series' && (

@@ -325,6 +325,7 @@ export interface FavoriteCollection {
 
 export type CreationWorkspaceModule = 'overview' | 'prompt' | 'brand' | 'style' | 'series'
 export type CreationAspectRatio = 'auto' | '1:1' | '16:9' | '9:16' | '4:3'
+export type CreationLockLayer = 'facts' | 'text' | 'ratio' | 'composition' | 'style'
 
 export interface CreationBrandAssets {
   name: string
@@ -333,6 +334,14 @@ export interface CreationBrandAssets {
   secondaryColor: string
   neutralColor: string
   visualNotes: string
+  /** 已确认的事实、数字、口径；启用事实锁后要求原样保留。 */
+  fixedFacts: string
+  /** 必须逐字保留的标题、产品名、专有名词或业务原文。 */
+  mandatoryText: string
+  /** 明确禁止模型修改、替换或补写的内容。 */
+  forbiddenChanges: string
+  /** Logo、品牌图形和参考资产的使用边界。 */
+  logoUsage: string
   referenceImageIds: string[]
 }
 
@@ -342,6 +351,8 @@ export interface CreationStyleLock {
   keywords: string
   avoid: string
   layoutRules: string
+  /** 可分别关闭的约束层；默认全部开启以保持旧项目行为。 */
+  lockedLayers: CreationLockLayer[]
 }
 
 export interface CreationVariable {

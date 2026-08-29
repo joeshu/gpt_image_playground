@@ -1,5 +1,6 @@
 import type {
   CreationAspectRatio,
+  CreationLockLayer,
   CreationProject,
   CreationVariable,
   CreationWorkspaceState,
@@ -9,6 +10,14 @@ export const CREATION_WORKSPACE_STORAGE_KEY = 'gpt-image-playground.creation-wor
 export const MAX_CREATION_PROJECTS = 20
 export const MAX_CREATION_VARIABLES = 12
 export const CREATION_ASPECT_RATIOS: CreationAspectRatio[] = ['auto', '1:1', '16:9', '9:16', '4:3']
+export const CREATION_LOCK_LAYERS: Array<{ value: CreationLockLayer; label: string; description: string }> = [
+  { value: 'facts', label: '事实', description: '数字、口径和已确认信息' },
+  { value: 'text', label: '文案', description: '标题、产品名和业务原文' },
+  { value: 'ratio', label: '比例', description: '输出尺寸与画面比例' },
+  { value: 'composition', label: '构图', description: '版式、留白和安全区' },
+  { value: 'style', label: '风格', description: '视觉方向、关键词和禁用项' },
+]
+export const DEFAULT_CREATION_LOCK_LAYERS: CreationLockLayer[] = CREATION_LOCK_LAYERS.map((layer) => layer.value)
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -50,6 +59,11 @@ function normalizeStringArray(value: unknown, maxLength: number) {
     .slice(0, maxLength)
 }
 
+function normalizeLockLayers(value: unknown) {
+  if (!Array.isArray(value)) return [...DEFAULT_CREATION_LOCK_LAYERS]
+  return [...new Set(value.filter((item): item is CreationLockLayer => CREATION_LOCK_LAYERS.some((layer) => layer.value === item)))]
+}
+
 function normalizeValues(value: unknown) {
   if (Array.isArray(value)) return normalizeStringArray(value, 24)
   if (typeof value !== 'string') return []
@@ -77,6 +91,10 @@ export function createCreationProject(name = '新创作项目', now = Date.now()
       secondaryColor: DEFAULT_SECONDARY_COLOR,
       neutralColor: DEFAULT_NEUTRAL_COLOR,
       visualNotes: '',
+      fixedFacts: '',
+      mandatoryText: '',
+      forbiddenChanges: '',
+      logoUsage: '',
       referenceImageIds: [],
     },
     style: {
@@ -85,6 +103,7 @@ export function createCreationProject(name = '新创作项目', now = Date.now()
       keywords: '',
       avoid: '',
       layoutRules: '',
+      lockedLayers: [...DEFAULT_CREATION_LOCK_LAYERS],
     },
     series: {
       name: '',
@@ -119,6 +138,10 @@ export function normalizeCreationProject(value: unknown, index = 0, now = Date.n
       secondaryColor: normalizeColor(brand.secondaryColor, DEFAULT_SECONDARY_COLOR),
       neutralColor: normalizeColor(brand.neutralColor, DEFAULT_NEUTRAL_COLOR),
       visualNotes: limitText(brand.visualNotes, 1200),
+      fixedFacts: limitText(brand.fixedFacts, 3000),
+      mandatoryText: limitText(brand.mandatoryText, 6000),
+      forbiddenChanges: limitText(brand.forbiddenChanges, 3000),
+      logoUsage: limitText(brand.logoUsage, 1200),
       referenceImageIds: normalizeStringArray(brand.referenceImageIds, 16),
     },
     style: {
@@ -127,6 +150,7 @@ export function normalizeCreationProject(value: unknown, index = 0, now = Date.n
       keywords: limitText(style.keywords, 500),
       avoid: limitText(style.avoid, 500),
       layoutRules: limitText(style.layoutRules, 800),
+      lockedLayers: normalizeLockLayers(style.lockedLayers),
     },
     series: {
       name: limitText(series.name, 80),
@@ -223,6 +247,36 @@ export function getCreationProjectCompletion(project: CreationProject) {
   return Math.round((checks.filter(Boolean).length / checks.length) * 100)
 }
 
+export function getCreationLockSummary(project: CreationProject) {
+  const locked = new Set(project.style.lockedLayers)
+  const ready = new Set<CreationLockLayer>()
+  if (project.brand.fixedFacts.trim()) ready.add('facts')
+  if (project.brand.mandatoryText.trim()) ready.add('text')
+  if (project.series.aspectRatio !== 'auto') ready.add('ratio')
+  if (project.style.layoutRules.trim()) ready.add('composition')
+  if (project.style.visualDirection.trim() || project.style.keywords.trim() || project.style.avoid.trim()) ready.add('style')
+  const lockedItems = CREATION_LOCK_LAYERS.filter((layer) => locked.has(layer.value))
+  return {
+    lockedCount: lockedItems.length,
+    readyCount: lockedItems.filter((layer) => ready.has(layer.value)).length,
+    total: CREATION_LOCK_LAYERS.length,
+    labels: lockedItems.map((layer) => layer.label),
+    warnings: getCreationLockWarnings(project),
+  }
+}
+
+export function getCreationLockWarnings(project: CreationProject) {
+  if (!project.style.enabled) return []
+  const locked = new Set(project.style.lockedLayers)
+  const warnings: string[] = []
+  if (locked.has('facts') && !project.brand.fixedFacts.trim()) warnings.push('事实锁尚未填写固定事实或数字')
+  if (locked.has('text') && !project.brand.mandatoryText.trim()) warnings.push('文案锁尚未填写必须保留的原文')
+  if (locked.has('ratio') && project.series.aspectRatio === 'auto') warnings.push('比例锁尚未指定默认比例')
+  if (locked.has('composition') && !project.style.layoutRules.trim()) warnings.push('构图锁尚未填写版式规则')
+  if (locked.has('style') && !project.style.visualDirection.trim() && !project.style.keywords.trim() && !project.style.avoid.trim()) warnings.push('风格锁尚未填写视觉方向或风格关键词')
+  return warnings
+}
+
 export function getCreationBatchCombinationCount(project: CreationProject) {
   const counts = project.series.variables.map((variable) => variable.values.length).filter((count) => count > 0)
   if (counts.length === 0) return 1
@@ -242,7 +296,7 @@ export function removeCreationProject(state: CreationWorkspaceState, projectId: 
 export function exportCreationProject(project: CreationProject, exportedAt = Date.now()) {
   return JSON.stringify({
     kind: 'gpt-image-playground.creation-project',
-    version: 1,
+    version: 2,
     exportedAt,
     project: normalizeCreationProject(project, 0, exportedAt),
   }, null, 2)
@@ -262,6 +316,7 @@ export function parseCreationProjectExport(raw: string, now = Date.now()) {
 export function buildCreationPrompt(project: CreationProject, currentPrompt = '', selectedVariableValues?: Record<string, string>) {
   const lines = ['【创作工作台规则】', `项目：${project.name}`]
   if (project.description) lines.push(`项目说明：${project.description}`)
+  const lockedLayers = new Set(project.style.lockedLayers)
 
   const brandLines = [
     project.brand.name && `品牌名称：${project.brand.name}`,
@@ -270,24 +325,29 @@ export function buildCreationPrompt(project: CreationProject, currentPrompt = ''
     `品牌辅助色：${project.brand.secondaryColor}`,
     `中性色：${project.brand.neutralColor}`,
     project.brand.visualNotes && `品牌视觉资产说明：${project.brand.visualNotes}`,
+    project.brand.logoUsage && `Logo/品牌资产使用规则：${project.brand.logoUsage}`,
+    lockedLayers.has('facts') && project.brand.fixedFacts && `固定事实与数字（不得改写）：${project.brand.fixedFacts}`,
+    lockedLayers.has('text') && project.brand.mandatoryText && `必须保留的原文（逐字）：${project.brand.mandatoryText}`,
+    project.brand.forbiddenChanges && `品牌禁改项：${project.brand.forbiddenChanges}`,
     project.brand.referenceImageIds.length > 0 && `已绑定品牌参考图：${project.brand.referenceImageIds.length} 张（应用前请保持这些参考图仍在输入栏中）`,
   ].filter((line): line is string => Boolean(line))
   if (brandLines.length > 0) lines.push('品牌资产：', ...brandLines)
 
   if (project.style.enabled) {
     const styleLines = [
-      project.style.visualDirection && `视觉方向：${project.style.visualDirection}`,
-      project.style.keywords && `风格关键词：${project.style.keywords}`,
-      project.style.layoutRules && `版式规则：${project.style.layoutRules}`,
-      project.style.avoid && `避免：${project.style.avoid}`,
+      lockedLayers.has('style') && project.style.visualDirection && `视觉方向：${project.style.visualDirection}`,
+      lockedLayers.has('style') && project.style.keywords && `风格关键词：${project.style.keywords}`,
+      lockedLayers.has('composition') && project.style.layoutRules && `版式规则：${project.style.layoutRules}`,
+      lockedLayers.has('style') && project.style.avoid && `避免：${project.style.avoid}`,
     ].filter((line): line is string => Boolean(line))
     if (styleLines.length > 0) lines.push('风格锁定（必须保持）：', ...styleLines)
+    if (lockedLayers.size > 0) lines.push(`锁定层：${CREATION_LOCK_LAYERS.filter((layer) => lockedLayers.has(layer.value)).map((layer) => layer.label).join('、')}`)
   }
 
   const seriesLines = [
     project.series.name && `系列名称：${project.series.name}`,
     project.series.subject && `系列主体：${project.series.subject}`,
-    project.series.aspectRatio !== 'auto' && `系列比例：${project.series.aspectRatio}`,
+    lockedLayers.has('ratio') && project.series.aspectRatio !== 'auto' && `系列比例：${project.series.aspectRatio}`,
     project.series.consistencyRules && `跨图一致性：${project.series.consistencyRules}`,
   ].filter((line): line is string => Boolean(line))
   if (seriesLines.length > 0) lines.push('系列一致性：', ...seriesLines)
