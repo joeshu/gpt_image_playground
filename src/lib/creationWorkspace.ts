@@ -2,6 +2,7 @@ import type {
   CreationAspectRatio,
   CreationLockLayer,
   CreationProject,
+  CreationSeriesAnchors,
   CreationVariable,
   CreationWorkspaceState,
 } from '../types'
@@ -18,6 +19,13 @@ export const CREATION_LOCK_LAYERS: Array<{ value: CreationLockLayer; label: stri
   { value: 'style', label: '风格', description: '视觉方向、关键词和禁用项' },
 ]
 export const DEFAULT_CREATION_LOCK_LAYERS: CreationLockLayer[] = CREATION_LOCK_LAYERS.map((layer) => layer.value)
+export const CREATION_SERIES_ANCHORS: Array<{ value: keyof CreationSeriesAnchors; label: string; placeholder: string }> = [
+  { value: 'subject', label: '主体锚点', placeholder: '每张图都必须出现的主体、人物或商品特征' },
+  { value: 'identity', label: '身份 / 外观锚点', placeholder: '人物身份、脸部特征、产品外观、比例或关键识别点' },
+  { value: 'camera', label: '镜头 / 视角锚点', placeholder: '焦段感、机位、景别、视角和光线方向' },
+  { value: 'background', label: '背景 / 环境锚点', placeholder: '场景、材质、环境元素和背景系统' },
+  { value: 'composition', label: '构图 / 版式锚点', placeholder: '主体位置、留白、安全区和系列版式关系' },
+]
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -163,6 +171,8 @@ export function createCreationProject(name = '新创作项目', now = Date.now()
       subject: '',
       consistencyRules: '',
       aspectRatio: 'auto',
+      referenceImageIds: [],
+      anchors: { subject: '', identity: '', camera: '', background: '', composition: '' },
       variables: [],
     },
     createdAt: now,
@@ -175,6 +185,7 @@ export function normalizeCreationProject(value: unknown, index = 0, now = Date.n
   const brand = isRecord(source.brand) ? source.brand : {}
   const style = isRecord(source.style) ? source.style : {}
   const series = isRecord(source.series) ? source.series : {}
+  const anchors = isRecord(series.anchors) ? series.anchors : {}
   const fallback = createCreationProject(`新创作项目${index + 1}`, now)
   const aspectRatio = CREATION_ASPECT_RATIOS.includes(series.aspectRatio as CreationAspectRatio)
     ? series.aspectRatio as CreationAspectRatio
@@ -210,6 +221,14 @@ export function normalizeCreationProject(value: unknown, index = 0, now = Date.n
       subject: limitText(series.subject, 800),
       consistencyRules: limitText(series.consistencyRules, 1200),
       aspectRatio,
+      referenceImageIds: normalizeStringArray(series.referenceImageIds, 16),
+      anchors: {
+        subject: limitText(anchors.subject, 1200),
+        identity: limitText(anchors.identity, 1200),
+        camera: limitText(anchors.camera, 1000),
+        background: limitText(anchors.background, 1200),
+        composition: limitText(anchors.composition, 1200),
+      },
       variables: Array.isArray(series.variables)
         ? series.variables.slice(0, MAX_CREATION_VARIABLES).map((item, itemIndex) => normalizeVariable(item, itemIndex))
         : [],
@@ -330,6 +349,21 @@ export function getCreationLockWarnings(project: CreationProject) {
   return warnings
 }
 
+export function getCreationSeriesConsistencySummary(project: CreationProject) {
+  const filledAnchorCount = CREATION_SERIES_ANCHORS.filter(({ value }) => project.series.anchors[value].trim()).length
+  const warnings: string[] = []
+  if (project.series.referenceImageIds.length === 0) warnings.push('尚未绑定系列参考图')
+  if (!project.series.subject.trim() && !project.series.consistencyRules.trim() && filledAnchorCount === 0) {
+    warnings.push('尚未填写系列主体、一致性规则或结构化锚点')
+  }
+  return {
+    referenceCount: project.series.referenceImageIds.length,
+    filledAnchorCount,
+    totalAnchors: CREATION_SERIES_ANCHORS.length,
+    warnings,
+  }
+}
+
 export function getCreationBatchCombinationCount(project: CreationProject) {
   const counts = project.series.variables.map((variable) => variable.values.length).filter((count) => count > 0)
   if (counts.length === 0) return 1
@@ -402,6 +436,12 @@ export function buildCreationPrompt(project: CreationProject, currentPrompt = ''
     project.series.subject && `系列主体：${project.series.subject}`,
     lockedLayers.has('ratio') && project.series.aspectRatio !== 'auto' && `系列比例：${project.series.aspectRatio}`,
     project.series.consistencyRules && `跨图一致性：${project.series.consistencyRules}`,
+    project.series.referenceImageIds.length > 0 && `系列参考板：${project.series.referenceImageIds.length} 张（每张图保持主体身份、视觉连续性和资产关系）`,
+    project.series.anchors.subject && `主体锚点：${project.series.anchors.subject}`,
+    project.series.anchors.identity && `身份/外观锚点：${project.series.anchors.identity}`,
+    project.series.anchors.camera && `镜头/视角锚点：${project.series.anchors.camera}`,
+    project.series.anchors.background && `背景/环境锚点：${project.series.anchors.background}`,
+    project.series.anchors.composition && `构图/版式锚点：${project.series.anchors.composition}`,
   ].filter((line): line is string => Boolean(line))
   if (seriesLines.length > 0) lines.push('系列一致性：', ...seriesLines)
 

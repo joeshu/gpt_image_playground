@@ -330,7 +330,7 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
     }
     setCreating(true)
     try {
-      const referenceIds = [...new Set([...inputImages.map((image) => image.id), ...project.brand.referenceImageIds])]
+      const referenceIds = [...new Set([...inputImages.map((image) => image.id), ...project.brand.referenceImageIds, ...project.series.referenceImageIds])]
       const images = await loadBatchImages(referenceIds)
       const storedIds = await Promise.all(images.map((image) => storeImage(image.dataUrl, 'upload')))
       const job = createCreationBatchJob(project, currentPrompt, storedIds, useStore.getState().params)

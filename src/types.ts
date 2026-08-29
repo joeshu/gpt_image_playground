@@ -361,11 +361,21 @@ export interface CreationVariable {
   values: string[]
 }
 
+export interface CreationSeriesAnchors {
+  subject: string
+  identity: string
+  camera: string
+  background: string
+  composition: string
+}
+
 export interface CreationSeriesConfig {
   name: string
   subject: string
   consistencyRules: string
   aspectRatio: CreationAspectRatio
+  referenceImageIds: string[]
+  anchors: CreationSeriesAnchors
   variables: CreationVariable[]
 }
 

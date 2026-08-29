@@ -5,11 +5,13 @@ import {
   MAX_CREATION_PROJECTS,
   MAX_CREATION_VARIABLES,
   buildCreationPrompt,
+  CREATION_SERIES_ANCHORS,
   createCreationProject,
   exportCreationProject,
   getActiveCreationProject,
   getCreationBatchCombinationCount,
   getCreationLockSummary,
+  getCreationSeriesConsistencySummary,
   getCreationProjectCompletion,
   loadCreationWorkspace,
   parseCreationProjectExport,
@@ -140,6 +142,7 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
   const replayStateRef = useRef(replayState)
   const activeProject = useMemo(() => getActiveCreationProject(workspace), [workspace])
   const lockSummary = useMemo(() => activeProject ? getCreationLockSummary(activeProject) : null, [activeProject])
+  const seriesSummary = useMemo(() => activeProject ? getCreationSeriesConsistencySummary(activeProject) : null, [activeProject])
   const activeModuleInfo = getModule(activeModule)
 
   const requestClose = () => {
@@ -307,12 +310,22 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
     showToast(`已绑定当前 ${inputImages.length} 张参考图`, 'success')
   }
 
+  const handleBindCurrentSeriesImages = () => {
+    if (inputImages.length === 0) {
+      showToast('当前输入栏还没有系列参考图', 'info')
+      return
+    }
+    updateSeries({ referenceImageIds: inputImages.map((image) => image.id) })
+    showToast(`已绑定当前 ${inputImages.length} 张系列参考图`, 'success')
+  }
+
   const handleApplyToPrompt = async () => {
     if (batchBusy) {
       showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
       return
     }
-    const missingIds = activeProject.brand.referenceImageIds.filter((id) => !useStore.getState().inputImages.some((image) => image.id === id))
+    const referenceIds = [...new Set([...activeProject.brand.referenceImageIds, ...activeProject.series.referenceImageIds])]
+    const missingIds = referenceIds.filter((id) => !useStore.getState().inputImages.some((image) => image.id === id))
     let additions: Array<{ id: string; dataUrl: string }> = []
     try {
       const loadedImages = await Promise.all(missingIds.map(async (id) => {
@@ -360,6 +373,10 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
         brand: {
           ...activeProject.brand,
           referenceImageIds: activeProject.brand.referenceImageIds.map((imageId) => imageIdMap.get(imageId) ?? imageId),
+        },
+        series: {
+          ...activeProject.series,
+          referenceImageIds: activeProject.series.referenceImageIds.map((imageId) => imageIdMap.get(imageId) ?? imageId),
         },
       }
       const snapshot = createCreationReplaySnapshot({
@@ -633,8 +650,8 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
                       <span className="truncate text-gray-500 dark:text-gray-400">{activeProject.style.visualDirection || `${lockSummary?.lockedCount ?? 0}/${lockSummary?.total ?? 0} 层已锁定`}</span>
                     </div>
                   </ModuleCard>
-                  <ModuleCard title="系列一致性" description="锁定主体、比例和跨图规则，减少系列素材漂移。" onClick={() => setActiveModule('series')}>
-                    <div className="text-xs text-gray-600 dark:text-gray-300">{activeProject.series.name || '尚未命名系列'} · {activeProject.series.aspectRatio}</div>
+                  <ModuleCard title="系列一致性" description="用参考板和结构化锚点锁定主体、镜头、背景与版式，减少系列素材漂移。" onClick={() => setActiveModule('series')}>
+                    <div className="text-xs text-gray-600 dark:text-gray-300">{activeProject.series.name || '尚未命名系列'} · {seriesSummary?.referenceCount ?? 0} 张参考图 · {seriesSummary?.filledAnchorCount ?? 0}/{seriesSummary?.totalAnchors ?? 0} 锚点</div>
                   </ModuleCard>
                   <ModuleCard title="批量变量" description="预览组合后手动启动队列，失败停在当前项并支持重试。" onClick={() => setActiveModule('series')}>
                     <div className="text-xs text-gray-600 dark:text-gray-300">{activeProject.series.variables.length} 个变量 · {getCreationBatchCombinationCount(activeProject)} 个组合</div>
@@ -718,12 +735,39 @@ export default function CreationWorkbench({ onClose, onOpenPromptStudio, onPromp
 
             {activeModule === 'series' && (
               <div className="space-y-4">
+                <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 shadow-sm dark:border-violet-500/15 dark:bg-violet-500/[0.06]">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-violet-900 dark:text-violet-100">系列参考板</div>
+                      <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-300">绑定当前输入栏的图片，应用规则、批量队列和复现快照都会携带这组系列参考图。</p>
+                    </div>
+                    <button type="button" onClick={handleBindCurrentSeriesImages} className="min-h-10 shrink-0 rounded-xl bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700">绑定当前图片</button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-violet-800 dark:text-violet-200">
+                    <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-white/[0.08]">已绑定 {activeProject.series.referenceImageIds.length} 张</span>
+                    <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-white/[0.08]">结构化锚点 {seriesSummary?.filledAnchorCount ?? 0}/{seriesSummary?.totalAnchors ?? 0}</span>
+                    {seriesSummary?.warnings.map((warning) => <span key={warning} className="text-violet-700/80 dark:text-violet-200/80">{warning}</span>)}
+                  </div>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">系列名称</span><input value={activeProject.series.name} onChange={(event) => updateSeries({ name: event.target.value })} placeholder="例如：2026 年度政企汇报视觉套件" className={smallFieldClass + ' mt-1'} /></label>
                   <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">默认比例</span><select value={activeProject.series.aspectRatio} onChange={(event) => updateSeries({ aspectRatio: event.target.value as CreationProject['series']['aspectRatio'] })} className={smallFieldClass + ' mt-1'}>{CREATION_ASPECT_RATIOS.map((ratio) => <option key={ratio} value={ratio}>{ratio === 'auto' ? '跟随当前设置' : ratio}</option>)}</select></label>
                 </div>
                 <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">系列主体</span><textarea value={activeProject.series.subject} onChange={(event) => updateSeries({ subject: event.target.value })} rows={4} placeholder="填写每张图都必须保持的主体、人物、商品或信息主题。" className={fieldClass} /></label>
                 <label className="block"><span className="text-xs font-medium text-gray-700 dark:text-gray-200">跨图一致性规则</span><textarea value={activeProject.series.consistencyRules} onChange={(event) => updateSeries({ consistencyRules: event.target.value })} rows={4} placeholder="例如：人物身份、商品比例、品牌色、字体气质、镜头语言和背景系统保持一致。" className={fieldClass} /></label>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">一致性锚点</div>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">把“保持一致”拆成可检查的字段，写入提示词、批量任务快照和复现快照。</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {CREATION_SERIES_ANCHORS.map((anchor) => (
+                      <label key={anchor.value} className="block">
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{anchor.label}</span>
+                        <textarea value={activeProject.series.anchors[anchor.value]} onChange={(event) => updateSeries({ anchors: { ...activeProject.series.anchors, [anchor.value]: event.target.value } })} rows={3} placeholder={anchor.placeholder} className={fieldClass} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-sm font-semibold text-gray-900 dark:text-white">批量变量预览</div><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">每个变量的值用逗号或换行分隔；当前只计算组合，不会自动提交生成。</p></div><div className="rounded-xl bg-blue-50 px-3 py-2 text-right dark:bg-blue-500/10"><div className="text-lg font-semibold tabular-nums text-blue-700 dark:text-blue-300">{getCreationBatchCombinationCount(activeProject)}</div><div className="text-[10px] text-blue-600 dark:text-blue-300">预计组合</div></div></div>

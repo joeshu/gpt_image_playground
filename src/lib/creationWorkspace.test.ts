@@ -8,6 +8,7 @@ import {
   getCreationPromptVariableTokens,
   getCreationPromptVariableWarnings,
   getCreationProjectCompletion,
+  getCreationSeriesConsistencySummary,
   loadCreationWorkspace,
   normalizeCreationWorkspace,
   parseCreationProjectExport,
@@ -52,6 +53,8 @@ describe('creation workspace', () => {
     expect(workspace.projects[0].style.enabled).toBe(false)
     expect(workspace.projects[0].style.lockedLayers).toEqual(['facts', 'text', 'ratio', 'composition', 'style'])
     expect(workspace.projects[0].series.aspectRatio).toBe('auto')
+    expect(workspace.projects[0].series.referenceImageIds).toEqual([])
+    expect(workspace.projects[0].series.anchors).toEqual({ subject: '', identity: '', camera: '', background: '', composition: '' })
     expect(workspace.projects[0].series.variables[0].values).toEqual(['会议', '展厅'])
   })
 
@@ -89,6 +92,14 @@ describe('creation workspace', () => {
     project.brand.mandatoryText = '新发展高质量发展'
     project.brand.forbiddenChanges = '不得虚构数字'
     project.brand.logoUsage = 'Logo 保持完整比例'
+    project.series.referenceImageIds = ['series-image-a', 'series-image-b']
+    project.series.anchors = {
+      subject: '同一款蓝色终端',
+      identity: '产品外观比例不变',
+      camera: '轻微俯拍，35mm 纪实感',
+      background: '冷灰色办公空间',
+      composition: '主体位于左侧，右侧留安全区',
+    }
     project.style.visualDirection = '正式克制、清晰留白'
     project.style.layoutRules = '四周保留安全区'
     project.series.aspectRatio = '16:9'
@@ -105,7 +116,20 @@ describe('creation workspace', () => {
     expect(prompt).toContain('Logo/品牌资产使用规则：Logo 保持完整比例')
     expect(prompt).toContain('锁定层：事实、文案、比例、构图、风格')
     expect(prompt).toContain('系列比例：16:9')
+    expect(prompt).toContain('系列参考板：2 张')
+    expect(prompt).toContain('身份/外观锚点：产品外观比例不变')
+    expect(prompt).toContain('构图/版式锚点：主体位于左侧，右侧留安全区')
     expect(prompt).toContain('不得虚构或修改用户提供的业务事实')
+  })
+
+  it('summarizes series reference board and anchor readiness', () => {
+    const project = createCreationProject('系列检查')
+    expect(getCreationSeriesConsistencySummary(project)).toMatchObject({ referenceCount: 0, filledAnchorCount: 0, totalAnchors: 5 })
+    expect(getCreationSeriesConsistencySummary(project).warnings).toEqual(['尚未绑定系列参考图', '尚未填写系列主体、一致性规则或结构化锚点'])
+    project.series.referenceImageIds = ['image-a']
+    project.series.anchors.subject = '固定产品'
+    expect(getCreationSeriesConsistencySummary(project)).toMatchObject({ referenceCount: 1, filledAnchorCount: 1 })
+    expect(getCreationSeriesConsistencySummary(project).warnings).toEqual([])
   })
 
   it('only includes rules from explicitly locked layers', () => {
