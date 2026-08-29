@@ -16,6 +16,7 @@ import {
   removeCreationBatchJob,
   saveCreationBatchState,
 } from '../lib/creationBatch'
+import { getCreationPromptVariableTokens, getCreationPromptVariableWarnings } from '../lib/creationWorkspace'
 import { savePromptVersion } from '../lib/promptVersionHistory'
 import { editOutputs, reuseConfig, submitTask, useStore } from '../store'
 import type { CreationBatchJob, CreationBatchItem, CreationProject, InputImage, TaskRecord } from '../types'
@@ -243,6 +244,8 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
     () => activeJob ? getCreationBatchDeliverySummary(activeJob, tasks) : null,
     [activeJob, tasks],
   )
+  const variableTokens = useMemo(() => getCreationPromptVariableTokens(currentPrompt), [currentPrompt])
+  const variableWarnings = useMemo(() => getCreationPromptVariableWarnings(project, currentPrompt), [currentPrompt, project])
   const firstUncheckedItem = useMemo(() => activeJob?.items.find((item) => {
     const task = item.taskId ? tasksById.get(item.taskId) : undefined
     const summary = getCreationBatchItemDeliverySummary(item, task)
@@ -315,6 +318,10 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
     if (runnerRef.current || creating) return
     if (!currentPrompt.trim() && !project.series.subject.trim()) {
       showToast('请先填写当前提示词或系列主体，再建立批量任务', 'info')
+      return
+    }
+    if (variableWarnings.length > 0) {
+      showToast(`无法建立批量任务：${variableWarnings[0]}`, 'info')
       return
     }
     if (useStore.getState().maskDraft) {
@@ -545,6 +552,7 @@ export default function CreationBatchPanel({ project, currentPrompt, inputImages
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-white/[0.08] dark:text-gray-400">本机保存</span>
           </div>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-gray-500 dark:text-gray-400">先建立组合预览，再由你手动开始。队列一次只提交一个图片任务，失败会停在当前组合，避免连续消耗调用额度。</p>
+          {variableTokens.length > 0 && <div className={`mt-2 rounded-xl px-3 py-2 text-[11px] leading-relaxed ${variableWarnings.length > 0 ? 'border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200' : 'border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200'}`}><span className="font-medium">变量插槽：{variableTokens.map((token) => `{{${token}}}`).join('、')}</span>{variableWarnings.length > 0 ? <div className="mt-1">{variableWarnings.join('；')}。修正后才能建立批量任务。</div> : <div className="mt-1">建立任务后，每个组合会逐项替换插槽，并在任务提示词中保留本次组合记录。</div>}</div>}
         </div>
         <button type="button" onClick={() => void handleCreateJob()} disabled={creating || runnerRef.current} className="min-h-10 shrink-0 rounded-xl bg-blue-600 px-3.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{creating ? '正在准备…' : '建立批量任务'}</button>
       </div>

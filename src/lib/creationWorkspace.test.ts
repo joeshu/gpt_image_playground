@@ -5,6 +5,8 @@ import {
   exportCreationProject,
   getCreationBatchCombinationCount,
   getCreationLockSummary,
+  getCreationPromptVariableTokens,
+  getCreationPromptVariableWarnings,
   getCreationProjectCompletion,
   loadCreationWorkspace,
   normalizeCreationWorkspace,
@@ -122,6 +124,37 @@ describe('creation workspace', () => {
     expect(prompt).not.toContain('版式规则：保持安全区')
     expect(prompt).not.toContain('系列比例：16:9')
     expect(prompt).toContain('视觉方向：正式克制')
+  })
+
+  it('expands named variable slots for each batch combination', () => {
+    const project = createCreationProject('变量项目')
+    project.series.variables = [
+      { id: 'topic', name: '主题', values: ['经营分析', '工作会'] },
+      { id: 'quarter', name: '季度', values: ['Q1'] },
+    ]
+
+    const prompt = buildCreationPrompt(project, '制作 {{主题}} 的 {{季度}} 海报', {
+      topic: '经营分析',
+      quarter: 'Q1',
+    })
+
+    expect(prompt).toContain('制作 经营分析 的 Q1 海报')
+    expect(prompt).not.toContain('{{主题}}')
+    expect(getCreationPromptVariableTokens('A {{主题}} B {{ 主题 }} C {{未知}}')).toEqual(['主题', '未知'])
+  })
+
+  it('prevents batch jobs from silently leaving invalid variable slots', () => {
+    const project = createCreationProject('变量预检')
+    project.series.variables = [
+      { id: 'scene', name: '场景', values: [] },
+      { id: 'scene-copy', name: '场景', values: ['展厅'] },
+    ]
+
+    expect(getCreationPromptVariableWarnings(project, '制作 {{场景}} 和 {{未定义}}')).toEqual([
+      '变量名称重复：场景',
+      '未定义变量：未定义',
+      '变量尚未填写值：场景',
+    ])
   })
 
   it('reports incomplete enabled lock layers without blocking local editing', () => {

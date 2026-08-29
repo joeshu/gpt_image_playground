@@ -79,6 +79,59 @@ function normalizeVariable(value: unknown, index: number): CreationVariable {
   }
 }
 
+const CREATION_VARIABLE_TOKEN_PATTERN = /\{\{\s*([^{}]+?)\s*\}\}/g
+
+export function getCreationPromptVariableTokens(prompt: string) {
+  const tokens: string[] = []
+  for (const match of prompt.matchAll(CREATION_VARIABLE_TOKEN_PATTERN)) {
+    const token = match[1]?.trim()
+    if (token && !tokens.includes(token)) tokens.push(token)
+  }
+  return tokens
+}
+
+function getCreationVariableLookup(project: CreationProject) {
+  const lookup = new Map<string, CreationVariable>()
+  const duplicateKeys = new Set<string>()
+  for (const variable of project.series.variables) {
+    for (const key of [variable.id, variable.name.trim()]) {
+      if (!key) continue
+      if (lookup.has(key)) duplicateKeys.add(key)
+      else lookup.set(key, variable)
+    }
+  }
+  return { lookup, duplicateKeys }
+}
+
+export function getCreationPromptVariableWarnings(project: CreationProject, prompt: string) {
+  const tokens = getCreationPromptVariableTokens(prompt)
+  if (tokens.length === 0) return []
+  const { lookup, duplicateKeys } = getCreationVariableLookup(project)
+  const warnings: string[] = []
+  const duplicateTokens = tokens.filter((token) => duplicateKeys.has(token))
+  const unknownTokens = tokens.filter((token) => !lookup.has(token))
+  const emptyTokens = tokens
+    .map((token) => lookup.get(token))
+    .filter((variable): variable is CreationVariable => variable != null && variable.values.length === 0)
+    .map((variable) => variable.name)
+    .filter((name, index, names) => names.indexOf(name) === index)
+
+  if (duplicateTokens.length > 0) warnings.push(`变量名称重复：${duplicateTokens.join('、')}`)
+  if (unknownTokens.length > 0) warnings.push(`未定义变量：${unknownTokens.join('、')}`)
+  if (emptyTokens.length > 0) warnings.push(`变量尚未填写值：${emptyTokens.join('、')}`)
+  return warnings
+}
+
+export function expandCreationPromptVariables(prompt: string, project: CreationProject, selectedVariableValues?: Record<string, string>) {
+  if (!selectedVariableValues) return prompt
+  const { lookup } = getCreationVariableLookup(project)
+  return prompt.replace(CREATION_VARIABLE_TOKEN_PATTERN, (match, rawToken: string) => {
+    const variable = lookup.get(rawToken.trim())
+    if (!variable || !Object.prototype.hasOwnProperty.call(selectedVariableValues, variable.id)) return match
+    return selectedVariableValues[variable.id] ?? match
+  })
+}
+
 export function createCreationProject(name = '新创作项目', now = Date.now()): CreationProject {
   return {
     id: createId(now),
@@ -363,6 +416,6 @@ export function buildCreationPrompt(project: CreationProject, currentPrompt = ''
   if (variableLines.length > 0) lines.push(hasSelectedVariables ? '本次批量变量组合：' : '批量变量（仅使用已填写值）：', ...variableLines)
 
   lines.push('执行约束：不得虚构或修改用户提供的业务事实、中文原文、数字、单位和政治表述；如信息缺失，保留待补位置。')
-  const base = currentPrompt.trim()
+  const base = expandCreationPromptVariables(currentPrompt.trim(), project, selectedVariableValues)
   return base ? `${base}\n\n${lines.join('\n')}` : lines.join('\n')
 }
