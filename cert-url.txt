@@ -1,0 +1,4 @@
+# Public certificate-pool sources.
+# One source per line. Sources may disappear or be revoked at any time.
+https://github.com/WSF-Team/WSF/raw/refs/heads/main/portal/resources/certificates.zip
+https://github.com/NovaDev404/NexCerts
