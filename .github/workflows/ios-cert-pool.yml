@@ -1,0 +1,100 @@
+name: iOS Certificate Pool Sign & Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: Optional direct HTTPS URL to an unsigned IPA
+        required: false
+        type: string
+  workflow_run:
+    workflows: ["Build Unsigned iOS IPA"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve unsigned IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_IPA_URL: ${{ inputs.ipa_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/input
+          if [[ -n "${INPUT_IPA_URL:-}" ]]; then
+            curl -fL --retry 3 "$INPUT_IPA_URL" -o build/input/app.ipa
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            run_id="${{ github.event.workflow_run.id }}"
+            gh run download "$run_id" --repo "${{ github.repository }}" --dir build/download
+            ipa=$(find build/download -type f -name '*-unsigned.ipa' | head -1)
+            cp "$ipa" build/input/app.ipa
+          else
+            echo 'Provide ipa_url or run after unsigned workflow.' >&2; exit 2
+          fi
+
+      - name: Fetch and prepare certificate pool
+        run: |
+          bash scripts/signing/fetch-certs.sh
+          bash scripts/signing/prepare-certs.sh
+
+      - name: Install zsign
+        run: brew install zsign
+
+      - name: Sign IPA with each usable certificate
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: feat/ios-cert-pool-install
+        run: |
+          set -euo pipefail
+          mkdir -p build/signed docs/install/ipa docs/install/manifests
+          ok=0; fail=0
+          while IFS=$'\t' read -r dir name expires appid; do
+            [[ -d "$dir" ]] || continue
+            pass=$(cat "$dir/password.txt")
+            slug=$(basename "$dir")
+            out="build/signed/$slug"; mkdir -p "$out"
+            if zsign -k "$dir/cert.p12" -p "$pass" -m "$dir/profile.mobileprovision" -o "$out/app.ipa" build/input/app.ipa; then
+              cp "$out/app.ipa" "docs/install/ipa/$slug.ipa"
+              bundle=$(unzip -p "$out/app.ipa" 'Payload/*.app/Info.plist' > "$out/Info.plist" && /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$out/Info.plist" || echo unknown)
+              title=$(unzip -p "$out/app.ipa" 'Payload/*.app/Info.plist' > "$out/Info.plist" && /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$out/Info.plist" 2>/dev/null || echo 'GPT Image Playground')
+              ipa_url="https://raw.githubusercontent.com/$REPO/$BRANCH/docs/install/ipa/$slug.ipa"
+              manifest_url="https://raw.githubusercontent.com/$REPO/$BRANCH/docs/install/manifests/$slug.plist"
+              cat > "docs/install/manifests/$slug.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>items</key><array><dict><key>assets</key><array><dict><key>kind</key><string>software-package</string><key>url</key><string>$ipa_url</string></dict></array><key>metadata</key><dict><key>bundle-identifier</key><string>$bundle</string><key>bundle-version</key><string>1</string><key>kind</key><string>software</string><key>title</key><string>$title</string></dict></dict></array></dict></plist>
+          EOF
+              python3 - "$name" "$expires" "$manifest_url" "$out/metadata.json" <<'PY'
+          import json,sys
+          json.dump({'name':sys.argv[1],'expires':sys.argv[2],'manifest_url':sys.argv[3]},open(sys.argv[4],'w'))
+          PY
+              ok=$((ok+1))
+            else fail=$((fail+1)); fi
+          done < build/cert-pool/cert-index.tsv
+          echo "SIGNED_OK=$ok" >> "$GITHUB_ENV"; echo "SIGNED_FAILED=$fail" >> "$GITHUB_ENV"
+          test "$ok" -gt 0
+
+      - name: Generate install page
+        run: python3 scripts/signing/generate-install-page.py
+
+      - name: Publish generated install assets to branch
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/install
+          git commit -m "chore(ios): publish $SIGNED_OK signed IPA variants" || exit 0
+          git push origin HEAD:feat/ios-cert-pool-install
+
+      - name: Summary
+        run: |
+          echo "### iOS certificate-pool signing" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Signed: $SIGNED_OK" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Failed/skipped: $SIGNED_FAILED" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Install page source: docs/install/index.html" >> "$GITHUB_STEP_SUMMARY"
