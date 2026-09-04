@@ -33,6 +33,15 @@ jobs:
           VITE_LOCK_PRESET_CONFIG_PARAMS: 'false'
           VITE_PREVENT_PRESET_CONFIG_DELETION: 'false'
 
+      - name: Add iOS install portal to Pages bundle
+        run: |
+          set -euo pipefail
+          if [[ -d docs/install ]]; then
+            rm -rf dist/install
+            mkdir -p dist/install
+            cp -R docs/install/. dist/install/
+          fi
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
