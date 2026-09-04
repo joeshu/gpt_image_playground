@@ -3,8 +3,10 @@ name: Build Unsigned iOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main, ios-mobile]
+    branches: [main, ios-mobile, feat/ios-cert-pool-install]
     tags: ['v*']
+    paths-ignore:
+      - 'docs/install/**'
 
 permissions:
   contents: write
@@ -17,7 +19,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -108,6 +110,104 @@ jobs:
             build/xcodebuild.log
           if-no-files-found: error
           retention-days: 30
+
+      # Temporary end-to-end certificate-pool validation on the feature branch.
+      # This does not publish or commit generated IPA files, so it cannot create a push loop.
+      - name: Fetch and prepare public certificate pool
+        if: github.ref_name == 'feat/ios-cert-pool-install'
+        run: |
+          set -euo pipefail
+          bash scripts/signing/fetch-certs.sh
+          bash scripts/signing/prepare-certs.sh
+          test -s build/cert-pool/cert-index.tsv
+
+      - name: Install zsign for certificate-pool test
+        if: github.ref_name == 'feat/ios-cert-pool-install'
+        run: brew install zsign
+
+      - name: Sign unsigned IPA with usable certificates
+        if: github.ref_name == 'feat/ios-cert-pool-install'
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          input_ipa="build/GPT-Image-Playground-${{ github.run_number }}-unsigned.ipa"
+          test -f "$input_ipa"
+          mkdir -p build/signed build/install/ipa build/install/manifests
+          ok=0
+          fail=0
+
+          while IFS=$'\t' read -r dir name expires appid; do
+            [[ -d "$dir" ]] || continue
+            [[ -f "$dir/cert.p12" && -f "$dir/profile.mobileprovision" ]] || { fail=$((fail+1)); continue; }
+            pass=""
+            [[ -f "$dir/password.txt" ]] && pass=$(cat "$dir/password.txt")
+            slug=$(basename "$dir")
+            out="build/signed/$slug"
+            mkdir -p "$out"
+
+            if zsign -k "$dir/cert.p12" -p "$pass" -m "$dir/profile.mobileprovision" -o "$out/app.ipa" "$input_ipa"; then
+              cp "$out/app.ipa" "build/install/ipa/$slug.ipa"
+              unzip -p "$out/app.ipa" 'Payload/*.app/Info.plist' > "$out/Info.plist"
+              bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$out/Info.plist" 2>/dev/null || echo unknown)
+              version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$out/Info.plist" 2>/dev/null || echo 1)
+              title=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$out/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$out/Info.plist" 2>/dev/null || echo 'GPT Image Playground')
+
+              IPA_URL="https://raw.githubusercontent.com/$REPO/$BRANCH/build/install/ipa/$slug.ipa" \
+              MANIFEST_PATH="build/install/manifests/$slug.plist" \
+              BUNDLE="$bundle" VERSION="$version" TITLE="$title" \
+              python3 - <<'PY'
+          import os, plistlib
+          payload = {
+              'items': [{
+                  'assets': [{'kind': 'software-package', 'url': os.environ['IPA_URL']}],
+                  'metadata': {
+                      'bundle-identifier': os.environ['BUNDLE'],
+                      'bundle-version': os.environ['VERSION'],
+                      'kind': 'software',
+                      'title': os.environ['TITLE'],
+                  },
+              }]
+          }
+          with open(os.environ['MANIFEST_PATH'], 'wb') as f:
+              plistlib.dump(payload, f, fmt=plistlib.FMT_XML, sort_keys=False)
+          PY
+
+              python3 - "$name" "$expires" "$bundle" "$version" "$out/metadata.json" <<'PY'
+          import json, sys
+          json.dump({
+              'name': sys.argv[1],
+              'expires': sys.argv[2],
+              'bundle_id': sys.argv[3],
+              'bundle_version': sys.argv[4],
+          }, open(sys.argv[5], 'w'))
+          PY
+              ok=$((ok+1))
+            else
+              fail=$((fail+1))
+            fi
+          done < build/cert-pool/cert-index.tsv
+
+          echo "CERT_POOL_SIGNED_OK=$ok" >> "$GITHUB_ENV"
+          echo "CERT_POOL_SIGNED_FAILED=$fail" >> "$GITHUB_ENV"
+          echo "### Certificate-pool test" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Signed successfully: $ok" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Failed/skipped: $fail" >> "$GITHUB_STEP_SUMMARY"
+          test "$ok" -gt 0
+
+      - name: Upload certificate-pool test result
+        if: github.ref_name == 'feat/ios-cert-pool-install' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpt-image-playground-cert-pool-test-${{ github.run_number }}
+          path: |
+            build/cert-pool/cert-index.tsv
+            build/signed/*/metadata.json
+            build/install/ipa/*.ipa
+            build/install/manifests/*.plist
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Publish tagged Unsigned release
         if: startsWith(github.ref, 'refs/tags/v')
