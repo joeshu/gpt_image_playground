@@ -5,6 +5,8 @@ on:
   push:
     branches: [main, ios-mobile, feat/ios-cert-pool-install]
     tags: ['v*']
+    paths-ignore:
+      - 'docs/install/**'
 
 permissions:
   contents: write
