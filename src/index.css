@@ -27,6 +27,9 @@
 }
 
 html {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-y: scroll;
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
@@ -34,8 +37,11 @@ html {
 }
 
 body {
+  box-sizing: border-box;
+  width: 100%;
   padding: 0;
   min-height: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow-x: clip;
   -webkit-user-select: none;
@@ -43,8 +49,11 @@ body {
 }
 
 #root {
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  overflow-x: clip;
 }
 
 /* Keep the global chrome out of the document scroll transform. iOS WebViews
@@ -558,7 +567,12 @@ input[type="number"] {
   input,
   textarea,
   select {
-    font-size: 16px;
+    /* Keep iOS from zooming the entire WebView when a small utility-sized
+       control receives focus. */
+    font-size: 16px !important;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -851,8 +865,10 @@ input[type="number"] {
 
   [data-ios-sheet],
   [data-ios-confirm-sheet] {
+    box-sizing: border-box;
     width: 100%;
-    max-width: none;
+    min-width: 0;
+    max-width: 100%;
     max-height: calc(94dvh - var(--safe-area-top));
     border-bottom: 0;
     border-bottom-left-radius: 0;
@@ -905,7 +921,46 @@ input[type="number"] {
 
   [data-settings-tabs] {
     position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     background: hsl(var(--muted) / 0.55);
+  }
+
+  [data-settings-content] {
+    box-sizing: border-box;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  [data-settings-scroll] {
+    box-sizing: border-box;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  [data-settings-scroll] > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  [data-settings-scroll] :where(input, textarea, select, button, [role="button"]) {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  [data-settings-scroll] :where(code, pre) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   [data-settings-tabs]::after {

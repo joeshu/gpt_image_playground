@@ -4,6 +4,14 @@ function finiteViewportMetric(value: number | undefined, fallback = 0) {
   return Number.isFinite(value) ? Math.max(0, value as number) : fallback
 }
 
+function boundedViewportWidth(value: number | undefined, fallbackWidth: number) {
+  const fallback = finiteViewportMetric(fallbackWidth)
+  if (!Number.isFinite(value) || (value as number) <= 0) return fallback
+  // A stale iOS visualViewport width must not make fixed mobile sheets wider
+  // than the layout viewport after keyboard dismissal or WebView reflow.
+  return fallback > 0 ? Math.min(value as number, fallback) : value as number
+}
+
 export function getVisualViewportMetrics(
   viewport: Pick<VisualViewport, 'offsetLeft' | 'offsetTop' | 'width'>,
   fallbackWidth: number,
@@ -11,7 +19,7 @@ export function getVisualViewportMetrics(
   return {
     left: finiteViewportMetric(viewport.offsetLeft),
     top: finiteViewportMetric(viewport.offsetTop),
-    width: finiteViewportMetric(viewport.width, finiteViewportMetric(fallbackWidth)),
+    width: boundedViewportWidth(viewport.width, fallbackWidth),
   }
 }
 
@@ -97,6 +105,7 @@ export function installMobileViewportGuards() {
       // document: iOS can preserve the resulting horizontal offset after the
       // keyboard is dismissed and shift the entire app off-screen.
       if (active.closest('[data-agent-sidebar], [data-input-bar]')) return
+      if (active.closest('[data-ios-sheet], [data-ios-confirm-sheet]')) return
       active.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
     }, 180)
   }
