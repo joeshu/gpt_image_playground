@@ -17,6 +17,13 @@ describe('getVisualViewportMetrics', () => {
       width: 430,
     })
   })
+  it('clamps stale visual viewport widths to the layout viewport', () => {
+    expect(getVisualViewportMetrics({ offsetLeft: 0, offsetTop: 0, width: 860 }, 430)).toEqual({
+      left: 0,
+      top: 0,
+      width: 430,
+    })
+  })
 })
 
 describe('calculateKeyboardInset', () => {
