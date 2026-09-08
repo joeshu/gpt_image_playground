@@ -45,8 +45,7 @@ jobs:
           npm ci
           npm test
           npm run build
-          node scripts/check-mobile-surface-layout.mjs
-          node scripts/check-agent-mobile-interaction.mjs
+          npm run check:mobile
 
       - name: Generate and sync Capacitor iOS project
         run: |

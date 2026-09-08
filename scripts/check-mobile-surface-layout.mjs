@@ -20,6 +20,7 @@ const promptTemplate = read('src/components/PromptTemplateModal.tsx')
 const select = read('src/components/Select.tsx')
 const inputParamsPanel = read('src/components/input/inputParamsPanel.tsx')
 const creationBatch = read('src/components/CreationBatchPanel.tsx')
+const unsignedWorkflow = read('.github/workflows/ios-unsigned.yml')
 const adhocWorkflow = read('.github/workflows/ios-adhoc.yml')
 const promptEnhancer = read('src/components/PromptEnhancerModal.tsx')
 const promptPreflight = read('src/components/PromptPreflightModal.tsx')
@@ -194,8 +195,10 @@ if (!store.includes('scheduleAgentConversationPersistence') || !store.includes('
   fail('Agent conversation persistence must be scheduled instead of writing every stream update')
 }
 
-if (!adhocWorkflow.includes('node scripts/check-mobile-surface-layout.mjs')) {
-  fail('Unsigned and Ad-hoc iOS builds must share the mobile layout contract')
+for (const [name, workflow] of [['Unsigned', unsignedWorkflow], ['Ad-hoc', adhocWorkflow]]) {
+  if (!workflow.includes('npm run check:mobile') || !workflow.includes('npm test') || !workflow.includes('npm run build')) {
+    fail(`${name} iOS build must run the web test, build, and mobile contract checks`)
+  }
 }
 
 for (const [name, source] of [['Agent title editor', agent], ['History title editor', historyModal]]) {
