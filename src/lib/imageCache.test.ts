@@ -14,6 +14,7 @@ import {
   cacheThumbnail,
   clearImageCaches,
   deleteImageCacheEntry,
+  ensureImageCached,
   ensureImageThumbnailCached,
   getCachedImage,
   scheduleThumbnailBackfill,
@@ -31,6 +32,14 @@ describe('imageCache', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('loads a Blob-backed image through the data URL compatibility boundary', async () => {
+    const imageBlob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
+    db.getImage.mockResolvedValue({ id: 'blob-image', imageBlob, dataUrl: 'data:image/png;base64,AQID' })
+
+    await expect(ensureImageCached('blob-image')).resolves.toBe('data:image/png;base64,AQID')
+    expect(getCachedImage('blob-image')).toBe('data:image/png;base64,AQID')
   })
 
   it('evicts the least recently used images and thumbnails', async () => {

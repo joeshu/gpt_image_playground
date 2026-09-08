@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentConversation, TaskRecord } from '../types'
-import { calculateAppStorageUsage, collectReferencedImageIds, getDataUrlBytes } from './storageUsage'
+import { calculateAppStorageUsage, collectReferencedImageIds, getDataUrlBytes, getStoredImageBytes } from './storageUsage'
 
 describe('app storage usage', () => {
   it('calculates base64 payload bytes without counting the data URL header', () => {
     expect(getDataUrlBytes('data:text/plain;base64,SGVsbG8=')).toBe(5)
+  })
+
+  it('uses the Blob byte size for binary-only image records', () => {
+    expect(getStoredImageBytes({ id: 'blob', imageBlob: new Blob([new Uint8Array([1, 2, 3, 4])]) })).toBe(4)
+    expect(getStoredImageBytes({ id: 'legacy', dataUrl: 'data:text/plain;base64,QQ==' })).toBe(1)
   })
 
   it('collects image references across tasks, conversations, and drafts', () => {

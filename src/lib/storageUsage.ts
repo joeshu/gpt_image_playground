@@ -1,5 +1,5 @@
-import type { AgentConversation, AgentInputDraft, InputImage, MaskDraft, StoredImage, StoredImageThumbnail, TaskRecord } from '../types'
-import { deleteImage, getAllImages, getAllImageThumbnails } from './db'
+import type { AgentConversation, AgentInputDraft, InputImage, MaskDraft, StoredImageRecord, StoredImageThumbnail, TaskRecord } from '../types'
+import { deleteImage, getAllImageRecords, getAllImageThumbnails } from './db'
 import { clearImageCaches } from './imageCache'
 
 export interface StorageReferenceState {
@@ -75,10 +75,16 @@ export function getDataUrlBytes(dataUrl: string) {
   return Math.max(0, Math.floor((body.length * 3) / 4) - padding)
 }
 
-export function calculateAppStorageUsage(images: StoredImage[], thumbnails: StoredImageThumbnail[], referencedIds: Set<string>): AppStorageUsage {
-  const imageBytes = images.reduce((total, image) => total + getDataUrlBytes(image.dataUrl), 0)
+export function getStoredImageBytes(image: StoredImageRecord) {
+  // Count both fields when an interrupted/older migration left a dual record.
+  // New writes contain only imageBlob; legacy records contain only dataUrl.
+  return (image.imageBlob?.size ?? 0) + (image.dataUrl ? getDataUrlBytes(image.dataUrl) : 0)
+}
+
+export function calculateAppStorageUsage(images: StoredImageRecord[], thumbnails: StoredImageThumbnail[], referencedIds: Set<string>): AppStorageUsage {
+  const imageBytes = images.reduce((total, image) => total + getStoredImageBytes(image), 0)
   const thumbnailBytes = thumbnails.reduce((total, thumbnail) => total + getDataUrlBytes(thumbnail.thumbnailDataUrl), 0)
-  const imageSizes = new Map(images.map((image) => [image.id, getDataUrlBytes(image.dataUrl)]))
+  const imageSizes = new Map(images.map((image) => [image.id, getStoredImageBytes(image)]))
   const thumbnailSizes = new Map(thumbnails.map((thumbnail) => [thumbnail.id, getDataUrlBytes(thumbnail.thumbnailDataUrl)]))
   const orphanIds = new Set([...imageSizes.keys(), ...thumbnailSizes.keys()].filter((id) => !referencedIds.has(id)))
   const orphanBytes = [...orphanIds].reduce((total, id) => total + (imageSizes.get(id) ?? 0) + (thumbnailSizes.get(id) ?? 0), 0)
@@ -94,12 +100,12 @@ export function calculateAppStorageUsage(images: StoredImage[], thumbnails: Stor
 }
 
 export async function inspectAppStorage(state: StorageReferenceState) {
-  const [images, thumbnails] = await Promise.all([getAllImages(), getAllImageThumbnails()])
+  const [images, thumbnails] = await Promise.all([getAllImageRecords(), getAllImageThumbnails()])
   return calculateAppStorageUsage(images, thumbnails, collectReferencedImageIds(state))
 }
 
 export async function removeOrphanedImages(state: StorageReferenceState) {
-  const [images, thumbnails] = await Promise.all([getAllImages(), getAllImageThumbnails()])
+  const [images, thumbnails] = await Promise.all([getAllImageRecords(), getAllImageThumbnails()])
   const referencedIds = collectReferencedImageIds(state)
   const orphanIds = [...new Set([...images.map((image) => image.id), ...thumbnails.map((thumbnail) => thumbnail.id)])]
     .filter((id) => !referencedIds.has(id))

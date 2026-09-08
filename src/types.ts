@@ -460,7 +460,10 @@ export interface AgentConversation {
 
 export interface StoredImage {
   id: string
+  /** 读取后的显示用 data URL；旧版记录直接提供，新版记录按需由 imageBlob 生成。 */
   dataUrl: string
+  /** 新版 IndexedDB 记录的二进制原图；持久化时优先使用。 */
+  imageBlob?: Blob
   /** 图片首次存储时间（ms） */
   createdAt?: number
   /** 图片来源：用户上传 / API 生成 / 遮罩 */
@@ -469,6 +472,11 @@ export interface StoredImage {
   width?: number
   /** 原图高度 */
   height?: number
+}
+
+/** IndexedDB 原始记录：dataUrl 对旧数据可选，新数据可以只保存 Blob。 */
+export type StoredImageRecord = Omit<StoredImage, 'dataUrl'> & {
+  dataUrl?: string
 }
 
 export interface StoredImageThumbnail {
