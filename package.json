@@ -7,6 +7,8 @@
     "dev": "vite",
     "mock:api": "node scripts/mock-image-api.mjs",
     "build": "tsc -b && vite build",
+    "postbuild": "node scripts/sync-service-worker-version.mjs",
+    "check:mobile": "node scripts/check-mobile-surface-layout.mjs && node scripts/check-agent-mobile-interaction.mjs",
     "ios:sync": "npm run build && cap sync ios",
     "deploy:cf": "npm run build && wrangler deploy",
     "preview": "vite preview",

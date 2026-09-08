@@ -35,6 +35,24 @@ Never auto-merge an upstream PR before the Unsigned IPA workflow and device smok
 4. Run the Ad-hoc workflow when signing secrets and registered devices are available.
 5. Verify launch, API request, background/resume, photo import, export, and upgrade from the previous IPA.
 
+## Verification baseline
+
+Run the following commands before publishing or merging an iOS-mobile change:
+
+```bash
+npm ci
+npm test
+npm run build
+npm run check:mobile
+```
+
+`npm run build` also synchronizes the Service Worker cache name with the version in
+`package.json`. The iOS workflows run the same web checks in a clean macOS
+environment before generating the Capacitor project. Local environments that
+cannot install the pinned Node dependencies should use the iOS workflow as the
+source of truth rather than treating a missing `vitest`, `tsc`, or `vite` binary
+as a source-code failure.
+
 
 ## Deterministic native configuration
 
