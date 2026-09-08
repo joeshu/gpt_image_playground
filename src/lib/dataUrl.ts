@@ -48,7 +48,8 @@ export function dataUrlToBlob(dataUrl: string): Blob {
   } else {
     bytes = new TextEncoder().encode(decodeURIComponent(payload))
   }
-  return new Blob([bytes], { type: mime })
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  return new Blob([buffer], { type: mime })
 }
 
 export function bytesToDataUrl(bytes: Uint8Array, filePath: string): string {

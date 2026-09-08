@@ -1,12 +1,13 @@
 import { zipSync } from 'fflate'
 
-type ZipFile = Uint8Array | [Uint8Array, { mtime?: Date; level?: number }]
+type CompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+type ZipFile = Uint8Array | [Uint8Array, { mtime?: Date; level?: CompressionLevel }]
 
 interface ZipWorkerEntry {
   name: string
   bytes: ArrayBuffer
   mtime?: number
-  level: number
+  level: CompressionLevel
 }
 
 interface ZipWorkerResponse {
@@ -20,7 +21,7 @@ interface ZipWorkerResponse {
  * The synchronous fallback keeps tests, older WebViews, and unusual native
  * shells functional without changing the public export API.
  */
-export async function zipFilesAsync(files: Record<string, ZipFile>, level = 6): Promise<Uint8Array> {
+export async function zipFilesAsync(files: Record<string, ZipFile>, level: CompressionLevel = 6): Promise<Uint8Array> {
   const entries = Object.entries(files).map(([name, value]): ZipWorkerEntry => {
     const [bytes, options] = Array.isArray(value) ? value : [value, undefined]
     const buffer = bytes.slice().buffer as ArrayBuffer

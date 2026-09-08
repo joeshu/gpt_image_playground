@@ -1,10 +1,12 @@
 import { zipSync } from 'fflate'
 
+type CompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
 interface ZipWorkerEntry {
   name: string
   bytes: ArrayBuffer
   mtime?: number
-  level: number
+  level: CompressionLevel
 }
 
 interface ZipWorkerRequest {
@@ -18,7 +20,7 @@ const workerScope = globalThis as unknown as {
 
 workerScope.onmessage = (event: MessageEvent<ZipWorkerRequest>) => {
   try {
-    const files: Record<string, Uint8Array | [Uint8Array, { mtime?: Date; level: number }]> = {}
+    const files: Record<string, Uint8Array | [Uint8Array, { mtime?: Date; level: CompressionLevel }]> = {}
     for (const entry of event.data.entries) {
       const bytes = new Uint8Array(entry.bytes)
       files[entry.name] = entry.mtime == null
