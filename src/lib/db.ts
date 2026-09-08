@@ -1,4 +1,5 @@
-import type { AgentConversation, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
+import type { AgentConversation, TaskRecord, StoredImage, StoredImageRecord, StoredImageThumbnail } from '../types'
+import { blobToDataUrl, dataUrlToBlob } from './dataUrl'
 import { StorageQuotaError, isStorageQuotaError } from './storage'
 
 const DB_NAME = 'gpt-image-playground'
@@ -121,8 +122,65 @@ export function replaceAgentConversations(conversations: AgentConversation[]): P
 
 // ===== Images =====
 
-export function getImage(id: string): Promise<StoredImage | undefined> {
+export function getImageRecord(id: string): Promise<StoredImageRecord | undefined> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.get(id))
+}
+
+/**
+ * Returns the legacy hydrated shape for callers that need a displayable URL.
+ * The IndexedDB record itself may contain only imageBlob, so conversion is
+ * intentionally lazy and happens only when a caller asks for the image.
+ */
+export async function getImage(id: string): Promise<StoredImage | undefined> {
+  const image = await getImageRecord(id)
+  if (!image) return undefined
+  const dataUrl = image.imageBlob
+    ? await blobToDataUrl(image.imageBlob, 'image/png')
+    : image.dataUrl ?? ''
+  if (!dataUrl) return undefined
+  return { ...image, dataUrl }
+}
+
+/** Returns the original bytes without hydrating a Blob-backed record to Base64. */
+export async function getStoredImageBlob(id: string): Promise<Blob | undefined> {
+  const image = await getImageRecord(id)
+  if (!image) return undefined
+  if (image.imageBlob) return image.imageBlob
+  if (image.dataUrl) {
+    try {
+      return dataUrlToBlob(image.dataUrl)
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+/** Returns a displayable URL while preferring the binary representation. */
+export async function getImageDataUrl(image: StoredImage | StoredImageRecord): Promise<string> {
+  if (image.imageBlob) return blobToDataUrl(image.imageBlob, 'image/png')
+  return image.dataUrl ?? ''
+}
+
+function blobFromDataUrl(dataUrl: string): Blob | undefined {
+  try {
+    return dataUrlToBlob(dataUrl)
+  } catch {
+    // Keep malformed legacy/test data readable instead of failing the write.
+    return undefined
+  }
+}
+
+function normalizeImageForStorage(image: StoredImage | StoredImageRecord): StoredImageRecord {
+  if (image.imageBlob) {
+    const { dataUrl: _legacyDataUrl, ...record } = image
+    return record
+  }
+  if (image.dataUrl) {
+    const imageBlob = blobFromDataUrl(image.dataUrl)
+    if (imageBlob) return { ...image, imageBlob, dataUrl: undefined }
+  }
+  return image
 }
 
 export function getStoredImageThumbnail(id: string): Promise<StoredImageThumbnail | undefined> {
@@ -182,8 +240,18 @@ export async function getImageThumbnail(id: string): Promise<StoredImageThumbnai
   return thumbnail
 }
 
-export function getAllImages(): Promise<StoredImage[]> {
+/** Returns raw image records without hydrating large binary payloads. */
+export function getAllImageRecords(): Promise<StoredImageRecord[]> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.getAll())
+}
+
+/** Legacy hydrated API for callers that explicitly need every image body. */
+export async function getAllImages(): Promise<StoredImage[]> {
+  const records = await getAllImageRecords()
+  return (await Promise.all(records.map(async (record) => {
+    const dataUrl = await getImageDataUrl(record)
+    return dataUrl ? { ...record, dataUrl } : undefined
+  }))).filter((image): image is StoredImage => image != null)
 }
 
 export function getAllImageThumbnails(): Promise<StoredImageThumbnail[]> {
@@ -196,8 +264,8 @@ export function getAllImageIds(): Promise<string[]> {
   )
 }
 
-export function putImage(image: StoredImage): Promise<IDBValidKey> {
-  return dbTransaction(STORE_IMAGES, 'readwrite', (s) => s.put(image))
+export function putImage(image: StoredImage | StoredImageRecord): Promise<IDBValidKey> {
+  return dbTransaction(STORE_IMAGES, 'readwrite', (s) => s.put(normalizeImageForStorage(image)))
 }
 
 export function deleteImage(id: string): Promise<undefined> {

@@ -15,12 +15,41 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 export function dataUrlToBytes(dataUrl: string): { ext: string; bytes: Uint8Array } {
-  const match = dataUrl.match(/^data:image\/(\w+);base64,/)
-  const ext = match?.[1] ?? 'png'
-  const binary = atob(dataUrl.replace(/^data:[^;]+;base64,/, ''))
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return { ext, bytes }
+  const match = dataUrl.match(/^data:image\/([^;,]+)(?:;base64)?,/i)
+  const ext = match?.[1]?.split('+')[0]?.toLowerCase() ?? 'png'
+  const comma = dataUrl.indexOf(',')
+  if (comma < 0) throw new Error('无效的图片 Data URL')
+  const header = dataUrl.slice(0, comma)
+  const payload = dataUrl.slice(comma + 1)
+  const isBase64 = header.toLowerCase().includes(';base64')
+  if (isBase64) {
+    const binary = atob(payload)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return { ext, bytes }
+  }
+  return { ext, bytes: new TextEncoder().encode(decodeURIComponent(payload)) }
+}
+
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(',')
+  if (!dataUrl.startsWith('data:') || comma < 0) throw new Error('无效的图片 Data URL')
+  const header = dataUrl.slice(5, comma)
+  const payload = dataUrl.slice(comma + 1)
+  const separator = header.indexOf(';')
+  const mime = separator < 0 ? header : header.slice(0, separator)
+  if (!mime) throw new Error('图片 MIME 类型缺失')
+  const isBase64 = header.toLowerCase().includes(';base64')
+  let bytes: Uint8Array
+  if (isBase64) {
+    const binary = atob(payload)
+    bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  } else {
+    bytes = new TextEncoder().encode(decodeURIComponent(payload))
+  }
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  return new Blob([buffer], { type: mime })
 }
 
 export function bytesToDataUrl(bytes: Uint8Array, filePath: string): string {

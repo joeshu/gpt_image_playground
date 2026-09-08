@@ -1,6 +1,7 @@
-import { zipSync } from 'fflate'
+import { zipFilesAsync } from './asyncZip'
 import type { TaskRecord } from '../types'
 import { getNumberedFileNameBase, sanitizeFileNamePart } from './exportFileName'
+import { getStoredImageBlob } from './db'
 import { ensureImageCached } from './imageCache'
 import { addExportHistory } from './exportHistory'
 import { isNativeApp } from './platform'
@@ -77,7 +78,7 @@ async function downloadNativeZipBatches(entries: DownloadImageZipEntry[], zipFil
       continue
     }
 
-    const zipped = zipSync(zipFiles, { level: 6 })
+    const zipped = await zipFilesAsync(zipFiles, 6)
     const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer
     const baseName = sanitizeFileNamePart(zipFileNameBase) || 'images'
     const fileName = totalBatches === 1 ? `${baseName}.zip` : `${baseName}-${String(batchIndex + 1).padStart(2, '0')}.zip`
@@ -185,7 +186,7 @@ export async function downloadImageEntriesAsZip(entries: DownloadImageZipEntry[]
   }
 
   if (successCount > 0) {
-    const zipped = zipSync(zipFiles, { level: 6 })
+    const zipped = await zipFilesAsync(zipFiles, 6)
     const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer
     const zipBlob = new Blob([buffer], { type: 'application/zip' })
     const fileName = `${sanitizeFileNamePart(zipFileNameBase) || 'images'}.zip`
@@ -219,13 +220,18 @@ export function getImageZipEntries(imageIds: string[], fileNameBase = 'image'): 
 }
 
 async function getImageBlob(imageIdOrUrl: string): Promise<Blob> {
-  let src = imageIdOrUrl
   if (!imageIdOrUrl.startsWith('data:') && !imageIdOrUrl.startsWith('http://') && !imageIdOrUrl.startsWith('https://')) {
-    src = await ensureImageCached(imageIdOrUrl) ?? imageIdOrUrl
+    const storedBlob = await getStoredImageBlob(imageIdOrUrl)
+    if (storedBlob) return storedBlob
+    const cachedDataUrl = await ensureImageCached(imageIdOrUrl)
+    if (cachedDataUrl) {
+      const response = await fetch(cachedDataUrl)
+      return await response.blob()
+    }
   }
 
-  const res = await fetch(src)
-  if (!res.ok && !src.startsWith('data:')) throw new Error(`读取图片失败：${imageIdOrUrl}`)
+  const res = await fetch(imageIdOrUrl)
+  if (!res.ok && !imageIdOrUrl.startsWith('data:')) throw new Error(`读取图片失败：${imageIdOrUrl}`)
   return await res.blob()
 }
 
