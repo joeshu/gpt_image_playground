@@ -1,10 +1,10 @@
-import type { AgentConversation, AgentInputDraft, AgentRound, AppMode, InputImage, MaskDraft } from '../types'
+import type { AgentConversation, AgentInputDraft, AgentRound, AppMode, InputAttachment, InputImage, MaskDraft } from '../types'
 import { remapAgentRoundMentionsForPathChange } from './agentConversationState'
 import { remapImageMentionsForOrder } from './promptImageMentions'
 
 const AGENT_INPUT_DRAFT_RETENTION_MS = 3 * 24 * 60 * 60 * 1000
 
-type InputDraftFields = Pick<AgentInputDraft, 'prompt' | 'inputImages' | 'maskDraft' | 'maskEditorImageId'>
+type InputDraftFields = Pick<AgentInputDraft, 'prompt' | 'inputImages' | 'attachments' | 'maskDraft' | 'maskEditorImageId'>
 
 type AgentInputDraftState = InputDraftFields & {
   appMode: AppMode
@@ -49,6 +49,7 @@ export function normalizeAgentInputDraft(value: unknown, fallbackUpdatedAt = Dat
   return {
     prompt: typeof draft.prompt === 'string' ? draft.prompt : '',
     inputImages: normalizeInputImages(draft.inputImages),
+    attachments: Array.isArray(draft.attachments) ? draft.attachments.filter((a): a is InputAttachment => isRecord(a) && typeof a.id === 'string' && typeof a.name === 'string' && typeof a.mimeType === 'string' && (a.kind === 'image' || a.kind === 'text' || a.kind === 'file')).map((a) => ({ id: a.id, name: a.name, mimeType: a.mimeType, size: typeof a.size === 'number' ? a.size : 0, kind: a.kind, createdAt: typeof a.createdAt === 'number' ? a.createdAt : Date.now() })) : [],
     maskDraft: normalizeMaskDraft(draft.maskDraft),
     maskEditorImageId: typeof draft.maskEditorImageId === 'string' ? draft.maskEditorImageId : null,
     updatedAt,
@@ -92,6 +93,7 @@ export function clearInputDraftState(): InputDraftFields {
   return {
     prompt: '',
     inputImages: [],
+    attachments: [],
     maskDraft: null,
     maskEditorImageId: null,
   }
@@ -101,6 +103,7 @@ function copyAgentInputDraft(draft: AgentInputDraft): AgentInputDraft {
   return {
     prompt: draft.prompt,
     inputImages: draft.inputImages.map((img) => ({ ...img })),
+    attachments: (draft.attachments ?? []).map((attachment) => ({ ...attachment })),
     maskDraft: draft.maskDraft ? { ...draft.maskDraft } : null,
     maskEditorImageId: draft.maskEditorImageId,
     updatedAt: draft.updatedAt ?? Date.now(),
@@ -111,6 +114,7 @@ function getCurrentAgentInputDraft(state: InputDraftFields): AgentInputDraft {
   return {
     prompt: state.prompt,
     inputImages: state.inputImages,
+    attachments: state.attachments ?? [],
     maskDraft: state.maskDraft,
     maskEditorImageId: state.maskEditorImageId,
     updatedAt: Date.now(),
@@ -118,7 +122,7 @@ function getCurrentAgentInputDraft(state: InputDraftFields): AgentInputDraft {
 }
 
 export function isEmptyAgentInputDraft(draft: AgentInputDraft) {
-  return draft.prompt.length === 0 && draft.inputImages.length === 0 && !draft.maskDraft && !draft.maskEditorImageId
+  return draft.prompt.length === 0 && draft.inputImages.length === 0 && (draft.attachments?.length ?? 0) === 0 && !draft.maskDraft && !draft.maskEditorImageId
 }
 
 function setAgentInputDraft(drafts: Record<string, AgentInputDraft>, conversationId: string, draft: AgentInputDraft) {
@@ -147,6 +151,8 @@ export function restoreGalleryInputDraftState(draft: AgentInputDraft | null): In
   return {
     prompt: draft.prompt,
     inputImages: draft.inputImages.map((img) => ({ ...img })),
+    // Gallery never carries general attachments; keep them in the Agent draft only.
+    attachments: [],
     maskDraft: draft.maskDraft ? { ...draft.maskDraft } : null,
     maskEditorImageId: draft.maskEditorImageId,
   }
@@ -154,7 +160,14 @@ export function restoreGalleryInputDraftState(draft: AgentInputDraft | null): In
 
 export function restoreAgentInputDraftState(drafts: Record<string, AgentInputDraft>, conversationId: string | null): InputDraftFields {
   const draft = conversationId ? drafts[conversationId] : null
-  return restoreGalleryInputDraftState(draft ?? null)
+  if (!draft) return clearInputDraftState()
+  return {
+    prompt: draft.prompt,
+    inputImages: draft.inputImages.map((img) => ({ ...img })),
+    attachments: (draft.attachments ?? []).map((attachment) => ({ ...attachment })),
+    maskDraft: draft.maskDraft ? { ...draft.maskDraft } : null,
+    maskEditorImageId: draft.maskEditorImageId,
+  }
 }
 
 export function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(

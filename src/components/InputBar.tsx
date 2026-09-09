@@ -25,6 +25,7 @@ import PromptPreflightModal from './PromptPreflightModal'
 import { runPromptPreflight, type PromptPreflightResult } from '../lib/promptPreflight'
 import { savePromptVersion } from '../lib/promptVersionHistory'
 import { validateImageFile } from '../lib/imageUploadValidation'
+import { attachmentKind, createAgentAttachment } from '../lib/agentAttachments'
 
 /** API 支持的最大参考图数量 */
 const API_MAX_IMAGES = 16
@@ -96,6 +97,9 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
   const appMode = useStore((s) => s.appMode)
   const setPrompt = useStore((s) => s.setPrompt)
   const inputImages = useStore((s) => s.inputImages)
+  const attachments = useStore((s) => s.attachments)
+  const addAttachment = useStore((s) => s.addAttachment)
+  const removeAttachment = useStore((s) => s.removeAttachment)
   const addInputImage = useStore((s) => s.addInputImage)
   const removeInputImage = useStore((s) => s.removeInputImage)
   const clearInputImages = useStore((s) => s.clearInputImages)
@@ -869,44 +873,38 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
   }
 
   const handleFiles = async (files: FileList | File[]) => {
-    try {
-      const currentCount = useStore.getState().inputImages.length
-      if (currentCount >= API_MAX_IMAGES) {
-        useStore.getState().showToast(
-          `参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`,
-          'error',
-        )
-        return
-      }
+    const incoming = Array.from(files)
+    const imageFiles = incoming.filter((file) => attachmentKind(file) === 'image')
+    const nonImageFiles = incoming.filter((file) => attachmentKind(file) !== 'image')
 
-      const remaining = API_MAX_IMAGES - currentCount
-      const accepted = Array.from(files).filter((f) => f.type.startsWith('image/'))
-      const toAdd = accepted.slice(0, remaining)
-      const discarded = accepted.length - toAdd.length
-
-      for (const file of toAdd) {
+    if (appMode === 'gallery' && nonImageFiles.length > 0) {
+      showToast('图库模式仅支持图片附件', 'error')
+    }
+    if (appMode === 'agent') {
+      for (const file of nonImageFiles) {
         try {
-          await validateImageFile(file)
-          await addImageFromFile(file)
+          const attachment = await createAgentAttachment(file)
+          addAttachment(attachment)
         } catch (error) {
-          useStore.getState().showToast(
-            `${file.name || '图片'}：${error instanceof Error ? error.message : String(error)}`,
-            'error',
-          )
+          showToast(`${file.name || '附件'}：${error instanceof Error ? error.message : String(error)}`, 'error')
         }
       }
+    }
 
-      if (discarded > 0) {
-        useStore.getState().showToast(
-          `已达上限 ${API_MAX_IMAGES} 张，${discarded} 张图片被丢弃`,
-          'error',
-        )
+    if (imageFiles.length === 0) return
+    const currentCount = useStore.getState().inputImages.length
+    const remaining = Math.max(0, API_MAX_IMAGES - currentCount)
+    const toAdd = imageFiles.slice(0, remaining)
+    for (const file of toAdd) {
+      try {
+        await validateImageFile(file)
+        await addImageFromFile(file)
+      } catch (error) {
+        showToast(`${file.name || '图片'}：${error instanceof Error ? error.message : String(error)}`, 'error')
       }
-    } catch (err) {
-      useStore.getState().showToast(
-        `图片添加失败：${err instanceof Error ? err.message : String(err)}`,
-        'error',
-      )
+    }
+    if (imageFiles.length > toAdd.length) {
+      showToast(`已达上限 ${API_MAX_IMAGES} 张，${imageFiles.length - toAdd.length} 张图片被丢弃`, 'error')
     }
   }
 
@@ -1002,16 +1000,14 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items
       if (!items) return
-      const imageFiles: File[] = []
+      const files: File[] = []
       for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile()
-          if (file) imageFiles.push(file)
-        }
+        const file = item.getAsFile()
+        if (file) files.push(file)
       }
-      if (imageFiles.length > 0) {
+      if (files.length > 0) {
         e.preventDefault()
-        handleFilesRef.current(imageFiles)
+        handleFilesRef.current(files)
       }
     }
     document.addEventListener('paste', handlePaste)
@@ -1742,6 +1738,18 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
             )
           )}
 
+          {appMode === 'agent' && attachments.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2" aria-label="通用附件">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="flex max-w-full items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs dark:border-white/[0.1] dark:bg-white/[0.05]">
+                  <span className="max-w-[12rem] truncate" title={attachment.name}>{attachment.name}</span>
+                  <span className="shrink-0 text-gray-400">{attachment.mimeType} · {(attachment.size / 1024).toFixed(1)} KB</span>
+                  <button type="button" className="shrink-0 text-gray-400 hover:text-red-500" aria-label={`删除附件 ${attachment.name}`} onClick={() => removeAttachment(attachment.id)}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* 输入框 */}
           <div className={`relative grid${promptExpanded ? ' min-h-0 flex-1' : ''}`}>
             {showAtImageMenu && (
@@ -1908,7 +1916,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
                 >
                   <ButtonTooltip visible={attachHover} text={uploadImageTooltipText} />
                   <button
-                    onClick={() => !atImageLimit && fileInputRef.current?.click()}
+                    onClick={() => (appMode === 'agent' || !atImageLimit) && fileInputRef.current?.click()}
                     className={`p-2.5 rounded-xl transition-all shadow-sm ${
                       atImageLimit
                         ? 'bg-gray-200 dark:bg-white/[0.04] text-gray-300 dark:text-gray-500 cursor-not-allowed'
@@ -1973,7 +1981,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
                 >
                   <button
                     onClick={() => {
-                      if (!atImageLimit) {
+                      if (appMode === 'agent' || !atImageLimit) {
                         setShowMobileUploadMenu(!showMobileUploadMenu)
                       }
                     }}
@@ -2025,7 +2033,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                           </svg>
-                          上传图片
+                          {appMode === 'agent' ? '上传文件或图片' : '上传图片'}
                         </button>
                       </div>
                     </>
@@ -2068,7 +2076,7 @@ export default function InputBar({ onOpenPromptStudio, promptStudioApplyToken = 
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={appMode === 'agent' ? 'image/*,.txt,.md,.json,.csv,.xml,.html,.htm,.pdf,.docx,.xlsx,.pptx' : 'image/*'}
             multiple
             className="hidden"
             onChange={handleFileUpload}

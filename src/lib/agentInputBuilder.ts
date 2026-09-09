@@ -7,6 +7,9 @@ import {
   replaceAgentPromptImageReferencesForApi,
 } from './agentImageReferences'
 import { getAgentRoundResponseOutput, sanitizeResponseOutputForInput } from './agentResponseState'
+import { getAgentAttachment } from './db'
+import { blobToDataUrl } from './dataUrl'
+import { INPUT_ATTACHMENT_TEXT_MAX_BYTES } from '../types'
 
 type LoadImage = (id: string) => Promise<string | null | undefined>
 
@@ -15,6 +18,7 @@ interface BuildAgentApiInputOptions {
   currentRound: AgentRound
   tasks: TaskRecord[]
   loadImage: LoadImage
+  loadAttachment?: (id: string) => Promise<{ blob: Blob; mimeType: string; kind: string } | null>
 }
 
 interface BuildAgentContinuationInputOptions {
@@ -27,6 +31,12 @@ interface BuildAgentContinuationInputOptions {
   toolCallsUsed: number
   maxToolCalls: number
   loadImage: LoadImage
+  loadAttachment?: BuildAgentApiInputOptions['loadAttachment']
+}
+
+async function defaultLoadAttachment(id: string) {
+  const record = await getAgentAttachment(id)
+  return record ? { blob: record.blob, mimeType: record.mimeType, kind: record.kind } : null
 }
 
 async function createUserInputItem(
@@ -35,6 +45,7 @@ async function createUserInputItem(
   message: AgentMessage,
   tasks: TaskRecord[],
   loadImage: LoadImage,
+  loadAttachment?: BuildAgentApiInputOptions['loadAttachment'],
 ) {
   const imageDataUrls: string[] = []
   for (const id of round.inputImageIds) {
@@ -51,6 +62,18 @@ async function createUserInputItem(
     content: [
       { type: 'input_text', text: `${text}${referenceText}` },
       ...imageDataUrls.map((dataUrl) => ({ type: 'input_image', image_url: dataUrl })),
+      ...await Promise.all((round.attachments ?? []).map(async (attachment) => {
+        const loaded = await (loadAttachment ?? defaultLoadAttachment)(attachment.id)
+        if (!loaded) return { type: 'input_text', text: `[附件不可用：${attachment.name}]` }
+        if (loaded.kind === 'text') {
+          const bytes = new Uint8Array(await loaded.blob.arrayBuffer())
+          const bounded = bytes.byteLength > INPUT_ATTACHMENT_TEXT_MAX_BYTES ? bytes.slice(0, INPUT_ATTACHMENT_TEXT_MAX_BYTES) : bytes
+          const text = new TextDecoder().decode(bounded)
+          return { type: 'input_text', text: `\n--- ${attachment.name} ---\n${text}\n--- end ---` }
+        }
+        // Responses API requires file_data to be a Data URL, never a Blob in JSON.
+        return { type: 'input_file', file_data: await blobToDataUrl(loaded.blob, loaded.mimeType), filename: attachment.name }
+      })),
     ],
   }
 }
@@ -131,7 +154,7 @@ export async function buildAgentApiInput(options: BuildAgentApiInputOptions): Pr
     const userMessage = options.conversation.messages.find((message) => message.id === round.userMessageId)
     if (!userMessage) continue
 
-    input.push(await createUserInputItem(options.conversation, round, userMessage, options.tasks, options.loadImage))
+    input.push(await createUserInputItem(options.conversation, round, userMessage, options.tasks, options.loadImage, options.loadAttachment))
     if (round.id === options.currentRound.id) continue
 
     const output = getAgentRoundResponseOutput(round, options.tasks)

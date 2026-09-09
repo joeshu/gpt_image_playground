@@ -11,6 +11,7 @@ import type {
   AppMode,
   TaskParams,
   InputImage,
+  InputAttachment,
   MaskDraft,
   TaskRecord,
   FavoriteCollection,
@@ -43,6 +44,7 @@ import {
   clearImages,
   storeImage,
   storeImageWithSize,
+  getAgentAttachment,
 } from './lib/db'
 import { callImageApi } from './lib/api'
 import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle, parseBatchImageCallArguments, type AgentApiResultImage } from './lib/agentApi'
@@ -300,6 +302,10 @@ interface AppState {
   prompt: string
   setPrompt: (p: string) => void
   inputImages: InputImage[]
+  attachments: InputAttachment[]
+  addAttachment: (attachment: InputAttachment) => void
+  removeAttachment: (id: string) => void
+  clearAttachments: () => void
   addInputImage: (img: InputImage) => void
   replaceInputImage: (idx: number, img: InputImage) => void
   removeInputImage: (idx: number) => void
@@ -683,6 +689,11 @@ export const useStore = create<AppState>()(
       prompt: '',
       setPrompt: (prompt) => set((s) => syncActiveInputDraft(s, { prompt })),
       inputImages: [],
+      attachments: [],
+      addAttachment: (attachment) => set((s) => s.attachments.some((a) => a.id === attachment.id) ? s : syncActiveInputDraft(s, { attachments: [...s.attachments, attachment] })),
+      // Keep attachment blobs for submitted rounds and historical retries; a later GC pass can reclaim unreferenced blobs.
+      removeAttachment: (id) => { set((s) => syncActiveInputDraft(s, { attachments: s.attachments.filter((a) => a.id !== id) })) },
+      clearAttachments: () => set((s) => syncActiveInputDraft(s, { attachments: [] })),
       addInputImage: (img) =>
         set((s) => {
           if (s.inputImages.find((i) => i.id === img.id)) return s
@@ -2434,7 +2445,7 @@ async function continueRecoveredAgentRound(taskId: string) {
 
 export async function submitAgentMessage() {
   const state = useStore.getState()
-  const { settings, prompt, inputImages, maskDraft, params, showToast } = state
+  const { settings, prompt, inputImages, attachments, maskDraft, params, showToast } = state
   const normalizedSettings = normalizeSettings(settings)
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -2528,6 +2539,7 @@ export async function submitAgentMessage() {
     userMessageId,
     prompt: trimmedPrompt,
     inputImageIds,
+    attachments: attachments.map((attachment) => ({ ...attachment })),
     maskTargetImageId,
     maskImageId,
     outputTaskIds: [],
@@ -2542,6 +2554,7 @@ export async function submitAgentMessage() {
     content: trimmedPrompt,
     roundId,
     inputImageIds,
+    attachments: attachments.map((attachment) => ({ ...attachment })),
     maskTargetImageId,
     maskImageId,
     createdAt: now,
@@ -2578,6 +2591,8 @@ export async function submitAgentMessage() {
   state.setPrompt('')
   state.clearInputImages()
   state.clearMaskDraft()
+  // 仅清空当前草稿状态；附件 Blob 仍由已提交的 round 引用。
+  state.clearAttachments()
   state.setAgentEditingRoundId(null)
 
   if (fallbackTitle) {
@@ -2666,6 +2681,7 @@ export async function regenerateAgentAssistantMessage(conversationId: string, ro
     userMessageId: newUserMessageId,
     prompt: sourceRound.prompt || sourceUserMessage.content.trim(),
     inputImageIds,
+    attachments: (sourceRound.attachments ?? sourceUserMessage.attachments ?? []).map((attachment) => ({ ...attachment })),
     maskTargetImageId: sourceRound.maskTargetImageId ?? sourceUserMessage.maskTargetImageId ?? null,
     maskImageId: sourceRound.maskImageId ?? sourceUserMessage.maskImageId ?? null,
     outputTaskIds: [],
@@ -2680,6 +2696,7 @@ export async function regenerateAgentAssistantMessage(conversationId: string, ro
     content: sourceUserMessage.content,
     roundId: newRoundId,
     inputImageIds,
+    attachments: (sourceRound.attachments ?? sourceUserMessage.attachments ?? []).map((attachment) => ({ ...attachment })),
     maskTargetImageId: sourceRound.maskTargetImageId ?? sourceUserMessage.maskTargetImageId ?? null,
     maskImageId: sourceRound.maskImageId ?? sourceUserMessage.maskImageId ?? null,
     createdAt: now,
@@ -2724,6 +2741,10 @@ async function executeAgentRound(
       currentRound: round,
       tasks: latestState.tasks,
       loadImage: ensureImageCached,
+      loadAttachment: async (id) => {
+        const attachment = await getAgentAttachment(id)
+        return attachment ? { blob: attachment.blob, mimeType: attachment.mimeType, kind: attachment.kind } : null
+      },
     })
     if (controller.signal.aborted) throw createAgentAbortError()
     const existingAssistantMessage = round.assistantMessageId
@@ -2940,6 +2961,10 @@ async function executeAgentRound(
         toolCallsUsed,
         maxToolCalls,
         loadImage: ensureImageCached,
+        loadAttachment: async (id) => {
+          const attachment = await getAgentAttachment(id)
+          return attachment ? { blob: attachment.blob, mimeType: attachment.mimeType, kind: attachment.kind } : null
+        },
       })
     }
     let reachedToolLimit = resume ? toolCallsUsed >= maxToolCalls : false
@@ -3516,6 +3541,10 @@ async function executeAgentRound(
         toolCallsUsed,
         maxToolCalls,
         loadImage: ensureImageCached,
+        loadAttachment: async (id) => {
+          const attachment = await getAgentAttachment(id)
+          return attachment ? { blob: attachment.blob, mimeType: attachment.mimeType, kind: attachment.kind } : null
+        },
       })
       accumulatedOutputItems = accumulatedOutputItemsWithFunctionOutputs
       pendingToolTextSeparator = true
