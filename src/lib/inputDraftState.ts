@@ -105,7 +105,7 @@ function copyAgentInputDraft(draft: AgentInputDraft): AgentInputDraft {
   return {
     prompt: draft.prompt,
     inputImages: draft.inputImages.map((img) => ({ ...img })),
-    attachments: (draft.attachments ?? []).map((attachment) => ({ ...attachment })),
+    ...(draft.attachments && draft.attachments.length > 0 ? { attachments: draft.attachments.map((attachment) => ({ ...attachment })) } : {}),
     maskDraft: draft.maskDraft ? { ...draft.maskDraft } : null,
     maskEditorImageId: draft.maskEditorImageId,
     updatedAt: draft.updatedAt ?? Date.now(),
@@ -179,7 +179,7 @@ export function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
   const draft: AgentInputDraft = {
     prompt: patch.prompt ?? state.prompt,
     inputImages: patch.inputImages ?? state.inputImages,
-    ...(patch.attachments !== undefined || state.attachments.length > 0 ? { attachments: patch.attachments ?? state.attachments } : {}),
+    ...(patch.attachments !== undefined || (state.attachments?.length ?? 0) > 0 ? { attachments: patch.attachments ?? state.attachments } : {}),
     maskDraft: patch.maskDraft !== undefined ? patch.maskDraft : state.maskDraft,
     maskEditorImageId: patch.maskEditorImageId !== undefined ? patch.maskEditorImageId : state.maskEditorImageId,
   }
