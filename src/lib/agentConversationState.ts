@@ -7,6 +7,21 @@ function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
+function normalizeAttachments(value: unknown): AgentRound['attachments'] {
+  if (!Array.isArray(value)) return []
+  return value.filter(isRecord).filter((item) =>
+    typeof item.id === 'string' && typeof item.name === 'string' && typeof item.mimeType === 'string' &&
+    (item.kind === 'text' || item.kind === 'file') && typeof item.size === 'number' && Number.isFinite(item.size),
+  ).map((item) => ({
+    id: item.id as string,
+    name: item.name as string,
+    mimeType: item.mimeType as string,
+    size: item.size as number,
+    kind: item.kind as 'text' | 'file',
+    createdAt: typeof item.createdAt === 'number' ? item.createdAt : Date.now(),
+  }))
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const proto = Object.getPrototypeOf(value)
@@ -34,6 +49,7 @@ function normalizeAgentRound(value: unknown, fallbackIndex: number): AgentRound 
     ...(typeof round.assistantMessageId === 'string' ? { assistantMessageId: round.assistantMessageId } : {}),
     prompt: typeof round.prompt === 'string' ? round.prompt : '',
     inputImageIds: normalizeStringArray(round.inputImageIds),
+    attachments: normalizeAttachments(round.attachments),
     maskTargetImageId: typeof round.maskTargetImageId === 'string' ? round.maskTargetImageId : null,
     maskImageId: typeof round.maskImageId === 'string' ? round.maskImageId : null,
     outputTaskIds: normalizeStringArray(round.outputTaskIds),
@@ -61,6 +77,7 @@ function normalizeAgentMessage(value: unknown): AgentMessage | null {
     content: typeof message.content === 'string' ? message.content : '',
     roundId: message.roundId,
     ...(Array.isArray(message.inputImageIds) ? { inputImageIds: normalizeStringArray(message.inputImageIds) } : {}),
+    ...(Array.isArray(message.attachments) ? { attachments: normalizeAttachments(message.attachments) } : {}),
     maskTargetImageId: typeof message.maskTargetImageId === 'string' ? message.maskTargetImageId : null,
     maskImageId: typeof message.maskImageId === 'string' ? message.maskImageId : null,
     ...(Array.isArray(message.outputTaskIds) ? { outputTaskIds: normalizeStringArray(message.outputTaskIds) } : {}),

@@ -154,6 +154,20 @@ export interface InputImage {
   dataUrl: string
 }
 
+/** Agent 通用附件元数据；二进制内容只存 IndexedDB Blob，不进入 localStorage。 */
+export type InputAttachmentKind = 'image' | 'text' | 'file'
+export interface InputAttachment {
+  id: string
+  name: string
+  mimeType: string
+  size: number
+  kind: InputAttachmentKind
+  createdAt: number
+}
+
+export const INPUT_ATTACHMENT_TEXT_MAX_BYTES = 512 * 1024
+export const INPUT_ATTACHMENT_FILE_MAX_BYTES = 20 * 1024 * 1024
+
 export interface MaskDraft {
   targetImageId: string
   maskDataUrl: string
@@ -163,6 +177,8 @@ export interface MaskDraft {
 export interface AgentInputDraft {
   prompt: string
   inputImages: InputImage[]
+  /** Agent 通用附件元数据；Gallery 草稿始终为空。 */
+  attachments?: InputAttachment[]
   maskDraft: MaskDraft | null
   maskEditorImageId: string | null
   updatedAt?: number
@@ -421,6 +437,8 @@ export interface AgentMessage {
   content: string
   roundId: string
   inputImageIds?: string[]
+  /** Agent 通用附件元数据；Blob 保存在 agentAttachments IndexedDB store。 */
+  attachments?: InputAttachment[]
   maskTargetImageId?: string | null
   maskImageId?: string | null
   outputTaskIds?: string[]
@@ -435,6 +453,8 @@ export interface AgentRound {
   assistantMessageId?: string
   prompt: string
   inputImageIds: string[]
+  /** Agent 通用附件元数据；Blob 保存在 agentAttachments IndexedDB store。 */
+  attachments?: InputAttachment[]
   maskTargetImageId?: string | null
   maskImageId?: string | null
   outputTaskIds: string[]

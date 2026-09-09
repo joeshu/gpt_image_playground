@@ -3,11 +3,12 @@ import { blobToDataUrl, dataUrlToBlob } from './dataUrl'
 import { StorageQuotaError, isStorageQuotaError } from './storage'
 
 const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const STORE_TASKS = 'tasks'
 const STORE_IMAGES = 'images'
 const STORE_THUMBNAILS = 'thumbnails'
 const STORE_AGENT_CONVERSATIONS = 'agentConversations'
+const STORE_AGENT_ATTACHMENTS = 'agentAttachments'
 const THUMBNAIL_MAX_SIZE = 720
 const THUMBNAIL_QUALITY = 0.9
 const THUMBNAIL_VERSION = 2
@@ -30,6 +31,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_AGENT_CONVERSATIONS)) {
         db.createObjectStore(STORE_AGENT_CONVERSATIONS, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_AGENT_ATTACHMENTS)) {
+        db.createObjectStore(STORE_AGENT_ATTACHMENTS, { keyPath: 'id' })
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -120,7 +124,13 @@ export function replaceAgentConversations(conversations: AgentConversation[]): P
   )
 }
 
-// ===== Images =====
+
+// ===== Agent attachments (Blob-only) =====
+export interface StoredAgentAttachment { id: string; name: string; mimeType: string; size: number; kind: string; createdAt: number; blob: Blob }
+export function putAgentAttachment(record: StoredAgentAttachment): Promise<IDBValidKey> { return dbTransaction(STORE_AGENT_ATTACHMENTS, 'readwrite', (s) => s.put(record)) }
+export function getAgentAttachment(id: string): Promise<StoredAgentAttachment | undefined> { return dbTransaction(STORE_AGENT_ATTACHMENTS, 'readonly', (s) => s.get(id)) }
+export function deleteAgentAttachment(id: string): Promise<undefined> { return dbTransaction(STORE_AGENT_ATTACHMENTS, 'readwrite', (s) => s.delete(id)) }
+
 
 export function getImageRecord(id: string): Promise<StoredImageRecord | undefined> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.get(id))

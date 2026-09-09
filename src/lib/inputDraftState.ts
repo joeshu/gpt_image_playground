@@ -1,10 +1,10 @@
-import type { AgentConversation, AgentInputDraft, AgentRound, AppMode, InputImage, MaskDraft } from '../types'
+import type { AgentConversation, AgentInputDraft, AgentRound, AppMode, InputAttachment, InputImage, MaskDraft } from '../types'
 import { remapAgentRoundMentionsForPathChange } from './agentConversationState'
 import { remapImageMentionsForOrder } from './promptImageMentions'
 
 const AGENT_INPUT_DRAFT_RETENTION_MS = 3 * 24 * 60 * 60 * 1000
 
-type InputDraftFields = Pick<AgentInputDraft, 'prompt' | 'inputImages' | 'maskDraft' | 'maskEditorImageId'>
+type InputDraftFields = Pick<AgentInputDraft, 'prompt' | 'inputImages' | 'attachments' | 'maskDraft' | 'maskEditorImageId'>
 
 type AgentInputDraftState = InputDraftFields & {
   appMode: AppMode
@@ -46,13 +46,17 @@ function normalizeMaskDraft(value: unknown): MaskDraft | null {
 export function normalizeAgentInputDraft(value: unknown, fallbackUpdatedAt = Date.now()): AgentInputDraft {
   const draft = isRecord(value) ? value : {}
   const updatedAt = typeof draft.updatedAt === 'number' && Number.isFinite(draft.updatedAt) ? draft.updatedAt : fallbackUpdatedAt
-  return {
+  const normalized: AgentInputDraft = {
     prompt: typeof draft.prompt === 'string' ? draft.prompt : '',
     inputImages: normalizeInputImages(draft.inputImages),
     maskDraft: normalizeMaskDraft(draft.maskDraft),
     maskEditorImageId: typeof draft.maskEditorImageId === 'string' ? draft.maskEditorImageId : null,
     updatedAt,
   }
+  if (Array.isArray(draft.attachments)) {
+    normalized.attachments = draft.attachments.filter((a): a is InputAttachment => isRecord(a) && typeof a.id === 'string' && typeof a.name === 'string' && typeof a.mimeType === 'string' && (a.kind === 'image' || a.kind === 'text' || a.kind === 'file')).map((a) => ({ id: a.id, name: a.name, mimeType: a.mimeType, size: typeof a.size === 'number' ? a.size : 0, kind: a.kind, createdAt: typeof a.createdAt === 'number' ? a.createdAt : Date.now() }))
+  }
+  return normalized
 }
 
 export function normalizeAgentInputDrafts(value: unknown, conversations: Pick<AgentConversation, 'id'>[]): Record<string, AgentInputDraft> {
@@ -101,6 +105,7 @@ function copyAgentInputDraft(draft: AgentInputDraft): AgentInputDraft {
   return {
     prompt: draft.prompt,
     inputImages: draft.inputImages.map((img) => ({ ...img })),
+    ...(draft.attachments && draft.attachments.length > 0 ? { attachments: draft.attachments.map((attachment) => ({ ...attachment })) } : {}),
     maskDraft: draft.maskDraft ? { ...draft.maskDraft } : null,
     maskEditorImageId: draft.maskEditorImageId,
     updatedAt: draft.updatedAt ?? Date.now(),
@@ -111,6 +116,7 @@ function getCurrentAgentInputDraft(state: InputDraftFields): AgentInputDraft {
   return {
     prompt: state.prompt,
     inputImages: state.inputImages,
+    attachments: state.attachments ?? [],
     maskDraft: state.maskDraft,
     maskEditorImageId: state.maskEditorImageId,
     updatedAt: Date.now(),
@@ -118,7 +124,7 @@ function getCurrentAgentInputDraft(state: InputDraftFields): AgentInputDraft {
 }
 
 export function isEmptyAgentInputDraft(draft: AgentInputDraft) {
-  return draft.prompt.length === 0 && draft.inputImages.length === 0 && !draft.maskDraft && !draft.maskEditorImageId
+  return draft.prompt.length === 0 && draft.inputImages.length === 0 && (draft.attachments?.length ?? 0) === 0 && !draft.maskDraft && !draft.maskEditorImageId
 }
 
 function setAgentInputDraft(drafts: Record<string, AgentInputDraft>, conversationId: string, draft: AgentInputDraft) {
@@ -147,6 +153,8 @@ export function restoreGalleryInputDraftState(draft: AgentInputDraft | null): In
   return {
     prompt: draft.prompt,
     inputImages: draft.inputImages.map((img) => ({ ...img })),
+    // Gallery never carries general attachments; keep them in the Agent draft only.
+    attachments: [],
     maskDraft: draft.maskDraft ? { ...draft.maskDraft } : null,
     maskEditorImageId: draft.maskEditorImageId,
   }
@@ -154,7 +162,14 @@ export function restoreGalleryInputDraftState(draft: AgentInputDraft | null): In
 
 export function restoreAgentInputDraftState(drafts: Record<string, AgentInputDraft>, conversationId: string | null): InputDraftFields {
   const draft = conversationId ? drafts[conversationId] : null
-  return restoreGalleryInputDraftState(draft ?? null)
+  if (!draft) return clearInputDraftState()
+  return {
+    prompt: draft.prompt,
+    inputImages: draft.inputImages.map((img) => ({ ...img })),
+    attachments: (draft.attachments ?? []).map((attachment) => ({ ...attachment })),
+    maskDraft: draft.maskDraft ? { ...draft.maskDraft } : null,
+    maskEditorImageId: draft.maskEditorImageId,
+  }
 }
 
 export function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
@@ -164,6 +179,7 @@ export function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
   const draft: AgentInputDraft = {
     prompt: patch.prompt ?? state.prompt,
     inputImages: patch.inputImages ?? state.inputImages,
+    ...(patch.attachments !== undefined || (state.attachments?.length ?? 0) > 0 ? { attachments: patch.attachments ?? state.attachments } : {}),
     maskDraft: patch.maskDraft !== undefined ? patch.maskDraft : state.maskDraft,
     maskEditorImageId: patch.maskEditorImageId !== undefined ? patch.maskEditorImageId : state.maskEditorImageId,
   }
