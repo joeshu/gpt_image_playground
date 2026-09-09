@@ -178,7 +178,7 @@ export interface AgentInputDraft {
   prompt: string
   inputImages: InputImage[]
   /** Agent 通用附件元数据；Gallery 草稿始终为空。 */
-  attachments: InputAttachment[]
+  attachments?: InputAttachment[]
   maskDraft: MaskDraft | null
   maskEditorImageId: string | null
   updatedAt?: number
