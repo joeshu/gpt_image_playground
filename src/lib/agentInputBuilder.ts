@@ -1,4 +1,5 @@
 import type { AgentConversation, AgentMessage, AgentRound, ResponsesOutputItem, TaskRecord } from '../types'
+import { AGENT_BINARY_ATTACHMENT_REQUEST_MAX_BYTES, INPUT_ATTACHMENT_TEXT_MAX_BYTES } from '../types'
 import { getAgentRoundPath } from './agentConversationState'
 import {
   collectAgentRoundOutputImageSlots,
@@ -9,7 +10,6 @@ import {
 import { getAgentRoundResponseOutput, sanitizeResponseOutputForInput } from './agentResponseState'
 import { getAgentAttachment } from './db'
 import { blobToDataUrl } from './dataUrl'
-import { INPUT_ATTACHMENT_TEXT_MAX_BYTES } from '../types'
 
 type LoadImage = (id: string) => Promise<string | null | undefined>
 
@@ -20,6 +20,9 @@ interface BuildAgentApiInputOptions {
   loadImage: LoadImage
   loadAttachment?: (id: string) => Promise<{ blob: Blob; mimeType: string; kind: string } | null>
 }
+
+type LoadedAttachment = { blob: Blob; mimeType: string; kind: string }
+type AttachmentLoader = (id: string) => Promise<LoadedAttachment | null>
 
 interface BuildAgentContinuationInputOptions {
   baseInput: unknown[]
@@ -39,13 +42,37 @@ async function defaultLoadAttachment(id: string) {
   return record ? { blob: record.blob, mimeType: record.mimeType, kind: record.kind } : null
 }
 
+async function preloadAgentAttachments(rounds: AgentRound[], loadAttachment: AttachmentLoader) {
+  const attachments = rounds.flatMap((round) => round.attachments ?? [])
+  const estimatedBytes = attachments
+    .filter((attachment) => attachment.kind !== 'text')
+    .reduce((sum, attachment) => sum + Math.max(0, attachment.size), 0)
+  if (estimatedBytes > AGENT_BINARY_ATTACHMENT_REQUEST_MAX_BYTES) {
+    throw new Error('附件总大小超过请求预算（6MiB）。请减少附件大小或数量后重试。')
+  }
+
+  const loaded = new Map<string, LoadedAttachment | null>()
+  for (const attachment of attachments) {
+    if (loaded.has(attachment.id)) continue
+    loaded.set(attachment.id, await loadAttachment(attachment.id))
+  }
+
+  const actualBytes = attachments
+    .filter((attachment) => attachment.kind !== 'text')
+    .reduce((sum, attachment) => sum + (loaded.get(attachment.id)?.blob.size ?? 0), 0)
+  if (actualBytes > AGENT_BINARY_ATTACHMENT_REQUEST_MAX_BYTES) {
+    throw new Error('附件总大小超过请求预算（6MiB，Base64 编码后约 8MiB）。请减少附件大小或改用较小文件后重试。')
+  }
+  return loaded
+}
+
 async function createUserInputItem(
   conversation: AgentConversation,
   round: AgentRound,
   message: AgentMessage,
   tasks: TaskRecord[],
   loadImage: LoadImage,
-  loadAttachment?: BuildAgentApiInputOptions['loadAttachment'],
+  attachmentCache: Map<string, LoadedAttachment | null>,
 ) {
   const imageDataUrls: string[] = []
   for (const id of round.inputImageIds) {
@@ -63,7 +90,7 @@ async function createUserInputItem(
       { type: 'input_text', text: `${text}${referenceText}` },
       ...imageDataUrls.map((dataUrl) => ({ type: 'input_image', image_url: dataUrl })),
       ...await Promise.all((round.attachments ?? []).map(async (attachment) => {
-        const loaded = await (loadAttachment ?? defaultLoadAttachment)(attachment.id)
+        const loaded = attachmentCache.get(attachment.id) ?? null
         if (!loaded) return { type: 'input_text', text: `[附件不可用：${attachment.name}]` }
         if (loaded.kind === 'text') {
           const bytes = new Uint8Array(await loaded.blob.arrayBuffer())
@@ -149,12 +176,13 @@ function createAssistantFallbackItem(text: string) {
 export async function buildAgentApiInput(options: BuildAgentApiInputOptions): Promise<unknown[]> {
   const input: unknown[] = []
   const rounds = getAgentRoundPath(options.conversation, options.currentRound.id)
+  const attachmentCache = await preloadAgentAttachments(rounds, options.loadAttachment ?? defaultLoadAttachment)
 
   for (const round of rounds) {
     const userMessage = options.conversation.messages.find((message) => message.id === round.userMessageId)
     if (!userMessage) continue
 
-    input.push(await createUserInputItem(options.conversation, round, userMessage, options.tasks, options.loadImage, options.loadAttachment))
+    input.push(await createUserInputItem(options.conversation, round, userMessage, options.tasks, options.loadImage, attachmentCache))
     if (round.id === options.currentRound.id) continue
 
     const output = getAgentRoundResponseOutput(round, options.tasks)
