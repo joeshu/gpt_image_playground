@@ -46,14 +46,17 @@ function normalizeMaskDraft(value: unknown): MaskDraft | null {
 export function normalizeAgentInputDraft(value: unknown, fallbackUpdatedAt = Date.now()): AgentInputDraft {
   const draft = isRecord(value) ? value : {}
   const updatedAt = typeof draft.updatedAt === 'number' && Number.isFinite(draft.updatedAt) ? draft.updatedAt : fallbackUpdatedAt
-  return {
+  const normalized: AgentInputDraft = {
     prompt: typeof draft.prompt === 'string' ? draft.prompt : '',
     inputImages: normalizeInputImages(draft.inputImages),
-    attachments: Array.isArray(draft.attachments) ? draft.attachments.filter((a): a is InputAttachment => isRecord(a) && typeof a.id === 'string' && typeof a.name === 'string' && typeof a.mimeType === 'string' && (a.kind === 'image' || a.kind === 'text' || a.kind === 'file')).map((a) => ({ id: a.id, name: a.name, mimeType: a.mimeType, size: typeof a.size === 'number' ? a.size : 0, kind: a.kind, createdAt: typeof a.createdAt === 'number' ? a.createdAt : Date.now() })) : [],
     maskDraft: normalizeMaskDraft(draft.maskDraft),
     maskEditorImageId: typeof draft.maskEditorImageId === 'string' ? draft.maskEditorImageId : null,
     updatedAt,
   }
+  if (Array.isArray(draft.attachments)) {
+    normalized.attachments = draft.attachments.filter((a): a is InputAttachment => isRecord(a) && typeof a.id === 'string' && typeof a.name === 'string' && typeof a.mimeType === 'string' && (a.kind === 'image' || a.kind === 'text' || a.kind === 'file')).map((a) => ({ id: a.id, name: a.name, mimeType: a.mimeType, size: typeof a.size === 'number' ? a.size : 0, kind: a.kind, createdAt: typeof a.createdAt === 'number' ? a.createdAt : Date.now() }))
+  }
+  return normalized
 }
 
 export function normalizeAgentInputDrafts(value: unknown, conversations: Pick<AgentConversation, 'id'>[]): Record<string, AgentInputDraft> {
@@ -93,7 +96,6 @@ export function clearInputDraftState(): InputDraftFields {
   return {
     prompt: '',
     inputImages: [],
-    attachments: [],
     maskDraft: null,
     maskEditorImageId: null,
   }
@@ -177,6 +179,7 @@ export function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
   const draft: AgentInputDraft = {
     prompt: patch.prompt ?? state.prompt,
     inputImages: patch.inputImages ?? state.inputImages,
+    ...(patch.attachments !== undefined || state.attachments.length > 0 ? { attachments: patch.attachments ?? state.attachments } : {}),
     maskDraft: patch.maskDraft !== undefined ? patch.maskDraft : state.maskDraft,
     maskEditorImageId: patch.maskEditorImageId !== undefined ? patch.maskEditorImageId : state.maskEditorImageId,
   }
