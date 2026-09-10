@@ -198,19 +198,42 @@ export async function fetchImageUrlAsDataUrl(url: string, fallbackMime: string, 
 export async function getApiErrorMessage(response: Response, context?: { endpoint?: string; mode?: string }): Promise<string> {
   let errorMsg = `HTTP ${response.status}`
   const textResponse = response.clone()
+  let parsedJson = false
   try {
     const errJson = await response.json()
-    if (errJson.error?.message) errorMsg = errJson.error.message
+    parsedJson = true
+    if (typeof errJson.error?.message === 'string') errorMsg = errJson.error.message
+    else if (Array.isArray(errJson.errors)) {
+      const messages = errJson.errors
+        .map((item: unknown) => typeof item === 'string' ? item : item && typeof item === 'object' && typeof (item as { message?: unknown }).message === 'string' ? (item as { message: string }).message : '')
+        .filter(Boolean)
+      if (messages.length) errorMsg = messages.join('\n')
+    }
     else if (typeof errJson.detail === 'string') errorMsg = errJson.detail
     else if (Array.isArray(errJson.detail)) errorMsg = errJson.detail.map((item: unknown) => typeof item === 'string' ? item : JSON.stringify(item)).join('\n')
     else if (typeof errJson.error === 'string') errorMsg = errJson.error
-    else if (errJson.message) errorMsg = errJson.message
+    else if (typeof errJson.message === 'string') errorMsg = errJson.message
+    if (response.status === 524 && errorMsg === `HTTP ${response.status}`) {
+      errorMsg = '上游 API 处理超时（HTTP 524）。附件可能过大，请减少附件大小或改用较小文件后重试。'
+    }
   } catch {
     try {
-      errorMsg = await textResponse.text()
+      const body = await textResponse.text()
+      const isHtml = /<html|<!doctype html|<body|cloudflare/i.test(body)
+      if (response.status === 524 || body.includes('524: A timeout occurred')) {
+        errorMsg = '上游 API 处理超时（HTTP 524）。附件可能过大，请减少附件大小或改用较小文件后重试。'
+      } else if (response.status >= 500 && response.status < 600 && isHtml) {
+        errorMsg = `上游 API 请求失败（HTTP ${response.status}）。上游服务暂时不可用，请稍后重试。`
+      } else {
+        errorMsg = body
+      }
     } catch {
       /* ignore */
     }
+  }
+  // JSON 错误优先保留服务商提供的原始消息，不被同状态的 HTML 规则覆盖。
+  if (!parsedJson && response.status === 524 && errorMsg === `HTTP ${response.status}`) {
+    errorMsg = '上游 API 处理超时（HTTP 524）。附件可能过大，请减少附件大小或改用较小文件后重试。'
   }
   const details = context
     ? [context.mode, context.endpoint, `HTTP ${response.status}`].filter(Boolean).join(' · ')

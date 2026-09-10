@@ -167,6 +167,8 @@ export interface InputAttachment {
 
 export const INPUT_ATTACHMENT_TEXT_MAX_BYTES = 512 * 1024
 export const INPUT_ATTACHMENT_FILE_MAX_BYTES = 20 * 1024 * 1024
+/** Responses API 请求中二进制附件的原始字节总预算；Base64 后约为 8MiB。 */
+export const AGENT_BINARY_ATTACHMENT_REQUEST_MAX_BYTES = 6 * 1024 * 1024
 
 export interface MaskDraft {
   targetImageId: string

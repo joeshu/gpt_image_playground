@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentConversation, AgentMessage, AgentRound, TaskRecord } from '../types'
-import { DEFAULT_PARAMS } from '../types'
+import { AGENT_BINARY_ATTACHMENT_REQUEST_MAX_BYTES, DEFAULT_PARAMS } from '../types'
 import { getSelectedImageMentionLabel } from './promptImageMentions'
 import { buildAgentApiInput, buildAgentContinuationInput } from './agentInputBuilder'
 
@@ -422,5 +422,57 @@ describe('agent input builder', () => {
     expect(serialized).not.toContain('stale')
     expect(input[input.length - 2]).toEqual(functionOutput)
     expect(JSON.stringify(input[input.length - 1])).toContain('Tool-call budget: 2/2 used.')
+  })
+})
+
+
+describe('agent input attachment budget', () => {
+  it('rejects binary attachments whose combined raw size exceeds 6 MiB before building input_file', async () => {
+    const currentRound = round('round-1', 1, {
+      status: 'running',
+      finishedAt: null,
+      attachments: [
+        { id: 'large-a', name: 'a.pdf', mimeType: 'application/pdf', size: AGENT_BINARY_ATTACHMENT_REQUEST_MAX_BYTES, kind: 'file', createdAt: 1 },
+        { id: 'large-b', name: 'b.pdf', mimeType: 'application/pdf', size: 1, kind: 'file', createdAt: 1 },
+      ],
+    })
+    const loadAttachment = vi.fn(async () => ({
+      blob: new Blob([new Uint8Array(1)]),
+      mimeType: 'application/pdf',
+      kind: 'file',
+    }))
+
+    await expect(buildAgentApiInput({
+      conversation: conversation([currentRound], [message(currentRound, '读取附件')]),
+      currentRound,
+      tasks: [],
+      loadImage: noImage,
+      loadAttachment,
+    })).rejects.toThrow('附件总大小超过请求预算')
+    expect(loadAttachment).not.toHaveBeenCalled()
+  })
+
+  it('converts binary attachments to data URLs without putting Blob in JSON', async () => {
+    const currentRound = round('round-1', 1, {
+      status: 'running',
+      finishedAt: null,
+      attachments: [{ id: 'brief', name: 'brief.pdf', mimeType: 'application/pdf', size: 3, kind: 'file', createdAt: 1 }],
+    })
+    const input = await buildAgentApiInput({
+      conversation: conversation([currentRound], [message(currentRound, '读取附件')]),
+      currentRound,
+      tasks: [],
+      loadImage: noImage,
+      loadAttachment: async () => ({ blob: new Blob([new Uint8Array([1, 2, 3])]), mimeType: 'application/pdf', kind: 'file' }),
+    })
+
+    expect(input).toContainEqual({
+      role: 'user',
+      content: [
+        { type: 'input_text', text: '读取附件' },
+        { type: 'input_file', file_data: 'data:application/pdf;base64,AQID', filename: 'brief.pdf' },
+      ],
+    })
+    expect(JSON.stringify(input)).not.toContain('[object Blob]')
   })
 })
