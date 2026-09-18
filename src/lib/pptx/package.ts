@@ -249,6 +249,35 @@ function coverSourceBox(page: PptxSourcePage, slide: PptxSlideSize): PptxElement
   return { x: 0, y: (1 - height) / 2, width: 1, height }
 }
 
+/** Map analyzer coordinates (source-image space) into slide space without stretching. */
+function mapSemanticBox(box: PptxElementBox, page: PptxSourcePage, slide: PptxSlideSize, fit: 'contain' | 'cover'): PptxElementBox | null {
+  const fitted = fitBox(page, slide, fit)
+  const content = {
+    x: fitted.x / slide.widthEmu,
+    y: fitted.y / slide.heightEmu,
+    width: fitted.width / slide.widthEmu,
+    height: fitted.height / slide.heightEmu,
+  }
+  const visibleSource = fit === 'cover' ? coverSourceBox(page, slide) : undefined
+  const sourceBox = visibleSource ?? { x: 0, y: 0, width: 1, height: 1 }
+  const left = Math.max(box.x, sourceBox.x)
+  const top = Math.max(box.y, sourceBox.y)
+  const right = Math.min(box.x + box.width, sourceBox.x + sourceBox.width)
+  const bottom = Math.min(box.y + box.height, sourceBox.y + sourceBox.height)
+  if (right <= left || bottom <= top) return null
+  return {
+    x: content.x + ((left - sourceBox.x) / sourceBox.width) * content.width,
+    y: content.y + ((top - sourceBox.y) / sourceBox.height) * content.height,
+    width: ((right - left) / sourceBox.width) * content.width,
+    height: ((bottom - top) / sourceBox.height) * content.height,
+  }
+}
+
+function mapSemanticElement(element: PptxSlideElement, page: PptxSourcePage, slide: PptxSlideSize, fit: 'contain' | 'cover'): PptxSlideElement | null {
+  const box = mapSemanticBox(element.box, page, slide, fit)
+  return box ? { ...element, box } : null
+}
+
 function slideXml(page: PptxSourcePage, slide: PptxSlideSize, options: PptxProjectOptions): string {
   const background = hex(options.backgroundColor)
   const cover = options.fit === 'cover'
@@ -287,7 +316,11 @@ function semanticSlideData(page: PptxSourcePage, slide: PptxSlideSize, options: 
     media.push({ path, image })
     return id
   }
-  const elements = spec.elements.map((element, index) => {
+  const mappedElements = spec.elements.flatMap((element) => {
+    const mapped = mapSemanticElement(element, page, slide, options.fit)
+    return mapped ? [mapped] : []
+  })
+  const elements = mappedElements.map((element, index) => {
     const shapeId = index + 2
     if (element.type === 'text') return textXml(element, slide, shapeId)
     if (element.type === 'rect' || element.type === 'line' || element.type === 'shape') return shapeXml(element, slide, shapeId)

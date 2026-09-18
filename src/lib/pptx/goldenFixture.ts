@@ -28,7 +28,20 @@ function line(id: string, x1: number, y1: number, x2: number, y2: number, color:
 }
 
 function sourceCrop(id: string, box: PptxElementBox, reason: string): PptxSlideElement {
-  return { id, type: 'image', box, sourceBox: box, classification: 'source_crop', confidence: 0.97, editable: false, fallbackReason: reason }
+  return { id, type: 'image', box, sourceBox: box, classification: 'source_crop', sourceExact: true, confidence: 0.97, editable: false, fallbackReason: reason }
+}
+
+function imagegenAsset(id: string, box: PptxElementBox, prompt: string, confidence = 0.90): PptxSlideElement {
+  return {
+    id,
+    type: 'image',
+    box,
+    classification: 'imagegen_asset',
+    assetId: id,
+    assetPrompt: `Isolated transparent PNG asset for a Chinese business presentation. No text, labels, numbers, card frame, or background. Match the reference geometry and colors exactly. ${prompt}`,
+    confidence,
+    editable: false,
+  }
 }
 
 /**
@@ -46,8 +59,8 @@ export function createUnicomOperationsGoldenSpec(): PptxSlideSpec {
     rect('top-overview-panel', b(0.020, 0.148, 0.318, 0.238), '#FFFDFD', '#F0D8DB', 0.018),
     rect('current-panel', b(0.030, 0.170, 0.132, 0.190), '#FFF1F2', undefined, 0.012),
     rect('target-panel', b(0.190, 0.170, 0.132, 0.190), '#FFF1F2', undefined, 0.012),
-    sourceCrop('current-icon', b(0.045, 0.198, 0.050, 0.066), '复杂业务图标保留为源图局部资产'),
-    sourceCrop('target-icon', b(0.205, 0.198, 0.050, 0.066), '复杂目标图标保留为源图局部资产'),
+    imagegenAsset('current-icon', b(0.045, 0.198, 0.050, 0.066), 'flat red bar-chart pictogram with three ascending bars and a small upward trend line'),
+    imagegenAsset('target-icon', b(0.205, 0.198, 0.050, 0.066), 'flat red target and bullseye pictogram with a centered arrow'),
     text('current-label', b(0.086, 0.194, 0.065, 0.034), '现状', { fontSizePt: 17, bold: true, color: '#C91F2B', align: 'center' }),
     text('current-copy', b(0.040, 0.279, 0.105, 0.062), '趋势向好\n仍在高位', { fontSizePt: 14, bold: true, color: '#16263A', align: 'center' }),
     text('target-label', b(0.240, 0.194, 0.065, 0.034), '目标', { fontSizePt: 17, bold: true, color: '#C91F2B', align: 'center' }),
@@ -110,7 +123,7 @@ export function createUnicomOperationsGoldenSpec(): PptxSlideSpec {
     const bodyY = 0.473
     card.body.forEach((copy, bodyIndex) => {
       const y = bodyY + bodyIndex * (cardIndex === 1 ? 0.083 : 0.095)
-      elements.push(sourceCrop(`card-${cardIndex + 1}-icon-${bodyIndex + 1}`, b(card.x + 0.020, y + 0.008, 0.044, 0.058), '复杂业务 pictogram 保留为独立源图资产'))
+      elements.push(imagegenAsset(`card-${cardIndex + 1}-icon-${bodyIndex + 1}`, b(card.x + 0.020, y + 0.008, 0.044, 0.058), `small monochrome red business pictogram for card ${cardIndex + 1}, item ${bodyIndex + 1}; simple flat vector-like silhouette with a soft pale-red circular host`))
       elements.push(text(`card-${cardIndex + 1}-copy-${bodyIndex + 1}`, b(card.x + 0.086, y, 0.216, cardIndex === 1 ? 0.072 : 0.080), copy, { fontSizePt: cardIndex === 1 ? 10.2 : 10.6, bold: bodyIndex === 0, color: '#16263A', align: 'left' }, bodyIndex === 1 ? 0.88 : 0.94))
     })
     elements.push(rect(`card-${cardIndex + 1}-footer-bg`, b(card.x + 0.010, 0.706, 0.298, 0.046), '#FFF0F1', undefined, 0.009))
@@ -120,26 +133,26 @@ export function createUnicomOperationsGoldenSpec(): PptxSlideSpec {
   elements.push(
     rect('management-strip', b(0.020, 0.785, 0.960, 0.058), '#FFFDFD', '#D92737', 0.010),
     text('management-title', b(0.038, 0.795, 0.340, 0.034), '管理保障｜借鉴郑州经验，营造高质量发展氛围', { fontSizePt: 11.5, bold: true, color: '#D92737', align: 'left' }),
-    sourceCrop('management-shield', b(0.402, 0.794, 0.034, 0.040), '保障图标保留为源图局部资产'),
+    imagegenAsset('management-shield', b(0.402, 0.794, 0.034, 0.040), 'flat red shield with a white check mark, isolated transparent asset'),
     text('management-copy-1', b(0.438, 0.795, 0.215, 0.034), '① 建立一线员工信誉分管理体系', { fontSizePt: 10, bold: true, color: '#25364A', align: 'left' }),
-    sourceCrop('management-policy', b(0.665, 0.794, 0.034, 0.040), '制度图标保留为源图局部资产'),
+    imagegenAsset('management-policy', b(0.665, 0.794, 0.034, 0.040), 'flat red document policy pictogram with two white horizontal lines, isolated transparent asset'),
     text('management-copy-2', b(0.700, 0.795, 0.260, 0.034), '② 明确违反生产经营管理秩序行为处理标准', { fontSizePt: 9.5, bold: true, color: '#25364A', align: 'left' }),
     shape('management-divider', 'rect', b(0.650, 0.795, 0.001, 0.034), '#E6A0A5', undefined),
     shape('outcome-ribbon', 'chevron', b(0.020, 0.860, 0.160, 0.064), '#D92737', undefined),
     text('outcome-title', b(0.043, 0.868, 0.130, 0.046), '预期成效', { fontSizePt: 16, bold: true, color: '#FFFFFF', align: 'center' }),
-    sourceCrop('outcome-quality-icon', b(0.190, 0.867, 0.046, 0.052), '成效图标保留为源图局部资产'),
+    imagegenAsset('outcome-quality-icon', b(0.190, 0.867, 0.046, 0.052), 'flat red ascending bar chart pictogram inside a pale-red circle'),
     text('outcome-quality', b(0.236, 0.866, 0.110, 0.053), '高质量发展\n提升收入持续性', { fontSizePt: 9.5, bold: true, color: '#25364A', align: 'left' }),
     shape('outcome-arrow-1', 'chevron', b(0.350, 0.878, 0.032, 0.030), '#F08A92', undefined),
-    sourceCrop('outcome-risk-icon', b(0.400, 0.867, 0.046, 0.052), '风险图标保留为源图局部资产'),
+    imagegenAsset('outcome-risk-icon', b(0.400, 0.867, 0.046, 0.052), 'flat red shield with a white check mark inside a pale-red circle'),
     text('outcome-risk', b(0.446, 0.866, 0.110, 0.053), '降低流失风险\n减少非必要流失', { fontSizePt: 9.5, bold: true, color: '#25364A', align: 'left' }),
     shape('outcome-arrow-2', 'chevron', b(0.560, 0.878, 0.032, 0.030), '#F08A92', undefined),
-    sourceCrop('outcome-value-icon', b(0.610, 0.867, 0.046, 0.052), '客户图标保留为源图局部资产'),
+    imagegenAsset('outcome-value-icon', b(0.610, 0.867, 0.046, 0.052), 'flat red group-of-customers pictogram inside a pale-red circle'),
     text('outcome-value', b(0.656, 0.866, 0.110, 0.053), '客户价值提升\nARPU与粘性增长', { fontSizePt: 9.5, bold: true, color: '#25364A', align: 'left' }),
     shape('outcome-arrow-3', 'chevron', b(0.770, 0.878, 0.032, 0.030), '#F08A92', undefined),
-    sourceCrop('outcome-target-icon', b(0.815, 0.867, 0.046, 0.052), '目标图标保留为源图局部资产'),
+    imagegenAsset('outcome-target-icon', b(0.815, 0.867, 0.046, 0.052), 'flat red target and bullseye pictogram with a centered arrow inside a pale-red circle'),
     text('outcome-target', b(0.861, 0.860, 0.115, 0.064), '流失收入持续压降\n目标 10%', { fontSizePt: 10, bold: true, color: '#D92737', align: 'left' }),
     text('footer-slogan', b(0.022, 0.934, 0.300, 0.035), '联通世界  创享美好智慧生活', { fontFamily: 'KaiTi', fontSizePt: 11, color: '#6D6D6D', align: 'left' }),
-    sourceCrop('footer-city-decoration', b(0.575, 0.932, 0.405, 0.068), '城市剪影和渐变装饰作为局部图片资产'),
+    imagegenAsset('footer-city-decoration', b(0.575, 0.932, 0.405, 0.068), 'wide red and pale-pink Chinese city skyline silhouette with a soft diagonal gradient band, transparent around the skyline'),
   )
 
   return {
