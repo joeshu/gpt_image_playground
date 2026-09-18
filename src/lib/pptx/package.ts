@@ -168,27 +168,42 @@ function normalizedBox(value: PptxElementBox): PptxElementBox {
   return { x, y, width, height }
 }
 
-function boxToXfrm(value: PptxElementBox, slide: PptxSlideSize): string {
+function boxToXfrm(value: PptxElementBox, slide: PptxSlideSize, rotation?: number, flipH = false, flipV = false): string {
   const box = normalizedBox(value)
-  return `<a:xfrm><a:off x="${emu(box.x * slide.widthEmu)}" y="${emu(box.y * slide.heightEmu)}"/><a:ext cx="${emu(box.width * slide.widthEmu)}" cy="${emu(box.height * slide.heightEmu)}"/></a:xfrm>`
+  const rotate = typeof rotation === 'number' && Number.isFinite(rotation) && rotation !== 0 ? ` rot="${Math.round(rotation * 60000)}"` : ''
+  const flips = `${flipH ? ' flipH="1"' : ''}${flipV ? ' flipV="1"' : ''}`
+  return `<a:xfrm${rotate}${flips}><a:off x="${emu(box.x * slide.widthEmu)}" y="${emu(box.y * slide.heightEmu)}"/><a:ext cx="${emu(box.width * slide.widthEmu)}" cy="${emu(box.height * slide.heightEmu)}"/></a:xfrm>`
 }
 
 function fillXml(color: string | undefined): string {
   return color ? `<a:solidFill><a:srgbClr val="${hex(color)}"/></a:solidFill>` : '<a:noFill/>'
 }
 
-function lineXml(color: string | undefined, widthPt = 1): string {
-  if (!color) return '<a:ln><a:noFill/></a:ln>'
+function lineXml(color: string | undefined, widthPt = 1, headEnd?: string, tailEnd?: string): string {
+  if (!color && !headEnd && !tailEnd) return '<a:ln><a:noFill/></a:ln>'
   const width = Math.min(12, Math.max(0.25, Number(widthPt) || 1))
-  return `<a:ln w="${emu(width * PT_TO_EMU)}"><a:solidFill><a:srgbClr val="${hex(color)}"/></a:solidFill><a:prstDash val="solid"/></a:ln>`
+  const head = headEnd ? `<a:headEnd type="${headEnd}" w="med" len="med"/>` : ''
+  const tail = tailEnd ? `<a:tailEnd type="${tailEnd}" w="med" len="med"/>` : ''
+  const stroke = color ? `<a:solidFill><a:srgbClr val="${hex(color)}"/></a:solidFill><a:prstDash val="solid"/>` : '<a:noFill/>'
+  return `<a:ln w="${emu(width * PT_TO_EMU)}">${stroke}${head}${tail}</a:ln>`
 }
 
-function shapeXml(element: Extract<PptxSlideElement, { type: 'rect' | 'line' }>, slide: PptxSlideSize, shapeId: number): string {
+type ShapeElement = Extract<PptxSlideElement, { type: 'rect' | 'line' | 'shape' }>
+
+function shapeXml(element: ShapeElement, slide: PptxSlideSize, shapeId: number): string {
   const isLine = element.type === 'line'
-  const geometry = isLine ? 'line' : (element.radius && element.radius > 0 ? 'roundRect' : 'rect')
+  const geometry = isLine
+    ? 'line'
+    : element.type === 'rect'
+      ? (element.radius && element.radius > 0 ? 'roundRect' : 'rect')
+      : element.shape
   const fill = isLine ? '<a:noFill/>' : fillXml(element.fill)
-  const line = lineXml(element.line, isLine ? element.widthPt : 1)
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${xml(element.id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${boxToXfrm(element.box, slide)}<a:prstGeom prst="${geometry}"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr/></a:p></p:txBody></p:sp>`
+  const widthPt = element.type === 'rect' ? 1 : element.widthPt
+  const line = lineXml(element.line, widthPt, element.type === 'line' ? element.headEnd : undefined, element.type === 'line' ? element.tailEnd : undefined)
+  const rotation = element.type === 'shape' ? element.rotation : undefined
+  const flipH = element.type === 'line' ? element.flipH : false
+  const flipV = element.type === 'line' ? element.flipV : false
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${xml(element.id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${boxToXfrm(element.box, slide, rotation, flipH, flipV)}<a:prstGeom prst="${geometry}"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr/></a:p></p:txBody></p:sp>`
 }
 
 function textXml(element: Extract<PptxSlideElement, { type: 'text' }>, slide: PptxSlideSize, shapeId: number): string {
@@ -199,9 +214,12 @@ function textXml(element: Extract<PptxSlideElement, { type: 'text' }>, slide: Pp
   const bold = style?.bold ? ' b="1"' : ''
   const italic = style?.italic ? ' i="1"' : ''
   const align = style?.align === 'center' ? 'center' : style?.align === 'right' ? 'right' : 'left'
+  const anchor = style?.verticalAnchor === 'middle' ? 'ctr' : style?.verticalAnchor === 'bottom' ? 'b' : 't'
+  const margin = Math.round((style?.marginPt ?? 0) * PT_TO_EMU)
   const runProps = `<a:rPr lang="zh-CN" sz="${Math.round(fontSize * 100)}"${bold}${italic}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${family}"/><a:ea typeface="${family}"/><a:cs typeface="${family}"/></a:rPr>`
   const paragraphs = xml(element.text).split('\n').map((part) => `<a:p><a:pPr algn="${align}"/><a:r>${runProps}<a:t xml:space="preserve">${part}</a:t></a:r><a:endParaRPr lang="zh-CN" sz="${Math.round(fontSize * 100)}"><a:latin typeface="${family}"/><a:ea typeface="${family}"/><a:cs typeface="${family}"/></a:endParaRPr></a:p>`).join('')
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${xml(element.id)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${boxToXfrm(element.box, slide)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"/><a:lstStyle/>${paragraphs}</p:txBody></p:sp>`
+  const bodyPr = `<a:bodyPr wrap="square" anchor="${anchor}" marL="${margin}" marR="${margin}" marT="${margin}" marB="${margin}"/>`
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${xml(element.id)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${boxToXfrm(element.box, slide)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody>${bodyPr}<a:lstStyle/>${paragraphs}</p:txBody></p:sp>`
 }
 function sourceCropXml(source: PptxElementBox | undefined): string {
   if (!source) return ''
@@ -272,7 +290,7 @@ function semanticSlideData(page: PptxSourcePage, slide: PptxSlideSize, options: 
   const elements = spec.elements.map((element, index) => {
     const shapeId = index + 2
     if (element.type === 'text') return textXml(element, slide, shapeId)
-    if (element.type === 'rect' || element.type === 'line') return shapeXml(element, slide, shapeId)
+    if (element.type === 'rect' || element.type === 'line' || element.type === 'shape') return shapeXml(element, slide, shapeId)
     const relId = imageRel(element)
     return relId ? pictureXml(element, slide, relId, shapeId, element.id) : ''
   }).join('')

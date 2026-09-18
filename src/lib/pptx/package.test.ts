@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { unzipSync } from 'fflate'
-import { getPptxSlideSize, validatePptxPages, PPTX_MAX_SOURCE_BYTES, type PptxSourcePage } from './model'
+import { getPptxSlideSize, normalizeSlideSpec, validatePptxPages, PPTX_MAX_SOURCE_BYTES, type PptxSourcePage } from './model'
 import {
   buildPptxBytes,
   calculatePptxImageBox,
@@ -72,6 +72,30 @@ describe('PPTX package compiler', () => {
   it('rejects empty or oversized page inputs before packaging', () => {
     expect(validatePptxPages([])).toContain('请至少添加一张图片')
     expect(validatePptxPages([{ ...page('large'), bytes: PPTX_MAX_SOURCE_BYTES + 1 }]).some((issue) => issue.includes('超过单张'))).toBe(true)
+  })
+
+  it('compiles semantic text, native shapes, directed lines, and source crops without a full-page picture shape', async () => {
+    const spec = normalizeSlideSpec({
+      canvas: { widthPx: 1920, heightPx: 1080 },
+      background: { color: '#FFFFFF' },
+      elements: [
+        { id: 'mask', type: 'rect', box: { x: 0, y: 0, width: 0.4, height: 0.2 }, fill: '#FFFFFF' },
+        { id: 'title', type: 'text', box: { x: 0.02, y: 0.02, width: 0.4, height: 0.08 }, text: '可编辑标题', style: { fontFamily: 'Microsoft YaHei', fontSizePt: 24, verticalAnchor: 'middle' } },
+        { id: 'point', type: 'shape', shape: 'ellipse', box: { x: 0.3, y: 0.3, width: 0.02, height: 0.03 }, fill: '#1F6EC5' },
+        { id: 'arrow', type: 'line', box: { x: 0.2, y: 0.2, width: 0.2, height: 0.1 }, line: '#D92737', headEnd: 'triangle', flipV: true },
+        { id: 'logo', type: 'image', box: { x: 0.8, y: 0.02, width: 0.1, height: 0.08 }, sourceBox: { x: 0.8, y: 0.02, width: 0.1, height: 0.08 }, classification: 'source_crop' },
+      ],
+    }, page('semantic'))
+    const bytes = await buildPptxBytes({ pages: [page('semantic')], images: { semantic: png }, slideSpecs: [spec] })
+    const files = unzipSync(bytes)
+    const slide = new TextDecoder().decode(files['ppt/slides/slide1.xml'])
+    expect(slide).toContain('<a:prstGeom prst="ellipse">')
+    expect(slide).toContain('<a:headEnd type="triangle"')
+    expect(slide).toContain('flipV="1"')
+    expect(slide).toContain('可编辑标题')
+    expect(slide).toContain('<a:srcRect')
+    expect(slide).not.toContain('name="Page semantic"')
+    expect(files['ppt/media/slide1-source.png']).toBeTruthy()
   })
 
   it('escapes XML-sensitive page names', async () => {
