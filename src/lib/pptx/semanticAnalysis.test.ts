@@ -34,7 +34,7 @@ describe('PPTX semantic analysis protocol', () => {
     const icon = result.spec.elements[0]
     expect(icon?.type).toBe('image')
     expect(icon && icon.type === 'image' ? icon.classification : undefined).toBe('source_crop')
-    expect(result.spec.warnings.some((warning) => warning.includes('assetId'))).toBe(true)
+    expect(result.spec.warnings.some((warning) => warning.includes('已回退'))).toBe(true)
   })
 
   it('rejects a response without a usable element', () => {
