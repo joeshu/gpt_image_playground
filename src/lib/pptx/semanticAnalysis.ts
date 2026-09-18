@@ -75,15 +75,16 @@ function enforceSemanticPolicy(spec: PptxSlideSpec): PptxSlideSpec {
     }
     ids.add(element.id)
     if (element.type === 'image') {
-      if (element.classification !== 'source_crop' && !element.assetId) {
+      if (element.classification !== 'source_crop') {
         next = {
           ...element,
           classification: 'source_crop',
           sourceBox: element.sourceBox ?? element.box,
+          assetId: undefined,
           editable: false,
-          fallbackReason: element.fallbackReason || '未提供独立资产，回退为源图局部资产',
+          fallbackReason: element.fallbackReason || '分析结果未随请求返回独立二进制资产，回退为源图局部资产',
         }
-        warnings.push(`资产 ${element.id} 未提供 assetId，已回退为源图局部资产`)
+        warnings.push(`资产 ${element.id} 未随分析结果返回，已回退为源图局部资产`)
       }
       const image = next as Extract<PptxSlideElement, { type: 'image' }>
       if (image.classification === 'source_crop' && (elementArea(image) >= 0.78 || sourceArea(image) >= 0.78)) {
