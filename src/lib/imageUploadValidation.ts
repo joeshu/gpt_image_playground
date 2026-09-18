@@ -8,7 +8,7 @@ export function validateDecodedImageSize(width: number, height: number) {
   }
 }
 
-export async function validateImageFile(file: File) {
+export async function validateImageFile(file: File): Promise<{ width: number; height: number }> {
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new Error(`图片过大，单张图片不能超过 ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`)
   }
@@ -22,6 +22,7 @@ export async function validateImageFile(file: File) {
       image.src = url
     })
     validateDecodedImageSize(size.width, size.height)
+    return size
   } finally {
     URL.revokeObjectURL(url)
   }

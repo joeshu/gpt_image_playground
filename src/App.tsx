@@ -21,6 +21,7 @@ import ImageContextMenu from './components/ImageContextMenu'
 import CreationWorkbench from './components/CreationWorkbench'
 import PromptStudioModal from './components/PromptStudioModal'
 import ResultsCenter from './components/ResultsCenter'
+import PptxWorkbench from './components/PptxWorkbench'
 import SupportPromptModal from './components/SupportPromptModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
@@ -33,11 +34,11 @@ let defaultConfigImportStarted = false
 let resolveStoreReady: (() => void) | null = null
 const storeReady = new Promise<void>((resolve) => { resolveStoreReady = resolve })
 
-type AppSurface = 'home' | 'creation' | 'results'
+type AppSurface = 'home' | 'creation' | 'results' | 'pptx'
 const SURFACE_HISTORY_KEY = 'gptImagePlaygroundSurface'
 
 function isAppSurface(value: unknown): value is AppSurface {
-  return value === 'home' || value === 'creation' || value === 'results'
+  return value === 'home' || value === 'creation' || value === 'results' || value === 'pptx'
 }
 
 function getInitialSurface(): AppSurface {
@@ -299,6 +300,11 @@ export default function App() {
           setPromptStudioOpen(false)
           navigateToSurface('results')
         }}
+        onOpenPptxWorkbench={() => {
+          if (!canNavigateToSurface('pptx')) return
+          setPromptStudioOpen(false)
+          navigateToSurface('pptx')
+        }}
         onOpenSettings={() => {
           if (creationBatchBusy) {
             showToast('批量生成进行中，请先暂停或等待当前任务完成', 'info')
@@ -320,6 +326,8 @@ export default function App() {
         />
       ) : activeSurface === 'home' && appMode === 'agent' ? (
         <AgentWorkspace />
+      ) : activeSurface === 'pptx' ? (
+        <PptxWorkbench />
       ) : activeSurface === 'home' ? (
         <main data-home-main data-drag-select-surface className="home-main-content">
           <div className="safe-area-x max-w-7xl mx-auto">
