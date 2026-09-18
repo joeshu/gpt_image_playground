@@ -213,7 +213,7 @@ function textXml(element: Extract<PptxSlideElement, { type: 'text' }>, slide: Pp
   const color = hex(style?.color, '000000')
   const bold = style?.bold ? ' b="1"' : ''
   const italic = style?.italic ? ' i="1"' : ''
-  const align = style?.align === 'center' ? 'center' : style?.align === 'right' ? 'right' : 'left'
+  const align = style?.align === 'center' ? 'ctr' : style?.align === 'right' ? 'r' : 'l'
   const anchor = style?.verticalAnchor === 'middle' ? 'ctr' : style?.verticalAnchor === 'bottom' ? 'b' : 't'
   const margin = Math.round((style?.marginPt ?? 0) * PT_TO_EMU)
   const runProps = `<a:rPr lang="zh-CN" sz="${Math.round(fontSize * 100)}"${bold}${italic}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${family}"/><a:ea typeface="${family}"/><a:cs typeface="${family}"/></a:rPr>`

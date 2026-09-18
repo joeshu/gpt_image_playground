@@ -93,6 +93,7 @@ describe('PPTX package compiler', () => {
     expect(slide).toContain('<a:headEnd type="triangle"')
     expect(slide).toContain('flipV="1"')
     expect(slide).toContain('可编辑标题')
+    expect(slide).toContain('algn="ctr"')
     expect(slide).toContain('<a:srcRect')
     expect(slide).not.toContain('name="Page semantic"')
     expect(files['ppt/media/slide1-source.png']).toBeTruthy()
