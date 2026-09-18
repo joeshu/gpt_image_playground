@@ -304,7 +304,7 @@ function packageParts(
   options: PptxProjectOptions,
   images: ImagePart[],
   createdAt: Date,
-  slideSpecs?: PptxSlideSpec[],
+  slideSpecs?: Array<PptxSlideSpec | undefined>,
   semanticAssets: Array<Record<string, ImagePart>> = [],
 ): Record<string, Uint8Array> {
   const files: Record<string, Uint8Array> = {}
@@ -386,7 +386,8 @@ export async function compilePptx(input: PptxPackageInput): Promise<PptxPackage>
   const entries = Object.keys(unzipSync(bytes)).sort()
   const options = normalizePptxOptions(input.options)
   const pages = input.pages as PptxSourcePage[]
-  return { blob: new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), bytes, entries, slideSize: getPptxSlideSize(options.aspectRatio, pages[0]) }
+  const blobBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  return { blob: new Blob([blobBytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), bytes, entries, slideSize: getPptxSlideSize(options.aspectRatio, pages[0]) }
 }
 
 /** Alias suited to download handlers. */
