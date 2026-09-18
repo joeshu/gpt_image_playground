@@ -71,7 +71,7 @@ describe('PPTX package compiler', () => {
 
   it('rejects empty or oversized page inputs before packaging', () => {
     expect(validatePptxPages([])).toContain('请至少添加一张图片')
-    expect(validatePptxPages([{ ...page('large'), bytes: PPTX_MAX_SOURCE_BYTES + 1 }])).toContain('超过单张')
+    expect(validatePptxPages([{ ...page('large'), bytes: PPTX_MAX_SOURCE_BYTES + 1 }]).some((issue) => issue.includes('超过单张'))).toBe(true)
   })
 
   it('escapes XML-sensitive page names', async () => {

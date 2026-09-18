@@ -324,6 +324,7 @@ function packageParts(
   put('ppt/theme/theme1.xml', themeXml())
   put('ppt/slideMasters/slideMaster1.xml', slideMasterXml())
   put('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS.rel}">${rel('rId1', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout', '../slideLayouts/slideLayout1.xml')}${rel('rId2', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme', '../theme/theme1.xml')}</Relationships>`)
+  put('ppt/slideLayouts/slideLayout1.xml', slideLayoutXml())
   put('ppt/slideLayouts/_rels/slideLayout1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS.rel}">${rel('rId1', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster', '../slideMasters/slideMaster1.xml')}</Relationships>`)
   pages.forEach((page, index) => {
     const n = index + 1
