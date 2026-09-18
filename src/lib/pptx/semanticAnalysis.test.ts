@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listPptxImagegenAssets, parsePptxSemanticSpec } from './semanticAnalysis'
+import { listPptxImagegenAssets, namespacePptxImagegenAssetIds, parsePptxSemanticSpec } from './semanticAnalysis'
 
 const page = { width: 1672, height: 941 }
 
@@ -33,6 +33,18 @@ describe('PPTX semantic analysis protocol', () => {
     const assets = listPptxImagegenAssets(result.spec)
     expect(assets).toHaveLength(1)
     expect(assets[0]).toMatchObject({ assetId: 'icon', prompt: 'red isolated transparent target icon', elementIds: ['icon', 'icon-copy'] })
+  })
+
+  it('namespaces generated asset IDs without breaking same-page reuse', () => {
+    const result = parsePptxSemanticSpec(JSON.stringify({
+      elements: [
+        { id: 'label', type: 'text', box: { x: 0.1, y: 0.1, width: 0.2, height: 0.05 }, text: '标签' },
+        { id: 'icon', type: 'image', box: { x: 0.2, y: 0.2, width: 0.06, height: 0.06 }, classification: 'imagegen_asset', assetId: 'icon', assetPrompt: 'red icon' },
+        { id: 'icon-copy', type: 'image', box: { x: 0.4, y: 0.2, width: 0.06, height: 0.06 }, classification: 'imagegen_asset', assetId: 'icon', assetPrompt: 'red icon' },
+      ],
+    }), page)
+    const namespaced = namespacePptxImagegenAssetIds(result.spec, 'slide-2')
+    expect(namespaced.elements.filter((element) => element.type === 'image').map((element) => element.type === 'image' ? element.assetId : undefined)).toEqual(['slide-2-icon', 'slide-2-icon'])
   })
 
   it('rejects full-page crops and incomplete generated assets', () => {

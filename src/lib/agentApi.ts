@@ -345,14 +345,17 @@ function getImageToolFailureFromOutputItem(event: Record<string, unknown>, item?
   }
 }
 
-function extractText(payload: ResponsesApiResponse) {
+function extractResponseText(payload: ResponsesApiResponse, options: { sanitize?: boolean; applyCitations?: boolean } = {}) {
+  const sanitize = options.sanitize !== false
+  const applyCitations = options.applyCitations !== false
   const chunks: string[] = []
 
   for (const item of payload.output ?? []) {
     if (item.type !== 'message') continue
     for (const part of item.content ?? []) {
       if ((part.type === 'output_text' || part.type === 'text') && typeof part.text === 'string') {
-        chunks.push(sanitizeAgentText(applyUrlCitations(part.text, part.annotations)))
+        const text = applyCitations ? applyUrlCitations(part.text, part.annotations) : part.text
+        chunks.push(sanitize ? sanitizeAgentText(text) : text)
       } else if (part.type === 'refusal' && typeof part.refusal === 'string') {
         chunks.push(part.refusal)
       }
@@ -360,6 +363,10 @@ function extractText(payload: ResponsesApiResponse) {
   }
 
   return chunks.join('\n').trim()
+}
+
+function extractText(payload: ResponsesApiResponse) {
+  return extractResponseText(payload)
 }
 
 function decodeXmlText(text: string) {
@@ -983,7 +990,7 @@ export async function callPptxSemanticAnalysisApi(opts: {
     const payload = normalizeResponsePayload(await response.json())
     if (!payload) throw new Error('语义分析接口返回格式无效')
     throwIfAborted(controller.signal, signal)
-    const text = extractText(payload).trim()
+    const text = extractResponseText(payload, { sanitize: false, applyCitations: false }).trim()
     if (!text) throw new Error('语义分析接口没有返回 JSON')
     return text
   } finally {

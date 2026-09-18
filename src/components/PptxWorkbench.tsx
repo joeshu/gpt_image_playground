@@ -5,7 +5,7 @@ import { shareNativeBlob } from '../lib/nativeExport'
 import { compilePptx } from '../lib/pptx/package'
 import { clearPptxDraft, loadPptxDraft, savePptxDraft } from '../lib/pptx/draft'
 import { ingestPptxFiles } from '../lib/pptx/fileIngest'
-import { analyzePptxSlide, blobToDataUrl, summarizePptxSemanticSpec } from '../lib/pptx/semanticAnalysis'
+import { analyzePptxSlide, blobToDataUrl, namespacePptxImagegenAssetIds, summarizePptxSemanticSpec } from '../lib/pptx/semanticAnalysis'
 import { generatePptxImagegenAssets } from '../lib/pptx/assetGeneration'
 import { getAgentImageApiProfile, getAgentTextApiProfile } from '../lib/apiProfiles'
 import { useStore } from '../store'
@@ -92,8 +92,9 @@ export default function PptxWorkbench() {
           const source = resolved.get(page.imageId)!
           const imageDataUrl = typeof source === 'string' ? source : await blobToDataUrl(source)
           const analysis = await analyzePptxSlide({ page, profile: textProfile, imageDataUrl })
-          slideSpecs.push(analysis.spec)
-          summaries.push(summarizePptxSemanticSpec(analysis.spec))
+          const namespacedSpec = namespacePptxImagegenAssetIds(analysis.spec, `slide-${index + 1}`)
+          slideSpecs.push(namespacedSpec)
+          summaries.push(summarizePptxSemanticSpec(namespacedSpec))
         }
 
         const needsGeneratedAssets = slideSpecs.some((spec) => spec.elements.some((element) => element.type === 'image' && element.classification === 'imagegen_asset'))

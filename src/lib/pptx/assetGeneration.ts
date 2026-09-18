@@ -2,6 +2,7 @@ import { callBatchImageSingle } from '../agentApi'
 import { DEFAULT_PARAMS, type ApiProfile } from '../../types'
 import type { PptxSlideSpec } from './model'
 import { listPptxImagegenAssets, type PptxImagegenAssetRequest } from './semanticAnalysis'
+import { inspectPngAlphaDataUrl } from './pngAlpha'
 
 export interface PptxGeneratedAssetManifestEntry {
   assetId: string
@@ -29,36 +30,13 @@ function transparentAssetPrompt(request: PptxImagegenAssetRequest): string {
   ].join(' ')
 }
 
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error('生成的 PNG 无法解码'))
-    image.src = dataUrl
-  })
-}
-
 /** Validate the alpha contract required by the image-to-PPTX skill. */
-export async function validateTransparentPngDataUrl(dataUrl: string): Promise<void> {
-  if (!/^data:image\/png(?:;|,)/i.test(dataUrl)) throw new Error('图片生成服务没有返回 PNG 透明资产')
-  if (typeof document === 'undefined' || typeof Image === 'undefined') return
-  const image = await loadImage(dataUrl)
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, image.naturalWidth || image.width)
-  canvas.height = Math.max(1, image.naturalHeight || image.height)
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  if (!context) throw new Error('无法读取生成资产的 alpha 通道')
-  context.clearRect(0, 0, canvas.width, canvas.height)
-  context.drawImage(image, 0, 0)
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
-  let opaque = 0
-  let transparent = 0
-  for (let index = 3; index < pixels.length; index += 4) {
-    if (pixels[index] === 0) transparent += 1
-    if (pixels[index] > 0) opaque += 1
+export function validateTransparentPngDataUrl(dataUrl: string): void {
+  const inspection = inspectPngAlphaDataUrl(dataUrl)
+  if (!inspection.hasVisiblePixels) throw new Error('生成的 PNG alpha 区域为空')
+  if (!inspection.hasTransparentPixels || !inspection.cornersTransparent) {
+    throw new Error('生成的 PNG 没有透明边界，拒绝作为独立资产')
   }
-  if (!opaque) throw new Error('生成的 PNG alpha 区域为空')
-  if (!transparent) throw new Error('生成的 PNG 没有透明区域，拒绝作为独立资产')
 }
 
 export async function generatePptxImagegenAssets(options: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { unzipSync } from 'fflate'
-import { getPptxSlideSize, normalizeSlideSpec, validatePptxPages, PPTX_MAX_SOURCE_BYTES, type PptxSourcePage } from './model'
+import { getPptxSlideSize, normalizeElementBox, normalizeSlideSpec, validatePptxPages, PPTX_MAX_SOURCE_BYTES, type PptxSourcePage } from './model'
 import {
   buildPptxBytes,
   calculatePptxImageBox,
@@ -23,6 +23,11 @@ const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4])
 
 // These tests intentionally stay at pure package/source level: no browser UI or app store.
 describe('PPTX package compiler', () => {
+  it('clips out-of-range semantic boxes by visible intersection', () => {
+    expect(normalizeElementBox({ x: -0.1, y: 0.2, width: 0.2, height: 0.1 })).toEqual({ x: 0, y: 0.2, width: 0.1, height: 0.1 })
+    expect(normalizeElementBox({ x: 1.1, y: 0.2, width: 0.2, height: 0.1 })).toBeNull()
+  })
+
   it('resolves Blob and DataURL to binary bytes', async () => {
     await expect(resolvePptxImageSource(new Blob([png], { type: 'image/png' }))).resolves.toMatchObject({ mime: 'image/png', bytes: png })
     await expect(resolvePptxImageSource('data:image/png;base64,iVBORwECAwQ=')).resolves.toMatchObject({ mime: 'image/png' })

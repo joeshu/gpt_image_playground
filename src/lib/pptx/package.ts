@@ -422,7 +422,10 @@ export async function buildPptxBytes(input: PptxPackageInput): Promise<Uint8Arra
         .map((element) => element.assetId!))
       for (const assetId of ids) {
         const source = input.assets?.[assetId] ?? input.images?.[assetId] ?? input.imageSources?.[assetId]
-        if (source) map[assetId] = imagePart(await resolvePptxImageSource(source), pages[index]!)
+        if (source === undefined) {
+          throw new Error(`语义图片资产缺失：${assetId}（页面 ${pages[index]!.name || pages[index]!.id}）`)
+        }
+        map[assetId] = imagePart(await resolvePptxImageSource(source), pages[index]!)
       }
     }
     semanticAssets.push(map)
