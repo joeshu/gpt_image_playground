@@ -930,3 +930,60 @@ export function parseBatchImageCallArguments(args: string): Array<{ id: string; 
     return null
   }
 }
+
+
+/**
+ * Ask the configured Responses model for a validated slide inventory.
+ * This is deliberately separate from the image-generation Agent tools: semantic
+ * rebuild must never let the model call an image tool or return PPTX/XML.
+ */
+export async function callPptxSemanticAnalysisApi(opts: {
+  profile: ApiProfile
+  imageDataUrl: string
+  instructions: string
+  signal?: AbortSignal
+}): Promise<string> {
+  const { profile, imageDataUrl, instructions, signal } = opts
+  const proxyConfig = readClientDevProxyConfig()
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(new DOMException('请求超时', 'TimeoutError')), Math.max(30, profile.timeout) * 1000)
+  const abortFromCaller = () => controller.abort()
+  if (signal?.aborted) controller.abort()
+  signal?.addEventListener('abort', abortFromCaller, { once: true })
+
+  try {
+    const body: Record<string, unknown> = {
+      model: profile.model,
+      instructions,
+      input: [{
+        role: 'user',
+        content: [
+          { type: 'input_text', text: '分析附件中的单页图片，并只返回要求的 JSON。' },
+          { type: 'input_image', image_url: imageDataUrl },
+        ],
+      }],
+      max_output_tokens: 16000,
+      text: { format: { type: 'json_object' } },
+    }
+    if (profile.reasoningEffort) body.reasoning = { effort: profile.reasoningEffort }
+
+    const response = await fetch(buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy), {
+      method: 'POST',
+      headers: createHeaders(profile),
+      cache: 'no-store',
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(await getApiErrorMessage(response, { mode: 'PPTX 语义重建分析' }))
+    const payload = normalizeResponsePayload(await response.json())
+    if (!payload) throw new Error('语义分析接口返回格式无效')
+    throwIfAborted(controller.signal, signal)
+    const text = extractText(payload).trim()
+    if (!text) throw new Error('语义分析接口没有返回 JSON')
+    return text
+  } finally {
+    clearTimeout(timeoutId)
+    signal?.removeEventListener('abort', abortFromCaller)
+  }
+}

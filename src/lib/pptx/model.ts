@@ -91,7 +91,23 @@ export interface PptxTextStyle {
   bold?: boolean
   italic?: boolean
   align?: 'left' | 'center' | 'right'
+  verticalAnchor?: 'top' | 'middle' | 'bottom'
+  marginPt?: number
 }
+
+export type PptxShapeKind =
+  | 'rect'
+  | 'roundRect'
+  | 'ellipse'
+  | 'chevron'
+  | 'rightArrow'
+  | 'leftArrow'
+  | 'upArrow'
+  | 'downArrow'
+  | 'hexagon'
+  | 'diamond'
+
+export type PptxArrowhead = 'triangle' | 'stealth' | 'diamond' | 'oval' | 'open'
 
 export type PptxSlideElement =
   | {
@@ -101,6 +117,7 @@ export type PptxSlideElement =
       text: string
       style?: PptxTextStyle
       confidence?: number
+      editable?: boolean
     }
   | {
       id: string
@@ -109,6 +126,7 @@ export type PptxSlideElement =
       fill?: string
       line?: string
       radius?: number
+      confidence?: number
     }
   | {
       id: string
@@ -116,6 +134,22 @@ export type PptxSlideElement =
       box: PptxElementBox
       line?: string
       widthPt?: number
+      headEnd?: PptxArrowhead
+      tailEnd?: PptxArrowhead
+      flipH?: boolean
+      flipV?: boolean
+      confidence?: number
+    }
+  | {
+      id: string
+      type: 'shape'
+      shape: PptxShapeKind
+      box: PptxElementBox
+      fill?: string
+      line?: string
+      widthPt?: number
+      rotation?: number
+      confidence?: number
     }
   | {
       id: string
@@ -125,6 +159,8 @@ export type PptxSlideElement =
       classification: 'source_crop' | 'user_asset' | 'imagegen_asset'
       assetId?: string
       confidence?: number
+      editable?: boolean
+      fallbackReason?: string
     }
 
 export interface PptxSlideSpec {
@@ -166,20 +202,57 @@ export function normalizeSlideSpec(value: unknown, fallback: Pick<PptxSourcePage
     const id = typeof item.id === 'string' && item.id.trim() ? item.id.trim().slice(0, 80) : `element-${elements.length + 1}`
     const type = item.type
     const box = normalizeElementBox(item.box)
-    if (!box || (type !== 'text' && type !== 'rect' && type !== 'line' && type !== 'image')) continue
+    if (!box || (type !== 'text' && type !== 'rect' && type !== 'line' && type !== 'shape' && type !== 'image')) continue
+    const confidence = normalizeConfidence(item.confidence)
     if (type === 'text') {
       const text = typeof item.text === 'string' ? item.text.slice(0, 5000) : ''
       if (!text.trim()) continue
       const style = normalizeTextStyle(item.style)
-      elements.push({ id, type, box, text, style, confidence: normalizeConfidence(item.confidence) })
+      elements.push({ id, type, box, text, style, confidence, editable: item.editable !== false })
     } else if (type === 'rect') {
-      elements.push({ id, type, box, fill: normalizeColor(item.fill), line: normalizeColor(item.line), radius: Number.isFinite(Number(item.radius)) ? Math.min(1, Math.max(0, Number(item.radius))) : undefined })
+      elements.push({ id, type, box, fill: normalizeColor(item.fill), line: normalizeColor(item.line), radius: Number.isFinite(Number(item.radius)) ? Math.min(1, Math.max(0, Number(item.radius))) : undefined, confidence })
     } else if (type === 'line') {
-      elements.push({ id, type, box, line: normalizeColor(item.line), widthPt: Number.isFinite(Number(item.widthPt)) ? Math.min(12, Math.max(0.25, Number(item.widthPt))) : undefined })
+      elements.push({
+        id,
+        type,
+        box,
+        line: normalizeColor(item.line),
+        widthPt: Number.isFinite(Number(item.widthPt)) ? Math.min(12, Math.max(0.25, Number(item.widthPt))) : undefined,
+        headEnd: normalizeArrowhead(item.headEnd),
+        tailEnd: normalizeArrowhead(item.tailEnd),
+        flipH: item.flipH === true,
+        flipV: item.flipV === true,
+        confidence,
+      })
+    } else if (type === 'shape') {
+      const shape = normalizeShapeKind(item.shape)
+      if (!shape) continue
+      const rotation = Number(item.rotation)
+      elements.push({
+        id,
+        type,
+        shape,
+        box,
+        fill: normalizeColor(item.fill),
+        line: normalizeColor(item.line),
+        widthPt: Number.isFinite(Number(item.widthPt)) ? Math.min(12, Math.max(0.25, Number(item.widthPt))) : undefined,
+        rotation: Number.isFinite(rotation) ? Math.max(-360, Math.min(360, rotation)) : undefined,
+        confidence,
+      })
     } else {
-      const sourceBox = normalizeElementBox(item.sourceBox) ?? undefined
       const classification = item.classification === 'user_asset' || item.classification === 'imagegen_asset' ? item.classification : 'source_crop'
-      elements.push({ id, type, box, sourceBox, classification, assetId: typeof item.assetId === 'string' ? item.assetId.slice(0, 100) : undefined, confidence: normalizeConfidence(item.confidence) })
+      const sourceBox = normalizeElementBox(item.sourceBox) ?? (classification === 'source_crop' ? box : undefined)
+      elements.push({
+        id,
+        type,
+        box,
+        sourceBox,
+        classification,
+        assetId: typeof item.assetId === 'string' ? item.assetId.slice(0, 100) : undefined,
+        confidence,
+        editable: item.editable !== false,
+        fallbackReason: typeof item.fallbackReason === 'string' ? item.fallbackReason.slice(0, 240) : undefined,
+      })
     }
   }
   const readingOrder = Array.isArray(record.readingOrder) ? record.readingOrder.filter((item): item is string => typeof item === 'string').slice(0, 240) : elements.filter((item) => item.type === 'text').map((item) => item.id)
@@ -199,6 +272,17 @@ function normalizeConfidence(value: unknown): number | undefined {
   return Number.isFinite(number) ? Math.min(1, Math.max(0, number > 1 ? number / 100 : number)) : undefined
 }
 
+const PPTX_SHAPE_KINDS: readonly PptxShapeKind[] = ['rect', 'roundRect', 'ellipse', 'chevron', 'rightArrow', 'leftArrow', 'upArrow', 'downArrow', 'hexagon', 'diamond']
+const PPTX_ARROWHEADS: readonly PptxArrowhead[] = ['triangle', 'stealth', 'diamond', 'oval', 'open']
+
+function normalizeShapeKind(value: unknown): PptxShapeKind | null {
+  return typeof value === 'string' && PPTX_SHAPE_KINDS.includes(value as PptxShapeKind) ? value as PptxShapeKind : null
+}
+
+function normalizeArrowhead(value: unknown): PptxArrowhead | undefined {
+  return typeof value === 'string' && PPTX_ARROWHEADS.includes(value as PptxArrowhead) ? value as PptxArrowhead : undefined
+}
+
 function normalizeColor(value: unknown): string | undefined {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : undefined
 }
@@ -207,7 +291,9 @@ function normalizeTextStyle(value: unknown): PptxTextStyle | undefined {
   if (!value || typeof value !== 'object') return undefined
   const record = value as Record<string, unknown>
   const align = record.align === 'center' || record.align === 'right' ? record.align : 'left'
+  const verticalAnchor = record.verticalAnchor === 'middle' || record.verticalAnchor === 'bottom' ? record.verticalAnchor : 'top'
   const fontSizePt = Number(record.fontSizePt)
+  const marginPt = Number(record.marginPt)
   return {
     fontFamily: typeof record.fontFamily === 'string' && record.fontFamily.trim() ? record.fontFamily.trim().slice(0, 80) : undefined,
     fontSizePt: Number.isFinite(fontSizePt) ? Math.min(96, Math.max(6, fontSizePt)) : undefined,
@@ -215,6 +301,8 @@ function normalizeTextStyle(value: unknown): PptxTextStyle | undefined {
     bold: record.bold === true,
     italic: record.italic === true,
     align,
+    verticalAnchor,
+    marginPt: Number.isFinite(marginPt) ? Math.min(24, Math.max(0, marginPt)) : undefined,
   }
 }
 
