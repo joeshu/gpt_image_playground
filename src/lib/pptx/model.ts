@@ -158,6 +158,10 @@ export type PptxSlideElement =
       sourceBox?: PptxElementBox
       classification: 'source_crop' | 'user_asset' | 'imagegen_asset'
       assetId?: string
+      /** Self-contained prompt used to generate an isolated transparent PNG asset. */
+      assetPrompt?: string
+      /** True only for an exact user-supplied brand/logo mark that must remain unchanged. */
+      sourceExact?: boolean
       confidence?: number
       editable?: boolean
       fallbackReason?: string
@@ -248,7 +252,9 @@ export function normalizeSlideSpec(value: unknown, fallback: Pick<PptxSourcePage
         box,
         sourceBox,
         classification,
-        assetId: typeof item.assetId === 'string' ? item.assetId.slice(0, 100) : undefined,
+        assetId: typeof item.assetId === 'string' && item.assetId.trim() ? item.assetId.trim().slice(0, 100) : undefined,
+        assetPrompt: typeof item.assetPrompt === 'string' && item.assetPrompt.trim() ? item.assetPrompt.trim().slice(0, 4000) : undefined,
+        sourceExact: item.sourceExact === true,
         confidence,
         editable: item.editable !== false,
         fallbackReason: typeof item.fallbackReason === 'string' ? item.fallbackReason.slice(0, 240) : undefined,

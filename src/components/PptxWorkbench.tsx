@@ -6,7 +6,8 @@ import { compilePptx } from '../lib/pptx/package'
 import { clearPptxDraft, loadPptxDraft, savePptxDraft } from '../lib/pptx/draft'
 import { ingestPptxFiles } from '../lib/pptx/fileIngest'
 import { analyzePptxSlide, blobToDataUrl, summarizePptxSemanticSpec } from '../lib/pptx/semanticAnalysis'
-import { getAgentTextApiProfile } from '../lib/apiProfiles'
+import { generatePptxImagegenAssets } from '../lib/pptx/assetGeneration'
+import { getAgentImageApiProfile, getAgentTextApiProfile } from '../lib/apiProfiles'
 import { useStore } from '../store'
 import { createEmptyPptxDraft, getPptxSlideSize, updatePptxDraft, validatePptxPages, PPTX_MAX_SOURCE_PAGES, type PptxProjectDraft, type PptxSlideSpec, type PptxSourcePage } from '../lib/pptx/model'
 
@@ -79,37 +80,56 @@ export default function PptxWorkbench() {
 
       const slideSpecs: PptxSlideSpec[] = []
       const summaries: ReturnType<typeof summarizePptxSemanticSpec>[] = []
+      const generatedAssets: Record<string, string> = {}
+      const assetManifest: Array<Record<string, unknown>> = []
       if (semantic) {
-        const profile = getAgentTextApiProfile(settings)
-        if (!profile) throw new Error('没有可用的 Agent 文本配置，请先在设置中配置 Responses API')
-        if (profile.apiMode !== 'responses') throw new Error('语义重建需要 Responses API 配置，请先在 Agent 设置中选择支持 Responses 的配置')
+        const textProfile = getAgentTextApiProfile(settings)
+        if (!textProfile) throw new Error('没有可用的 Agent 文本配置，请先在设置中配置 Responses API')
+        if (textProfile.apiMode !== 'responses') throw new Error('语义重建需要 Responses API 配置，请先在 Agent 设置中选择支持 Responses 的配置')
         for (let index = 0; index < draft.pages.length; index += 1) {
           const page = draft.pages[index]!
           setProgress(`正在分析第 ${index + 1}/${draft.pages.length} 页：识别文字、卡片和图表…`)
           const source = resolved.get(page.imageId)!
           const imageDataUrl = typeof source === 'string' ? source : await blobToDataUrl(source)
-          const analysis = await analyzePptxSlide({ page, profile, imageDataUrl })
+          const analysis = await analyzePptxSlide({ page, profile: textProfile, imageDataUrl })
           slideSpecs.push(analysis.spec)
           summaries.push(summarizePptxSemanticSpec(analysis.spec))
         }
+
+        const needsGeneratedAssets = slideSpecs.some((spec) => spec.elements.some((element) => element.type === 'image' && element.classification === 'imagegen_asset'))
+        if (needsGeneratedAssets) {
+          const imageProfile = getAgentImageApiProfile(settings)
+          if (!imageProfile) throw new Error('没有可用的 Agent 图片配置，无法生成复杂透明资产')
+          if (imageProfile.apiMode !== 'responses') throw new Error('复杂资产生成需要 Responses API 图片配置，请在 Agent 设置中选择支持 Responses 的配置')
+          for (let index = 0; index < slideSpecs.length; index += 1) {
+            const generated = await generatePptxImagegenAssets({
+              spec: slideSpecs[index]!,
+              profile: imageProfile,
+              onProgress: (detail) => setProgress(`第 ${index + 1}/${slideSpecs.length} 页：${detail}`),
+            })
+            Object.assign(generatedAssets, generated.assets)
+            assetManifest.push(...generated.manifest.map((entry) => ({ pageIndex: index, ...entry })))
+          }
+        }
       }
 
-      setProgress(semantic ? '正在编译可编辑对象…' : '正在生成 PPTX…')
+      setProgress(semantic ? '正在编译可编辑对象和独立透明资产…' : '正在生成 PPTX…')
       const compiled = await compilePptx({
         pages: draft.pages,
         options: draft.options,
         resolveImage: (page) => resolved.get(page.imageId)!,
+        assets: semantic ? generatedAssets : undefined,
         slideSpecs: semantic ? slideSpecs : undefined,
       })
       const fileName = safeFileName(draft.options.fileName)
       const report = semantic
-        ? { version: 1, createdAt: Date.now(), fileName, sourcePageCount: draft.pages.length, fileSizeBytes: compiled.blob.size, slideRatio: compiled.slideSize.ratio, mode: draft.options.mode, editability: '高置信文本、形状和图表为原生对象；复杂资产为独立源图局部', pages: summaries, limitation: '单张光栅图无法保证所有像素均可编辑；低置信复杂区域保留为图片资产' }
+        ? { version: 1, createdAt: Date.now(), fileName, sourcePageCount: draft.pages.length, fileSizeBytes: compiled.blob.size, slideRatio: compiled.slideSize.ratio, mode: draft.options.mode, editability: '高置信文本、形状和图表为原生对象；复杂图标和插画为独立透明 PNG 资产；明确的原始品牌 Logo 保留为精确源图资产', pages: summaries, imagegenAssets: assetManifest, phases: { inputPrepared: 'passed', visualInventory: 'passed', assetClassification: 'passed', imagegenAssets: assetManifest.length ? 'passed' : 'not-applicable', textFit: 'not-run', pptxBuilt: 'passed', renderQa: 'not-run', localCropQa: 'not-run', validation: 'passed' }, limitations: ['单张光栅图无法保证所有像素均可编辑', 'PowerPoint 字体替换和模型 OCR 误差仍需渲染 QA 复核'] }
         : { version: 1, createdAt: Date.now(), fileName, sourcePageCount: draft.pages.length, fileSizeBytes: compiled.blob.size, slideRatio: compiled.slideSize.ratio, mode: draft.options.mode, editability: '整页图片，不可拆分编辑', limitation: '每页以整页图片写入 PPTX，文本、图层和元素不可单独编辑' }
       setProgress('正在准备下载…')
       if (isNativeApp()) await shareNativeBlob(compiled.blob, fileName)
       else { const url = URL.createObjectURL(compiled.blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = fileName; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
       setResult({ blob: compiled.blob, fileName, ratio: compiled.slideSize.ratio, bytes: compiled.blob.size, report })
-      setMessage({ kind: 'success', text: semantic ? '语义重建 PPTX 已生成并准备下载' : 'PPTX 已生成并准备下载' })
+      setMessage({ kind: 'success', text: semantic ? '语义重建 PPTX 已生成；渲染 QA 仍需在 PowerPoint/Keynote 中复核' : 'PPTX 已生成并准备下载' })
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : 'PPTX 生成失败' }) }
     finally { setBusy(false); setProgress('') }
   }
@@ -127,7 +147,7 @@ export default function PptxWorkbench() {
       {!draft.pages.length ? <div className="rounded-lg border border-dashed border-gray-300 px-4 py-14 text-center text-sm text-gray-500 dark:border-gray-700">尚未添加图片。支持 PNG、JPEG、GIF、BMP，最多 {PPTX_MAX_SOURCE_PAGES} 页。</div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{draft.pages.map((page, index) => <article key={page.id} className="overflow-hidden rounded-lg border border-gray-200 dark:border-white/[0.1]"><div className="flex aspect-video items-center justify-center bg-gray-100 dark:bg-gray-950"><ImagePreview page={page} /></div><div className="p-3"><div className="truncate text-sm font-medium" title={page.name}>{index + 1}. {page.name}</div><div className="mt-1 text-xs text-gray-500">{page.width} × {page.height} · {(page.bytes / 1024 / 1024).toFixed(2)} MB</div><div className="mt-3 flex flex-wrap gap-1"><button type="button" aria-label={`第 ${index + 1} 页上移`} disabled={index === 0} onClick={() => movePage(index, -1)} className="min-h-9 rounded border px-2 text-xs disabled:opacity-40">上移</button><button type="button" aria-label={`第 ${index + 1} 页下移`} disabled={index === draft.pages.length - 1} onClick={() => movePage(index, 1)} className="min-h-9 rounded border px-2 text-xs disabled:opacity-40">下移</button><button type="button" aria-label={`移除第 ${index + 1} 页`} onClick={() => removePage(page.id)} className="min-h-9 rounded border border-red-200 px-2 text-xs text-red-600">移除</button></div></div></article>)}</div>}
     </section>
     <section className="mt-4 grid gap-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/[0.1] dark:bg-gray-900 sm:grid-cols-2 lg:grid-cols-4" aria-label="PPTX 输出选项">
-      <label className="text-sm">打包模式<select value={draft.options.mode} onChange={(event) => updateOptions({ mode: event.target.value as PptxProjectDraft['options']['mode'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="quick-pack">快速打包（整页图片）</option><option value="semantic-rebuild">语义重建（可编辑对象）</option></select>{draft.options.mode === 'semantic-rebuild' && <span className="mt-1 block text-xs text-blue-600">使用 Agent Responses API 分析文字、卡片、图表；复杂 Logo/图标按源图局部资产保留。</span>}</label>
+      <label className="text-sm">打包模式<select value={draft.options.mode} onChange={(event) => updateOptions({ mode: event.target.value as PptxProjectDraft['options']['mode'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="quick-pack">快速打包（整页图片）</option><option value="semantic-rebuild">语义重建（可编辑对象）</option></select>{draft.options.mode === 'semantic-rebuild' && <span className="mt-1 block text-xs text-blue-600">使用 Agent Responses API 分析文字、卡片、图表；复杂图标通过透明 PNG 生图，用户原始品牌 Logo 才保留精确源图资产。</span>}</label>
       <label className="text-sm">幻灯片比例<select value={draft.options.aspectRatio} onChange={(event) => updateOptions({ aspectRatio: event.target.value as PptxProjectDraft['options']['aspectRatio'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="source">跟随首张图片</option><option value="16:9">16:9</option><option value="4:3">4:3</option></select></label>
       <label className="text-sm">图片适配<select value={draft.options.fit} onChange={(event) => updateOptions({ fit: event.target.value as PptxProjectDraft['options']['fit'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="contain">完整显示（contain）</option><option value="cover">铺满裁切（cover）</option></select></label>
       <label className="text-sm">背景色<input type="color" value={draft.options.backgroundColor} onChange={(event) => updateOptions({ backgroundColor: event.target.value })} className="mt-1 block h-11 w-full rounded border bg-transparent px-1" aria-label="背景色" /></label>

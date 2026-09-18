@@ -749,11 +749,14 @@ export async function callBatchImageSingle(opts: {
   allowPromptRewrite?: boolean
   signal?: AbortSignal
   onImageToolStarted?: () => void | Promise<void>
+  /** Request a genuine transparent PNG for isolated PPTX assets. */
+  transparentBackground?: boolean
   onPartialImage?: (event: { image: string; partialImageIndex?: number }) => void | Promise<void>
   onImageToolCompleted?: (image: AgentApiResultImage) => void | Promise<void>
 }): Promise<BatchImageCallResult> {
-  const { profile, params, batchItemId, prompt, referenceImageDataUrls, referenceIds, allowPromptRewrite, signal, onImageToolStarted, onPartialImage, onImageToolCompleted } = opts
-  const mime = MIME_MAP[params.output_format] || 'image/png'
+  const { profile, params, batchItemId, prompt, referenceImageDataUrls, referenceIds, allowPromptRewrite, signal, transparentBackground, onImageToolStarted, onPartialImage, onImageToolCompleted } = opts
+  const outputFormat = transparentBackground ? 'png' : params.output_format
+  const mime = MIME_MAP[outputFormat] || 'image/png'
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
@@ -788,14 +791,15 @@ export async function callBatchImageSingle(opts: {
     const tool: Record<string, unknown> = {
       type: 'image_generation',
       action: referenceImageDataUrls.length > 0 ? 'auto' : 'generate',
-      output_format: params.output_format,
+      output_format: outputFormat,
       moderation: params.moderation,
       quality: params.quality,
+      ...(transparentBackground ? { background: 'transparent' } : {}),
     }
     if (!profile.codexCli) {
       tool.size = params.size
     }
-    if (params.output_format !== 'png' && params.output_compression != null) {
+    if (outputFormat !== 'png' && params.output_compression != null) {
       tool.output_compression = params.output_compression
     }
     if (profile.streamImages) {

@@ -33,7 +33,7 @@ Allowed editable native elements:
 Use native text for all readable titles, labels, numbers and body copy. Use native rectangles/rounded rectangles for cards, headers, pills, separators and flat-color masks. Reconstruct simple charts with native lines, ellipses and text labels; do not use a screenshot of the whole chart. Use native arrows or chevrons for visible process arrows.
 
 Allowed non-native fallback:
-5. image: {id,type:"image",box,sourceBox,classification:"source_crop",confidence,editable:false,fallbackReason}. Use this only for a small complex logo, icon, illustration, photo, gradient decoration or other asset that cannot be represented reliably by native objects. sourceBox MUST be a tight crop of the same source image and must not cover the whole page. Never return a full-page source image and never put a source crop behind text that has already been reconstructed. If an icon is ambiguous, preserve it as a small source crop rather than inventing its meaning.
+5. image: {id,type:"image",box,sourceBox,classification,assetId,assetPrompt,sourceExact,confidence,editable:false,fallbackReason}. For every icon, pictogram, illustration, skyline, decorative mark, complex badge, logo-like visual, or non-native visual that is not an exact user-supplied brand file, use classification:"imagegen_asset", give it a stable assetId and a self-contained assetPrompt. The prompt must request one isolated transparent PNG with no text, labels, card frame, or background, and must describe the reference colors and geometry. Use classification:"source_crop" only for an exact user-supplied brand/logo mark that must remain unchanged; set sourceExact:true and use a tight sourceBox. source crops must never cover the whole page and must never be used for ordinary icons.
 
 Important quality rules:
 - Do not omit readable Chinese text merely because it is small.
@@ -44,7 +44,7 @@ Important quality rules:
 - For line charts, estimate data points and use one line element per segment plus small ellipse points and editable labels.
 - Report confidence from 0 to 1 for every text and image; do not claim confidence for pixels you cannot read.
 - Keep the result under 220 elements. Prefer faithful, editable structure over decorative over-segmentation.
-- If a complex region cannot be reconstructed, use a tight source crop and add a warning. Do not silently fake it.
+- If a complex region cannot be reconstructed natively, classify it as imagegen_asset and provide assetPrompt. Never silently replace a complex visual with a screenshot crop.
 - Return valid JSON only; no Markdown fences, comments or explanatory prose.`
 
 function extractJsonObject(text: string): string {
@@ -75,21 +75,22 @@ function enforceSemanticPolicy(spec: PptxSlideSpec): PptxSlideSpec {
     }
     ids.add(element.id)
     if (element.type === 'image') {
-      if (element.classification !== 'source_crop') {
-        next = {
-          ...element,
-          classification: 'source_crop',
-          sourceBox: element.sourceBox ?? element.box,
-          assetId: undefined,
-          editable: false,
-          fallbackReason: element.fallbackReason || '分析结果未随请求返回独立二进制资产，回退为源图局部资产',
+      if (element.classification === 'imagegen_asset') {
+        if (!element.assetId || !element.assetPrompt) {
+          throw new Error(`生图资产 ${element.id} 缺少 assetId 或 assetPrompt`)
         }
-        warnings.push(`资产 ${element.id} 未随分析结果返回，已回退为源图局部资产`)
-      }
-      const image = next as Extract<PptxSlideElement, { type: 'image' }>
-      if (image.classification === 'source_crop' && (elementArea(image) >= 0.78 || sourceArea(image) >= 0.78)) {
-        warnings.push(`移除疑似整页图片回退：${image.id}`)
-        continue
+        if (elementArea(element) >= 0.78) {
+          throw new Error(`生图资产 ${element.id} 覆盖范围过大，禁止作为整页回退`)
+        }
+      } else if (element.classification === 'user_asset') {
+        if (!element.assetId) throw new Error(`用户资产 ${element.id} 缺少 assetId`)
+      } else {
+        if (!element.sourceExact) {
+          throw new Error(`源图裁切 ${element.id} 不是明确的用户原始 Logo/品牌资产`)
+        }
+        if (elementArea(element) >= 0.78 || sourceArea(element) >= 0.78) {
+          throw new Error(`源图裁切 ${element.id} 覆盖范围过大，禁止整页图片回退`)
+        }
       }
     }
     elements.push(next)
@@ -156,3 +157,27 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 export { SEMANTIC_ANALYSIS_INSTRUCTIONS }
+
+
+export interface PptxImagegenAssetRequest {
+  assetId: string
+  prompt: string
+  elementIds: string[]
+}
+
+/** Return the unique image-generation assets required by a validated SlideSpec. */
+export function listPptxImagegenAssets(spec: PptxSlideSpec): PptxImagegenAssetRequest[] {
+  const byId = new Map<string, PptxImagegenAssetRequest>()
+  for (const element of spec.elements) {
+    if (element.type !== 'image' || element.classification !== 'imagegen_asset') continue
+    if (!element.assetId || !element.assetPrompt) throw new Error(`生图资产 ${element.id} 缺少 assetId 或 assetPrompt`)
+    const existing = byId.get(element.assetId)
+    if (existing) {
+      if (existing.prompt !== element.assetPrompt) throw new Error(`生图资产 ${element.assetId} 的提示词不一致`)
+      existing.elementIds.push(element.id)
+    } else {
+      byId.set(element.assetId, { assetId: element.assetId, prompt: element.assetPrompt, elementIds: [element.id] })
+    }
+  }
+  return [...byId.values()]
+}
