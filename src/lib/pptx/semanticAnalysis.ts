@@ -83,7 +83,7 @@ function enforceSemanticPolicy(spec: PptxSlideSpec): PptxSlideSpec {
           throw new Error(`生图资产 ${element.id} 覆盖范围过大，禁止作为整页回退`)
         }
       } else if (element.classification === 'user_asset') {
-        if (!element.assetId) throw new Error(`用户资产 ${element.id} 缺少 assetId`)
+        throw new Error(`用户资产 ${element.id} 当前没有接入资产来源；请提供精确品牌源图并使用 source_crop，或改为 imagegen_asset`)
       } else {
         if (!element.sourceExact) {
           throw new Error(`源图裁切 ${element.id} 不是明确的用户原始 Logo/品牌资产`)
@@ -180,4 +180,15 @@ export function listPptxImagegenAssets(spec: PptxSlideSpec): PptxImagegenAssetRe
     }
   }
   return [...byId.values()]
+}
+
+/** Keep asset IDs unique across multiple source pages while preserving reuse within one page. */
+export function namespacePptxImagegenAssetIds(spec: PptxSlideSpec, namespace: string): PptxSlideSpec {
+  const safeNamespace = namespace.trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'slide'
+  return {
+    ...spec,
+    elements: spec.elements.map((element) => element.type === 'image' && element.classification === 'imagegen_asset' && element.assetId
+      ? { ...element, assetId: `${safeNamespace}-${element.assetId}`.slice(0, 100) }
+      : element),
+  }
 }

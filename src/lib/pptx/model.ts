@@ -183,13 +183,16 @@ export function normalizeElementBox(value: unknown): PptxElementBox | null {
   if (numbers.some((item) => !Number.isFinite(item))) return null
   const [x, y, width, height] = numbers
   if (width <= 0 || height <= 0) return null
-  const clampedX = Math.min(1, Math.max(0, x))
-  const clampedY = Math.min(1, Math.max(0, y))
+  const left = Math.max(0, x)
+  const top = Math.max(0, y)
+  const right = Math.min(1, x + width)
+  const bottom = Math.min(1, y + height)
+  if (right <= left || bottom <= top) return null
   return {
-    x: clampedX,
-    y: clampedY,
-    width: Math.min(1 - clampedX, Math.max(0.001, width)),
-    height: Math.min(1 - clampedY, Math.max(0.001, height)),
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
   }
 }
 
