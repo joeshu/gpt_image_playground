@@ -177,7 +177,7 @@ export function normalizeSlideSpec(value: unknown, fallback: Pick<PptxSourcePage
     } else if (type === 'line') {
       elements.push({ id, type, box, line: normalizeColor(item.line), widthPt: Number.isFinite(Number(item.widthPt)) ? Math.min(12, Math.max(0.25, Number(item.widthPt))) : undefined })
     } else {
-      const sourceBox = normalizeElementBox(item.sourceBox)
+      const sourceBox = normalizeElementBox(item.sourceBox) ?? undefined
       const classification = item.classification === 'user_asset' || item.classification === 'imagegen_asset' ? item.classification : 'source_crop'
       elements.push({ id, type, box, sourceBox, classification, assetId: typeof item.assetId === 'string' ? item.assetId.slice(0, 100) : undefined, confidence: normalizeConfidence(item.confidence) })
     }
