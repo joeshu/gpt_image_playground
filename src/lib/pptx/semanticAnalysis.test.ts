@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { listPptxImagegenAssets, namespacePptxImagegenAssetIds, parsePptxSemanticSpec } from './semanticAnalysis'
+import { SEMANTIC_ANALYSIS_INSTRUCTIONS, listPptxImagegenAssets, namespacePptxImagegenAssetIds, parsePptxSemanticSpec } from './semanticAnalysis'
 
 const page = { width: 1672, height: 941 }
 
 describe('PPTX semantic analysis protocol', () => {
+  it('requires canonical geometry keys in the model instructions', () => {
+    expect(SEMANTIC_ANALYSIS_INSTRUCTIONS).toContain('x, y, width, and height numeric keys')
+    expect(SEMANTIC_ANALYSIS_INSTRUCTIONS).toContain('do not abbreviate width/height as w/h')
+  })
   it('accepts native objects and exact user-supplied brand crops', () => {
     const result = parsePptxSemanticSpec(JSON.stringify({
       schemaVersion: 1,
