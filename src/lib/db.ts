@@ -125,6 +125,17 @@ export function getImage(id: string): Promise<StoredImage | undefined> {
   return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.get(id))
 }
 
+/** Returns the stored image as binary without exposing IndexedDB internals. */
+export async function getStoredImageBlob(id: string): Promise<Blob | undefined> {
+  const image = await getImage(id)
+  if (!image?.dataUrl) return undefined
+  try {
+    return await (await fetch(image.dataUrl)).blob()
+  } catch {
+    return undefined
+  }
+}
+
 export function getStoredImageThumbnail(id: string): Promise<StoredImageThumbnail | undefined> {
   return dbTransaction(STORE_THUMBNAILS, 'readonly', (s) => s.get(id))
 }

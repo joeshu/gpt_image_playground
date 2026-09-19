@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PARAMS } from '../types'
 import { createDefaultOpenAIProfile, DEFAULT_SETTINGS } from './apiProfiles'
-import { callAgentConversationTitleApi, callAgentResponsesApi, parseBatchImageCallArguments } from './agentApi'
+import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle, parseBatchImageCallArguments } from './agentApi'
 
 describe('parseBatchImageCallArguments', () => {
   it('trims ids and prompts, fills missing ids, and skips empty prompts', () => {
@@ -412,5 +412,34 @@ describe('callAgentResponsesApi', () => {
     expect(messageItems).toHaveLength(1)
     expect(result.text).toBe("hi!")
     expect(outputItemSnapshots[outputItemSnapshots.length - 1]).toBe(1)
+  })
+})
+
+
+describe('callBatchImageSingle transparent assets', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('requests a PNG with a transparent background for semantic PPTX assets', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      output: [{ type: 'image_generation_call', id: 'asset_1', result: 'aW1hZ2U=' }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    const profile = createDefaultOpenAIProfile({ apiKey: 'test-key', apiMode: 'responses' })
+    const result = await callBatchImageSingle({
+      profile,
+      params: DEFAULT_PARAMS,
+      batchItemId: 'asset_1',
+      prompt: 'isolated red target icon',
+      referenceImageDataUrls: [],
+      transparentBackground: true,
+    })
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(String((init as RequestInit).body))
+    expect(body.tools[0]).toMatchObject({ output_format: 'png', background: 'transparent' })
+    expect(result.image?.dataUrl).toBe('data:image/png;base64,aW1hZ2U=')
   })
 })

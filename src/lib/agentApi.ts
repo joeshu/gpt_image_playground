@@ -345,14 +345,17 @@ function getImageToolFailureFromOutputItem(event: Record<string, unknown>, item?
   }
 }
 
-function extractText(payload: ResponsesApiResponse) {
+function extractResponseText(payload: ResponsesApiResponse, options: { sanitize?: boolean; applyCitations?: boolean } = {}) {
+  const sanitize = options.sanitize !== false
+  const applyCitations = options.applyCitations !== false
   const chunks: string[] = []
 
   for (const item of payload.output ?? []) {
     if (item.type !== 'message') continue
     for (const part of item.content ?? []) {
       if ((part.type === 'output_text' || part.type === 'text') && typeof part.text === 'string') {
-        chunks.push(sanitizeAgentText(applyUrlCitations(part.text, part.annotations)))
+        const text = applyCitations ? applyUrlCitations(part.text, part.annotations) : part.text
+        chunks.push(sanitize ? sanitizeAgentText(text) : text)
       } else if (part.type === 'refusal' && typeof part.refusal === 'string') {
         chunks.push(part.refusal)
       }
@@ -360,6 +363,10 @@ function extractText(payload: ResponsesApiResponse) {
   }
 
   return chunks.join('\n').trim()
+}
+
+function extractText(payload: ResponsesApiResponse) {
+  return extractResponseText(payload)
 }
 
 function decodeXmlText(text: string) {
@@ -749,11 +756,14 @@ export async function callBatchImageSingle(opts: {
   allowPromptRewrite?: boolean
   signal?: AbortSignal
   onImageToolStarted?: () => void | Promise<void>
+  /** Request a genuine transparent PNG for isolated PPTX assets. */
+  transparentBackground?: boolean
   onPartialImage?: (event: { image: string; partialImageIndex?: number }) => void | Promise<void>
   onImageToolCompleted?: (image: AgentApiResultImage) => void | Promise<void>
 }): Promise<BatchImageCallResult> {
-  const { profile, params, batchItemId, prompt, referenceImageDataUrls, referenceIds, allowPromptRewrite, signal, onImageToolStarted, onPartialImage, onImageToolCompleted } = opts
-  const mime = MIME_MAP[params.output_format] || 'image/png'
+  const { profile, params, batchItemId, prompt, referenceImageDataUrls, referenceIds, allowPromptRewrite, signal, transparentBackground, onImageToolStarted, onPartialImage, onImageToolCompleted } = opts
+  const outputFormat = transparentBackground ? 'png' : params.output_format
+  const mime = MIME_MAP[outputFormat] || 'image/png'
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
@@ -788,14 +798,15 @@ export async function callBatchImageSingle(opts: {
     const tool: Record<string, unknown> = {
       type: 'image_generation',
       action: referenceImageDataUrls.length > 0 ? 'auto' : 'generate',
-      output_format: params.output_format,
+      output_format: outputFormat,
       moderation: params.moderation,
       quality: params.quality,
+      ...(transparentBackground ? { background: 'transparent' } : {}),
     }
     if (!profile.codexCli) {
       tool.size = params.size
     }
-    if (params.output_format !== 'png' && params.output_compression != null) {
+    if (outputFormat !== 'png' && params.output_compression != null) {
       tool.output_compression = params.output_compression
     }
     if (profile.streamImages) {
@@ -928,5 +939,62 @@ export function parseBatchImageCallArguments(args: string): Array<{ id: string; 
     return items.length > 0 ? items : null
   } catch {
     return null
+  }
+}
+
+
+/**
+ * Ask the configured Responses model for a validated slide inventory.
+ * This is deliberately separate from the image-generation Agent tools: semantic
+ * rebuild must never let the model call an image tool or return PPTX/XML.
+ */
+export async function callPptxSemanticAnalysisApi(opts: {
+  profile: ApiProfile
+  imageDataUrl: string
+  instructions: string
+  signal?: AbortSignal
+}): Promise<string> {
+  const { profile, imageDataUrl, instructions, signal } = opts
+  const proxyConfig = readClientDevProxyConfig()
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(new DOMException('请求超时', 'TimeoutError')), Math.max(30, profile.timeout) * 1000)
+  const abortFromCaller = () => controller.abort()
+  if (signal?.aborted) controller.abort()
+  signal?.addEventListener('abort', abortFromCaller, { once: true })
+
+  try {
+    const body: Record<string, unknown> = {
+      model: profile.model,
+      instructions,
+      input: [{
+        role: 'user',
+        content: [
+          { type: 'input_text', text: '分析附件中的单页图片，并只返回要求的 JSON。' },
+          { type: 'input_image', image_url: imageDataUrl },
+        ],
+      }],
+      max_output_tokens: 16000,
+      text: { format: { type: 'json_object' } },
+    }
+    if (profile.reasoningEffort) body.reasoning = { effort: profile.reasoningEffort }
+
+    const response = await fetch(buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy), {
+      method: 'POST',
+      headers: createHeaders(profile),
+      cache: 'no-store',
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(await getApiErrorMessage(response, { mode: 'PPTX 语义重建分析' }))
+    const payload = normalizeResponsePayload(await response.json())
+    if (!payload) throw new Error('语义分析接口返回格式无效')
+    throwIfAborted(controller.signal, signal)
+    const text = extractResponseText(payload, { sanitize: false, applyCitations: false }).trim()
+    if (!text) throw new Error('语义分析接口没有返回 JSON')
+    return text
+  } finally {
+    clearTimeout(timeoutId)
+    signal?.removeEventListener('abort', abortFromCaller)
   }
 }

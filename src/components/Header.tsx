@@ -21,14 +21,15 @@ function isInstalledPwa() {
 }
 
 interface HeaderProps {
-  activeSurface: 'home' | 'creation' | 'results'
+  activeSurface: 'home' | 'creation' | 'results' | 'pptx'
   onOpenHome: (mode: 'gallery' | 'agent') => void
   onOpenCreationWorkbench: () => void
   onOpenResultsCenter: () => void
+  onOpenPptxWorkbench: () => void
   onOpenSettings?: () => void
 }
 
-export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbench, onOpenResultsCenter, onOpenSettings }: HeaderProps) {
+export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbench, onOpenResultsCenter, onOpenPptxWorkbench, onOpenSettings }: HeaderProps) {
   const appMode = useStore((s) => s.appMode)
   const setAppMode = useStore((s) => s.setAppMode)
   const setShowSettings = useStore((s) => s.setShowSettings)
@@ -271,6 +272,7 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
             >
               结果
             </button>
+            <button type="button" onClick={onOpenPptxWorkbench} aria-label="图片转 PPTX" className={`px-3.5 py-1.5 rounded-lg text-sm transition-colors ${activeSurface === 'pptx' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>图片转 PPTX</button>
           </div>
           <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
             {!isPwaInstalled && (
@@ -329,7 +331,7 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
           </div>
         </div>
         <div className="safe-area-x sm:hidden pb-1.5">
-          <div className="grid min-h-10 grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+          <div className="flex min-h-10 gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-gray-100/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]" role="tablist" aria-label="主导航">
             <button
               type="button"
               onClick={() => onOpenHome('gallery')}
@@ -354,10 +356,11 @@ export default function Header({ activeSurface, onOpenHome, onOpenCreationWorkbe
             <button
               type="button"
               onClick={onOpenResultsCenter}
-              className={`px-1 py-1.5 rounded-lg text-xs transition-colors ${activeSurface === 'results' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+              className={`min-w-max min-h-9 px-2 py-1.5 rounded-lg text-xs transition-colors ${activeSurface === 'results' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
             >
               结果
             </button>
+            <button type="button" onClick={onOpenPptxWorkbench} aria-label="图片转 PPTX" className={`min-w-max min-h-9 px-2 py-1.5 rounded-lg text-xs transition-colors ${activeSurface === 'pptx' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>图片转 PPTX</button>
           </div>
         </div>
       </header>

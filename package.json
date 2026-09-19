@@ -11,7 +11,8 @@
     "deploy:cf": "npm run build && wrangler deploy",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:mobile": "node scripts/check-mobile-surface-layout.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.0",
