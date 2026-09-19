@@ -976,6 +976,8 @@ export async function callPptxSemanticAnalysisApi(opts: {
       }],
       max_output_tokens: 16000,
       text: { format: { type: 'json_object' } },
+      // Stream text so reverse proxies receive early bytes during complex visual analysis.
+      stream: true,
     }
     if (profile.reasoningEffort) body.reasoning = { effort: profile.reasoningEffort }
 
@@ -987,10 +989,9 @@ export async function callPptxSemanticAnalysisApi(opts: {
       signal: controller.signal,
     })
     if (!response.ok) throw new Error(await getApiErrorMessage(response, { mode: 'PPTX 语义重建分析' }))
-    const payload = normalizeResponsePayload(await response.json())
-    if (!payload) throw new Error('语义分析接口返回格式无效')
+    const streamed = await parseAgentStreamResponse(response, 'image/png', controller.signal, signal)
     throwIfAborted(controller.signal, signal)
-    const text = extractResponseText(payload, { sanitize: false, applyCitations: false }).trim()
+    const text = streamed.text.trim()
     if (!text) throw new Error('语义分析接口没有返回 JSON')
     return text
   } finally {
