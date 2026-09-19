@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PARAMS } from '../types'
 import { createDefaultOpenAIProfile, DEFAULT_SETTINGS } from './apiProfiles'
-import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle, parseBatchImageCallArguments } from './agentApi'
+import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle, callPptxSemanticAnalysisApi, parseBatchImageCallArguments } from './agentApi'
 
 describe('parseBatchImageCallArguments', () => {
   it('trims ids and prompts, fills missing ids, and skips empty prompts', () => {
@@ -32,6 +32,40 @@ describe('parseBatchImageCallArguments', () => {
       { id: 'same_3', prompt: 'four' },
     ])
     expect(parseBatchImageCallArguments(args)).toEqual(parseBatchImageCallArguments(args))
+  })
+})
+
+describe('callPptxSemanticAnalysisApi', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('streams strict JSON text to avoid reverse-proxy idle timeouts', async () => {
+    const json = '{"schemaVersion":1,"elements":[]}'
+    const streamBody = [
+      `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: json })}`,
+      '',
+      `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_pptx', output: [{ type: 'message', content: [{ type: 'output_text', text: json }] }] } })}`,
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(streamBody, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    }))
+    const profile = createDefaultOpenAIProfile({ apiKey: 'test-key', apiMode: 'responses' })
+
+    await expect(callPptxSemanticAnalysisApi({
+      profile,
+      imageDataUrl: 'data:image/png;base64,aW1hZ2U=',
+      instructions: 'Return JSON only.',
+    })).resolves.toBe(json)
+
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(String((init as RequestInit).body))
+    expect(body.stream).toBe(true)
+    expect(body.text).toEqual({ format: { type: 'json_object' } })
   })
 })
 
