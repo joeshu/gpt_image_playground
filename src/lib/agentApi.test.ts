@@ -54,7 +54,8 @@ describe('callPptxSemanticAnalysisApi', () => {
       status: 200,
       headers: { 'Content-Type': 'text/event-stream' },
     }))
-    const profile = createDefaultOpenAIProfile({ apiKey: 'test-key', apiMode: 'responses' })
+    const profile = createDefaultOpenAIProfile({ apiKey: 'test-key', apiMode: 'responses', timeout: 30 })
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout')
 
     await expect(callPptxSemanticAnalysisApi({
       profile,
@@ -66,6 +67,7 @@ describe('callPptxSemanticAnalysisApi', () => {
     const body = JSON.parse(String((init as RequestInit).body))
     expect(body.stream).toBe(true)
     expect(body.text).toEqual({ format: { type: 'json_object' } })
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 900_000)
   })
 })
 
