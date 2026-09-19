@@ -34,7 +34,7 @@ export async function ingestPptxImageId(imageId: string, name = '图片'): Promi
   const source = blob ?? (image.dataUrl ? await (await fetch(image.dataUrl)).blob() : undefined)
   if (!source) throw new Error('已保存图片没有可用数据')
   const { width, height } = await readDimensions(source)
-  return { id: createPptxPageId(), imageId, name, mimeType: source.type || image?.imageBlob?.type || 'image/png', bytes: source.size, width, height, addedAt: Date.now() }
+  return { id: createPptxPageId(), imageId, name, mimeType: source.type || image.dataUrl.match(/^data:([^;,]+)/)?.[1] || 'image/png', bytes: source.size, width, height, addedAt: Date.now() }
 }
 
 export async function readFileAsDataUrl(file: Blob): Promise<string> {
