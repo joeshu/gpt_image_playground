@@ -177,6 +177,7 @@ export interface PptxSlideSpec {
 }
 
 export function normalizeElementBox(value: unknown): PptxElementBox | null {
+  if (!value || typeof value !== 'object') return null
   const record = value as Record<string, unknown>
   const x = Number(record.x)
   const y = Number(record.y)
