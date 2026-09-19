@@ -73,6 +73,7 @@ import { getApiKeySignature, hydrateNativeApiKeys, markNativeSecretStorageReady,
 import { isNativeApp } from './lib/platform'
 import { isAutoTextRepairPrompt } from './lib/textRepair'
 import { verifyImageText } from './lib/textVerification'
+import { getPptxDraftImageIds } from './lib/pptx/draft'
 
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
@@ -1580,6 +1581,9 @@ async function initStoreInternal() {
   const agentConversations = state.agentConversations
   const agentInputDrafts = state.agentInputDrafts
   for (const img of persistedInputImages) referencedIds.add(img.id)
+  // PPTX keeps page metadata in localStorage and image bytes in IndexedDB.
+  // Preserve those images during startup orphan cleanup as well.
+  for (const imageId of getPptxDraftImageIds()) referencedIds.add(imageId)
   if (galleryInputDraft) {
     for (const img of galleryInputDraft.inputImages) referencedIds.add(img.id)
   }
