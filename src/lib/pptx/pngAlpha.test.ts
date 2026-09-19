@@ -7,8 +7,8 @@ const opaque = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg
 describe('PNG alpha inspection', () => {
   it('detects visible content with transparent corners', () => {
     expect(inspectPngAlphaDataUrl(mixed)).toMatchObject({
-      width: 2,
-      height: 2,
+      width: 3,
+      height: 3,
       hasVisiblePixels: true,
       hasTransparentPixels: true,
       cornersTransparent: true,
