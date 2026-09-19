@@ -21,6 +21,20 @@ describe('PPTX semantic analysis protocol', () => {
     expect(result.spec.elements.some((element) => element.id === 'logo' && element.type === 'image' && element.sourceExact)).toBe(true)
   })
 
+  it('accepts compact w/h geometry returned by vision models', () => {
+    const result = parsePptxSemanticSpec(JSON.stringify({
+      canvas: { widthPx: 1200, heightPx: 675 },
+      elements: [
+        { id: 'title-short-box', type: 'text', box: { x: 0.06, y: 0.02, w: 0.35, h: 0.06 }, text: '聚焦流失三大根因', confidence: 0.99 },
+        { id: 'divider-short-box', type: 'line', box: { x: 0.39, y: 0.79, w: 0.02, h: 0.04 }, line: '#D6A4A7' },
+        { id: 'icon-short-box', type: 'image', box: { x: 0.1, y: 0.2, w: 0.08, h: 0.08 }, classification: 'imagegen_asset', assetId: 'chart-icon', assetPrompt: 'isolated transparent red chart icon' },
+      ],
+    }), page)
+    expect(result.nativeElementCount).toBe(2)
+    expect(result.sourceAssetCount).toBe(1)
+    expect(result.spec.elements[0]).toMatchObject({ type: 'text', box: { x: 0.06, y: 0.02, width: 0.35, height: 0.06 } })
+  })
+
   it('requires generated image assets to carry a stable prompt and manifest entry', () => {
     const result = parsePptxSemanticSpec(JSON.stringify({
       canvas: { widthPx: 1672, heightPx: 941 },
