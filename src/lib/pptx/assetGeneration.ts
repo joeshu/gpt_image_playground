@@ -2,6 +2,7 @@ import { callBatchImageSingle } from '../agentApi'
 import { DEFAULT_PARAMS, type ApiProfile } from '../../types'
 import type { PptxSlideSpec } from './model'
 import { listPptxImagegenAssets, type PptxImagegenAssetRequest } from './semanticAnalysis'
+import { buildTransparentPrompt, removeKeyedBackgroundFromDataUrl } from '../transparentImage'
 import { inspectPngAlphaDataUrl } from './pngAlpha'
 
 export interface PptxGeneratedAssetManifestEntry {
@@ -19,18 +20,23 @@ export interface PptxGeneratedAssetsResult {
   manifest: PptxGeneratedAssetManifestEntry[]
 }
 
-function transparentAssetPrompt(request: PptxImagegenAssetRequest): string {
+function transparentAssetPrompt(request: PptxImagegenAssetRequest, allowKeyedBackground = false): string {
   return [
     `Create exactly one isolated transparent PNG asset named ${request.assetId}.`,
     'This asset will be inserted into an editable PowerPoint slide.',
-    'Use a genuine alpha channel: transparent corners and transparent space around the subject.',
+    allowKeyedBackground
+      ? 'Use exactly one flat key-color background selected by the final background instructions in this prompt. Fill the entire square canvas uniformly with that color for local transparency removal.'
+      : 'Use a genuine alpha channel: transparent corners and transparent space around the subject.',
     'Do not draw any text, Chinese characters, labels, numbers, card frame, page background, or shadow unless the prompt explicitly asks for a visible shadow.',
     'Preserve the requested flat presentation color roles and simple geometry; do not invent a different palette.',
     request.prompt,
   ].join(' ')
 }
 
-/** Validate the alpha contract required by the image-to-PPTX skill. */
+function isNativeTransparencyUnsupported(error: string | null): boolean {
+  return /transparent background is not supported for this model/i.test(error ?? '')
+}
+
 export function validateTransparentPngDataUrl(dataUrl: string): void {
   const inspection = inspectPngAlphaDataUrl(dataUrl)
   if (!inspection.hasVisiblePixels) throw new Error('生成的 PNG alpha 区域为空')
@@ -51,6 +57,7 @@ export async function generatePptxImagegenAssets(options: {
   const requests = listPptxImagegenAssets(options.spec)
   const assets: Record<string, string> = {}
   const manifest: PptxGeneratedAssetManifestEntry[] = []
+  let useLocalKeyedBackground = false
   const params = {
     ...DEFAULT_PARAMS,
     size: '1024x1024',
@@ -67,17 +74,28 @@ export async function generatePptxImagegenAssets(options: {
       profile: options.profile,
       params,
       batchItemId: request.assetId,
-      prompt: transparentAssetPrompt(request),
+      prompt: useLocalKeyedBackground
+        ? buildTransparentPrompt(transparentAssetPrompt(request, true))
+        : transparentAssetPrompt(request),
       referenceImageDataUrls: [],
       allowPromptRewrite: false,
       signal: options.signal,
-      transparentBackground: true,
+      transparentBackground: !useLocalKeyedBackground,
     })
     if (!result.image || result.error) {
+      if (!useLocalKeyedBackground && isNativeTransparencyUnsupported(result.error)) {
+        useLocalKeyedBackground = true
+        index -= 1
+        options.onProgress?.(`服务不支持原生透明背景，后续资产改用本地去背重试：${request.assetId}`)
+        continue
+      }
       throw new Error(`复杂资产 ${request.assetId} 生成失败：${result.error || '接口未返回图片'}`)
     }
-    await validateTransparentPngDataUrl(result.image.dataUrl)
-    assets[request.assetId] = result.image.dataUrl
+    const dataUrl = useLocalKeyedBackground
+      ? await removeKeyedBackgroundFromDataUrl(result.image.dataUrl, undefined, 'png')
+      : result.image.dataUrl
+    await validateTransparentPngDataUrl(dataUrl)
+    assets[request.assetId] = dataUrl
     manifest.push({
       assetId: request.assetId,
       prompt: request.prompt,
