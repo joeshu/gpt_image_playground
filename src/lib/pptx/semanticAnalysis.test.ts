@@ -5,8 +5,8 @@ const page = { width: 1672, height: 941 }
 
 describe('PPTX semantic analysis protocol', () => {
   it('requires canonical geometry keys in the model instructions', () => {
-    expect(SEMANTIC_ANALYSIS_INSTRUCTIONS).toContain('"width": number, "height": number')
-    expect(SEMANTIC_ANALYSIS_INSTRUCTIONS).toContain('do not abbreviate `width`/`height` as `w`/`h`')
+    expect(SEMANTIC_ANALYSIS_INSTRUCTIONS).toContain('x, y, width, and height numeric keys')
+    expect(SEMANTIC_ANALYSIS_INSTRUCTIONS).toContain('do not abbreviate width/height as w/h')
   })
   it('accepts native objects and exact user-supplied brand crops', () => {
     const result = parsePptxSemanticSpec(JSON.stringify({

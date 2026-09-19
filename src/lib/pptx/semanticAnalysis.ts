@@ -22,7 +22,7 @@ The output is not a design suggestion and not an XML document. Return ONLY one J
   "warnings": []
 }
 
-Coordinates for every element and every sourceBox are normalized to 0..1 relative to the complete source image. Each `box` and `sourceBox` MUST use exactly `{ "x": number, "y": number, "width": number, "height": number }`; do not abbreviate `width`/`height` as `w`/`h`. Preserve the source reading order and approximate geometry. Paint background panels and masking patches before the text or icon that sits above them.
+Coordinates for every element and every sourceBox are normalized to 0..1 relative to the complete source image. Each box and sourceBox MUST use exactly x, y, width, and height numeric keys; do not abbreviate width/height as w/h. Preserve the source reading order and approximate geometry. Paint background panels and masking patches before the text or icon that sits above them.
 
 Allowed editable native elements:
 1. text: {id,type:"text",box,text,style:{fontFamily,fontSizePt,color,bold,italic,align,verticalAnchor,marginPt},confidence,editable:true}
