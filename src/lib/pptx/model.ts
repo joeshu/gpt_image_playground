@@ -178,10 +178,14 @@ export interface PptxSlideSpec {
 
 export function normalizeElementBox(value: unknown): PptxElementBox | null {
   if (!value || typeof value !== 'object') return null
-  const record = value as Record<string, unknown>
-  const numbers = ['x', 'y', 'width', 'height'].map((key) => Number(record[key]))
+  const x = Number(record.x)
+  const y = Number(record.y)
+  // Vision models commonly serialize normalized rectangles as x/y/w/h.
+  // Accept those aliases while preserving the canonical width/height form.
+  const width = Number(record.width ?? record.w)
+  const height = Number(record.height ?? record.h)
+  const numbers = [x, y, width, height]
   if (numbers.some((item) => !Number.isFinite(item))) return null
-  const [x, y, width, height] = numbers
   if (width <= 0 || height <= 0) return null
   const left = Math.max(0, x)
   const top = Math.max(0, y)
