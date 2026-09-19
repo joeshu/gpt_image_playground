@@ -74,6 +74,7 @@ import { isNativeApp } from './lib/platform'
 import { isAutoTextRepairPrompt } from './lib/textRepair'
 import { verifyImageText } from './lib/textVerification'
 import { getPptxDraftImageIds } from './lib/pptx/draft'
+import { getPptxWorkflowImageIds } from './lib/pptx/workflow'
 
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
@@ -1584,6 +1585,7 @@ async function initStoreInternal() {
   // PPTX keeps page metadata in localStorage and image bytes in IndexedDB.
   // Preserve those images during startup orphan cleanup as well.
   for (const imageId of getPptxDraftImageIds()) referencedIds.add(imageId)
+  for (const imageId of getPptxWorkflowImageIds()) referencedIds.add(imageId)
   if (galleryInputDraft) {
     for (const img of galleryInputDraft.inputImages) referencedIds.add(img.id)
   }

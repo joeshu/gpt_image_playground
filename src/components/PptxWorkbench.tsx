@@ -1,160 +1,100 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getImage, getStoredImageBlob, getStoredImageThumbnail } from '../lib/db'
+import { getImage, getStoredImageBlob, getStoredImageThumbnail, storeImage } from '../lib/db'
 import { isNativeApp } from '../lib/platform'
 import { shareNativeBlob } from '../lib/nativeExport'
 import { compilePptx } from '../lib/pptx/package'
 import { clearPptxDraft, loadPptxDraft, savePptxDraft } from '../lib/pptx/draft'
 import { ingestPptxFiles } from '../lib/pptx/fileIngest'
-import { analyzePptxSlide, blobToDataUrl, namespacePptxImagegenAssetIds, summarizePptxSemanticSpec } from '../lib/pptx/semanticAnalysis'
+import { analyzePptxSlide, blobToDataUrl, listPptxImagegenAssets, namespacePptxImagegenAssetIds, summarizePptxSemanticSpec } from '../lib/pptx/semanticAnalysis'
 import { generatePptxImagegenAssets } from '../lib/pptx/assetGeneration'
 import { getAgentImageApiProfile, getAgentTextApiProfile } from '../lib/apiProfiles'
 import { useStore } from '../store'
 import { createEmptyPptxDraft, getPptxSlideSize, updatePptxDraft, validatePptxPages, PPTX_MAX_SOURCE_PAGES, type PptxProjectDraft, type PptxSlideSpec, type PptxSourcePage } from '../lib/pptx/model'
+import { clearPptxWorkflow, createPptxWorkflow, getPptxSourceKey, loadPptxWorkflow, savePptxWorkflow, type PptxWorkflowAsset, type PptxWorkflowState } from '../lib/pptx/workflow'
 
 const safeFileName = (value: string) => (value.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').slice(0, 80) || '图片转PPTX').replace(/\.pptx$/i, '') + '.pptx'
+const stageLabels = ['导入图片', '语义分析', '结构确认', '生成资产', '编译下载']
 
 function ImagePreview({ page }: { page: PptxSourcePage }) {
   const [src, setSrc] = useState<string>()
-  useEffect(() => {
-    let alive = true
-    let objectUrl = ''
-    void (async () => {
-      const thumb = await getStoredImageThumbnail(page.imageId)
-      if (alive && thumb?.thumbnailDataUrl) { setSrc(thumb.thumbnailDataUrl); return }
-      const blob = await getStoredImageBlob(page.imageId)
-      if (blob) {
-        const nextUrl = URL.createObjectURL(blob)
-        if (alive) { objectUrl = nextUrl; setSrc(nextUrl) } else URL.revokeObjectURL(nextUrl)
-        return
-      }
-      const image = await getImage(page.imageId)
-      if (alive && image?.dataUrl) setSrc(image.dataUrl)
-    })()
-    return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [page.imageId])
+  useEffect(() => { let alive = true; let url = ''; void (async () => { const thumb = await getStoredImageThumbnail(page.imageId); if (alive && thumb?.thumbnailDataUrl) return setSrc(thumb.thumbnailDataUrl); const blob = await getStoredImageBlob(page.imageId); if (blob) { const next = URL.createObjectURL(blob); if (alive) { url = next; setSrc(next) } else URL.revokeObjectURL(next) } })(); return () => { alive = false; if (url) URL.revokeObjectURL(url) } }, [page.imageId])
   return src ? <img src={src} alt={page.name} className="h-full w-full object-contain" /> : <span className="text-xs text-gray-400">读取中…</span>
+}
+
+async function resolveSources(pages: PptxSourcePage[]): Promise<Map<string, Blob | string>> {
+  const resolved = new Map<string, Blob | string>()
+  for (const page of pages) { const blob = await getStoredImageBlob(page.imageId); if (blob) resolved.set(page.imageId, blob); else { const image = await getImage(page.imageId); if (image?.dataUrl) resolved.set(page.imageId, image.dataUrl) } }
+  if (resolved.size !== pages.length) throw new Error('部分图片已失效，请重新导入后再继续')
+  return resolved
 }
 
 export default function PptxWorkbench() {
   const settings = useStore((state) => state.settings)
   const [draft, setDraft] = useState<PptxProjectDraft>(() => loadPptxDraft())
+  const sourceKey = useMemo(() => getPptxSourceKey(draft.pages), [draft.pages])
+  const [workflow, setWorkflow] = useState<PptxWorkflowState>(() => loadPptxWorkflow(getPptxSourceKey(loadPptxDraft().pages)))
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string }>()
   const [progress, setProgress] = useState('')
   const [result, setResult] = useState<{ blob: Blob; fileName: string; ratio: number; bytes: number; report: Record<string, unknown> }>()
   const fileRef = useRef<HTMLInputElement>(null)
   const setPatch = useCallback((patch: Partial<Pick<PptxProjectDraft, 'pages' | 'options'>>) => setDraft((current) => updatePptxDraft(current, patch)), [])
-  useEffect(() => { savePptxDraft(draft) }, [draft])
+  useEffect(() => savePptxDraft(draft), [draft])
+  useEffect(() => { if (workflow.sourceKey !== sourceKey) setWorkflow(loadPptxWorkflow(sourceKey)) }, [sourceKey, workflow.sourceKey])
+  useEffect(() => savePptxWorkflow(workflow), [workflow])
 
   const slideSize = useMemo(() => getPptxSlideSize(draft.options.aspectRatio, draft.pages[0]), [draft.options.aspectRatio, draft.pages])
   const updateOptions = (patch: Partial<PptxProjectDraft['options']>) => setPatch({ options: { ...draft.options, ...patch } })
-  const removePage = (id: string) => setPatch({ pages: draft.pages.filter((page) => page.id !== id) })
-  const movePage = (index: number, direction: -1 | 1) => { const next = index + direction; if (next < 0 || next >= draft.pages.length) return; const pages = [...draft.pages]; [pages[index], pages[next]] = [pages[next], pages[index]]; setPatch({ pages }) }
+  const invalidate = (pages: PptxSourcePage[]) => { setPatch({ pages }); setWorkflow(createPptxWorkflow(getPptxSourceKey(pages))); setResult(undefined) }
+  const removePage = (id: string) => invalidate(draft.pages.filter((page) => page.id !== id))
+  const movePage = (index: number, direction: -1 | 1) => { const next = index + direction; if (next < 0 || next >= draft.pages.length) return; const pages = [...draft.pages]; [pages[index], pages[next]] = [pages[next], pages[index]]; invalidate(pages) }
+  const onFiles = async (event: React.ChangeEvent<HTMLInputElement>) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; if (!files.length) return; setMessage(undefined); try { invalidate([...draft.pages, ...(await ingestPptxFiles(files, draft.pages.length))]) } catch (error) { fail(error, '图片导入失败') } }
+  const fail = (error: unknown, fallback: string) => setMessage({ kind: 'error', text: error instanceof Error ? error.message : fallback })
+  const validate = () => { const issues = validatePptxPages(draft.pages); if (issues.length) { setMessage({ kind: 'error', text: issues.join('；') }); return false } return true }
+  const run = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); setMessage(undefined); try { await action() } catch (error) { fail(error, '操作失败') } finally { setBusy(false); setProgress('') } }
 
-  const onFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []); event.target.value = ''
-    if (!files.length) return
-    setMessage(undefined)
-    try { setPatch({ pages: [...draft.pages, ...(await ingestPptxFiles(files, draft.pages.length))] }) }
-    catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '图片导入失败' }) }
+  const analyze = () => run(async () => {
+    if (!validate()) return
+    const profile = getAgentTextApiProfile(settings)
+    if (!profile || profile.apiMode !== 'responses') throw new Error('语义分析需要可用的 Responses API 文本配置')
+    const resolved = await resolveSources(draft.pages); const specs: PptxSlideSpec[] = []
+    for (let index = 0; index < draft.pages.length; index += 1) { const page = draft.pages[index]!; setProgress(`正在分析第 ${index + 1}/${draft.pages.length} 页…`); const source = resolved.get(page.imageId)!; const analysis = await analyzePptxSlide({ page, profile, imageDataUrl: typeof source === 'string' ? source : await blobToDataUrl(source) }); specs.push(namespacePptxImagegenAssetIds(analysis.spec, `slide-${index + 1}`)) }
+    const assets = specs.flatMap((spec, pageIndex) => listPptxImagegenAssets(spec).map((item): PptxWorkflowAsset => ({ ...item, pageIndex, status: 'pending' })))
+    setWorkflow({ version: 1, sourceKey, stage: 'review', specs, assets, updatedAt: Date.now() }); setMessage({ kind: 'success', text: `分析完成：${specs.reduce((n, s) => n + s.elements.length, 0)} 个对象，${assets.length} 个图片资产。请确认结构后继续。` })
+  })
+
+  const confirmReview = () => setWorkflow((current) => ({ ...current, stage: current.assets.length ? 'assets' : 'compile', reviewedAt: Date.now(), updatedAt: Date.now() }))
+  const generateAsset = async (asset: PptxWorkflowAsset) => {
+    const profile = getAgentImageApiProfile(settings); if (!profile || profile.apiMode !== 'responses') throw new Error('资产生成需要可用的 Responses API 图片配置')
+    setWorkflow((current) => ({ ...current, assets: current.assets.map((item) => item.assetId === asset.assetId ? { ...item, status: 'generating', error: undefined } : item), updatedAt: Date.now() }))
+    try { const spec = workflow.specs[asset.pageIndex]!; const ids = new Set(asset.elementIds); const isolated: PptxSlideSpec = { ...spec, elements: spec.elements.filter((item) => ids.has(item.id)), readingOrder: [] }; const generated = await generatePptxImagegenAssets({ spec: isolated, profile, onProgress: setProgress }); const dataUrl = generated.assets[asset.assetId]; if (!dataUrl) throw new Error('接口未返回资产'); const imageId = await storeImage(dataUrl, 'generated'); setWorkflow((current) => ({ ...current, assets: current.assets.map((item) => item.assetId === asset.assetId ? { ...item, status: 'ready', imageId, error: undefined } : item), updatedAt: Date.now() })) } catch (error) { setWorkflow((current) => ({ ...current, assets: current.assets.map((item) => item.assetId === asset.assetId ? { ...item, status: 'failed', error: error instanceof Error ? error.message : '生成失败' } : item), updatedAt: Date.now() })); throw error }
   }
 
-  const generate = async () => {
-    if (busy) return
-    const issues = validatePptxPages(draft.pages)
-    if (issues.length) { setMessage({ kind: 'error', text: issues.join('；') }); return }
-    setBusy(true); setMessage(undefined); setResult(undefined)
-    try {
-      const semantic = draft.options.mode === 'semantic-rebuild'
-      const resolved = new Map<string, Blob | string>()
-      setProgress('正在检查图片…')
-      for (const page of draft.pages) {
-        const blob = await getStoredImageBlob(page.imageId)
-        if (blob) resolved.set(page.imageId, blob)
-        else {
-          const image = await getImage(page.imageId)
-          if (image?.dataUrl) resolved.set(page.imageId, image.dataUrl)
-        }
-      }
-      if (resolved.size !== draft.pages.length) throw new Error('部分图片已失效，请重新导入后再生成')
-
-      const slideSpecs: PptxSlideSpec[] = []
-      const summaries: ReturnType<typeof summarizePptxSemanticSpec>[] = []
-      const generatedAssets: Record<string, string> = {}
-      const assetManifest: Array<Record<string, unknown>> = []
-      if (semantic) {
-        const textProfile = getAgentTextApiProfile(settings)
-        if (!textProfile) throw new Error('没有可用的 Agent 文本配置，请先在设置中配置 Responses API')
-        if (textProfile.apiMode !== 'responses') throw new Error('语义重建需要 Responses API 配置，请先在 Agent 设置中选择支持 Responses 的配置')
-        for (let index = 0; index < draft.pages.length; index += 1) {
-          const page = draft.pages[index]!
-          setProgress(`正在分析第 ${index + 1}/${draft.pages.length} 页：识别文字、卡片和图表…`)
-          const source = resolved.get(page.imageId)!
-          const imageDataUrl = typeof source === 'string' ? source : await blobToDataUrl(source)
-          const analysis = await analyzePptxSlide({ page, profile: textProfile, imageDataUrl })
-          const namespacedSpec = namespacePptxImagegenAssetIds(analysis.spec, `slide-${index + 1}`)
-          slideSpecs.push(namespacedSpec)
-          summaries.push(summarizePptxSemanticSpec(namespacedSpec))
-        }
-
-        const needsGeneratedAssets = slideSpecs.some((spec) => spec.elements.some((element) => element.type === 'image' && element.classification === 'imagegen_asset'))
-        if (needsGeneratedAssets) {
-          const imageProfile = getAgentImageApiProfile(settings)
-          if (!imageProfile) throw new Error('没有可用的 Agent 图片配置，无法生成复杂透明资产')
-          if (imageProfile.apiMode !== 'responses') throw new Error('复杂资产生成需要 Responses API 图片配置，请在 Agent 设置中选择支持 Responses 的配置')
-          for (let index = 0; index < slideSpecs.length; index += 1) {
-            const generated = await generatePptxImagegenAssets({
-              spec: slideSpecs[index]!,
-              profile: imageProfile,
-              onProgress: (detail) => setProgress(`第 ${index + 1}/${slideSpecs.length} 页：${detail}`),
-            })
-            Object.assign(generatedAssets, generated.assets)
-            assetManifest.push(...generated.manifest.map((entry) => ({ pageIndex: index, ...entry })))
-          }
-        }
-      }
-
-      setProgress(semantic ? '正在编译可编辑对象和独立透明资产…' : '正在生成 PPTX…')
-      const compiled = await compilePptx({
-        pages: draft.pages,
-        options: draft.options,
-        resolveImage: (page) => resolved.get(page.imageId)!,
-        assets: semantic ? generatedAssets : undefined,
-        slideSpecs: semantic ? slideSpecs : undefined,
-      })
-      const fileName = safeFileName(draft.options.fileName)
-      const report = semantic
-        ? { version: 1, createdAt: Date.now(), fileName, sourcePageCount: draft.pages.length, fileSizeBytes: compiled.blob.size, slideRatio: compiled.slideSize.ratio, mode: draft.options.mode, editability: '高置信文本、形状和图表为原生对象；复杂图标和插画为独立透明 PNG 资产；明确的原始品牌 Logo 保留为精确源图资产', pages: summaries, imagegenAssets: assetManifest, phases: { inputPrepared: 'passed', visualInventory: 'passed', assetClassification: 'passed', imagegenAssets: assetManifest.length ? 'passed' : 'not-applicable', textFit: 'not-run', pptxBuilt: 'passed', renderQa: 'not-run', localCropQa: 'not-run', validation: 'passed' }, limitations: ['单张光栅图无法保证所有像素均可编辑', 'PowerPoint 字体替换和模型 OCR 误差仍需渲染 QA 复核'] }
-        : { version: 1, createdAt: Date.now(), fileName, sourcePageCount: draft.pages.length, fileSizeBytes: compiled.blob.size, slideRatio: compiled.slideSize.ratio, mode: draft.options.mode, editability: '整页图片，不可拆分编辑', limitation: '每页以整页图片写入 PPTX，文本、图层和元素不可单独编辑' }
-      setProgress('正在准备下载…')
-      if (isNativeApp()) await shareNativeBlob(compiled.blob, fileName)
-      else { const url = URL.createObjectURL(compiled.blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = fileName; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
-      setResult({ blob: compiled.blob, fileName, ratio: compiled.slideSize.ratio, bytes: compiled.blob.size, report })
-      setMessage({ kind: 'success', text: semantic ? '语义重建 PPTX 已生成；渲染 QA 仍需在 PowerPoint/Keynote 中复核' : 'PPTX 已生成并准备下载' })
-    } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : 'PPTX 生成失败' }) }
-    finally { setBusy(false); setProgress('') }
-  }
-
-  const downloadReport = () => { if (!result) return; const blob = new Blob([JSON.stringify(result.report, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = result.fileName.replace(/\.pptx$/i, '.json'); anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
+  const generatePendingAssets = () => run(async () => { const pending = workflow.assets.filter((asset) => asset.status !== 'ready' && asset.status !== 'skipped'); for (let index = 0; index < pending.length; index += 1) { setProgress(`正在生成资产 ${index + 1}/${pending.length}：${pending[index]!.assetId}`); try { await generateAsset(pending[index]!) } catch { /* keep remaining assets resumable */ } } setMessage({ kind: 'success', text: '本轮资产生成结束；失败项可单独重试。' }) })
+  const compile = () => run(async () => {
+    if (!validate()) return
+    const unresolved = workflow.assets.filter((asset) => asset.status !== 'ready' && asset.status !== 'skipped'); if (unresolved.length) throw new Error(`仍有 ${unresolved.length} 个资产未处理，请先生成、重试或跳过`)
+    const resolved = await resolveSources(draft.pages); const assets: Record<string, string> = {}
+    for (const asset of workflow.assets) if (asset.status === 'ready' && asset.imageId) { const image = await getImage(asset.imageId); if (!image?.dataUrl) throw new Error(`资产 ${asset.assetId} 已失效，请重新生成`); assets[asset.assetId] = image.dataUrl }
+    setProgress('正在本地编译 PPTX…'); const semantic = draft.options.mode === 'semantic-rebuild'; const compiled = await compilePptx({ pages: draft.pages, options: draft.options, resolveImage: (page) => resolved.get(page.imageId)!, assets: semantic ? assets : undefined, slideSpecs: semantic ? workflow.specs : undefined })
+    const fileName = safeFileName(draft.options.fileName); const summaries = workflow.specs.map(summarizePptxSemanticSpec); const report = { version: 1, createdAt: Date.now(), fileName, sourcePageCount: draft.pages.length, fileSizeBytes: compiled.blob.size, slideRatio: compiled.slideSize.ratio, mode: draft.options.mode, editability: semantic ? '原生文本和形状可编辑；复杂图标为独立透明图片资产' : '整页图片，不可拆分编辑', pages: summaries, imagegenAssets: workflow.assets }
+    if (isNativeApp()) await shareNativeBlob(compiled.blob, fileName); else { const url = URL.createObjectURL(compiled.blob); const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
+    setWorkflow((current) => ({ ...current, stage: 'compile', updatedAt: Date.now() })); setResult({ blob: compiled.blob, fileName, ratio: compiled.slideSize.ratio, bytes: compiled.blob.size, report }); setMessage({ kind: 'success', text: 'PPTX 已编译并准备下载' })
+  })
+  const quickPack = () => run(async () => { if (!validate()) return; const resolved = await resolveSources(draft.pages); const compiled = await compilePptx({ pages: draft.pages, options: draft.options, resolveImage: (page) => resolved.get(page.imageId)! }); const fileName = safeFileName(draft.options.fileName); if (isNativeApp()) await shareNativeBlob(compiled.blob, fileName); else { const url = URL.createObjectURL(compiled.blob); const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) } setResult({ blob: compiled.blob, fileName, ratio: compiled.slideSize.ratio, bytes: compiled.blob.size, report: { mode: 'quick-pack' } }) })
+  const downloadReport = () => { if (!result) return; const blob = new Blob([JSON.stringify(result.report, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = result.fileName.replace(/\.pptx$/i, '.json'); a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
+  const objectCount = workflow.specs.reduce((count, spec) => count + spec.elements.length, 0); const readyCount = workflow.assets.filter((asset) => asset.status === 'ready').length
 
   return <main data-pptx-content className="safe-area-x mx-auto w-full max-w-7xl px-0 pb-24 pt-4 sm:pt-6">
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-xl font-bold text-gray-900 dark:text-white">图片转 PPTX</h2><p className="mt-1 text-sm text-gray-500">将复杂图片按语义拆解为可编辑文本、形状、图表和独立图片资产；分析失败时可使用快速打包保真兜底。</p></div>
-      <button type="button" onClick={() => fileRef.current?.click()} className="min-h-11 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 dark:bg-white dark:text-gray-900" aria-label="添加图片">添加图片</button>
-      <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,image/gif,image/bmp" className="hidden" onChange={onFiles} />
-    </div>
+    <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold text-gray-900 dark:text-white">图片转 PPTX</h2><p className="mt-1 text-sm text-gray-500">按阶段分析、确认、生成资产和编译；每一步独立保存，失败无需重做前序步骤。</p></div><button type="button" onClick={() => fileRef.current?.click()} className="min-h-11 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-gray-900">添加图片</button><input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,image/gif,image/bmp" className="hidden" onChange={onFiles} /></div>
     {message && <div role="status" className={`mb-4 rounded-lg border px-3 py-2 text-sm ${message.kind === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{message.text}</div>}
-    <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-white/[0.1] dark:bg-gray-900 sm:p-5" aria-label="图片页面列表">
-      {!draft.pages.length ? <div className="rounded-lg border border-dashed border-gray-300 px-4 py-14 text-center text-sm text-gray-500 dark:border-gray-700">尚未添加图片。支持 PNG、JPEG、GIF、BMP，最多 {PPTX_MAX_SOURCE_PAGES} 页。</div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{draft.pages.map((page, index) => <article key={page.id} className="overflow-hidden rounded-lg border border-gray-200 dark:border-white/[0.1]"><div className="flex aspect-video items-center justify-center bg-gray-100 dark:bg-gray-950"><ImagePreview page={page} /></div><div className="p-3"><div className="truncate text-sm font-medium" title={page.name}>{index + 1}. {page.name}</div><div className="mt-1 text-xs text-gray-500">{page.width} × {page.height} · {(page.bytes / 1024 / 1024).toFixed(2)} MB</div><div className="mt-3 flex flex-wrap gap-1"><button type="button" aria-label={`第 ${index + 1} 页上移`} disabled={index === 0} onClick={() => movePage(index, -1)} className="min-h-9 rounded border px-2 text-xs disabled:opacity-40">上移</button><button type="button" aria-label={`第 ${index + 1} 页下移`} disabled={index === draft.pages.length - 1} onClick={() => movePage(index, 1)} className="min-h-9 rounded border px-2 text-xs disabled:opacity-40">下移</button><button type="button" aria-label={`移除第 ${index + 1} 页`} onClick={() => removePage(page.id)} className="min-h-9 rounded border border-red-200 px-2 text-xs text-red-600">移除</button></div></div></article>)}</div>}
-    </section>
-    <section className="mt-4 grid gap-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/[0.1] dark:bg-gray-900 sm:grid-cols-2 lg:grid-cols-4" aria-label="PPTX 输出选项">
-      <label className="text-sm">打包模式<select value={draft.options.mode} onChange={(event) => updateOptions({ mode: event.target.value as PptxProjectDraft['options']['mode'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="quick-pack">快速打包（整页图片）</option><option value="semantic-rebuild">语义重建（可编辑对象）</option></select>{draft.options.mode === 'semantic-rebuild' && <span className="mt-1 block text-xs text-blue-600">使用 Agent Responses API 分析文字、卡片、图表；复杂图标通过透明 PNG 生图，用户原始品牌 Logo 才保留精确源图资产。</span>}</label>
-      <label className="text-sm">幻灯片比例<select value={draft.options.aspectRatio} onChange={(event) => updateOptions({ aspectRatio: event.target.value as PptxProjectDraft['options']['aspectRatio'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="source">跟随首张图片</option><option value="16:9">16:9</option><option value="4:3">4:3</option></select></label>
-      <label className="text-sm">图片适配<select value={draft.options.fit} onChange={(event) => updateOptions({ fit: event.target.value as PptxProjectDraft['options']['fit'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="contain">完整显示（contain）</option><option value="cover">铺满裁切（cover）</option></select></label>
-      <label className="text-sm">背景色<input type="color" value={draft.options.backgroundColor} onChange={(event) => updateOptions({ backgroundColor: event.target.value })} className="mt-1 block h-11 w-full rounded border bg-transparent px-1" aria-label="背景色" /></label>
-      <label className="text-sm sm:col-span-2 lg:col-span-4">输出文件名<input value={draft.options.fileName} onChange={(event) => updateOptions({ fileName: event.target.value })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-3" placeholder="图片转PPTX" /></label>
-    </section>
-    <div className="mt-4 flex flex-wrap items-center justify-end gap-2"><button type="button" onClick={() => { setDraft(createEmptyPptxDraft()); clearPptxDraft(); setResult(undefined); setMessage(undefined) }} className="min-h-11 rounded-lg border px-4 text-sm">清空草稿</button><button type="button" disabled={busy} onClick={generate} className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-50">{busy ? (progress || '处理中…') : draft.options.mode === 'semantic-rebuild' ? '分析并生成可编辑 PPTX' : '生成 PPTX'}</button></div>
-    {result && <section className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900" aria-label="生成结果"><h3 className="font-semibold">生成完成</h3><p className="mt-2">页数：{draft.pages.length} · 文件大小：{(result.bytes / 1024 / 1024).toFixed(2)} MB · Slide ratio：{result.ratio.toFixed(3)}</p><p className="mt-1">编辑能力：{String(result.report.editability ?? '')}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" className="min-h-10 rounded border border-emerald-300 px-3" onClick={downloadReport}>下载报告 JSON</button><button type="button" className="min-h-10 rounded border border-emerald-300 px-3" onClick={generate}>重新生成</button></div></section>}
+    {draft.options.mode === 'semantic-rebuild' && <section aria-label="PPTX 生成阶段" className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{stageLabels.map((label, index) => { const active = index === 0 ? draft.pages.length > 0 : index === 1 ? workflow.specs.length > 0 : index === 2 ? Boolean(workflow.reviewedAt) : index === 3 ? workflow.assets.length === 0 ? Boolean(workflow.reviewedAt) : readyCount === workflow.assets.length : Boolean(result); return <div key={label} className={`rounded-lg border p-3 text-sm ${active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-gray-200 text-gray-500'}`}><strong>{index + 1}. {label}</strong><div className="mt-1 text-xs">{active ? '已完成' : '待处理'}</div></div> })}</section>}
+    <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-white/[0.1] dark:bg-gray-900 sm:p-5" aria-label="图片页面列表">{!draft.pages.length ? <div className="rounded-lg border border-dashed border-gray-300 px-4 py-14 text-center text-sm text-gray-500">尚未添加图片。最多 {PPTX_MAX_SOURCE_PAGES} 页。</div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{draft.pages.map((page, index) => <article key={page.id} className="overflow-hidden rounded-lg border"><div className="flex aspect-video items-center justify-center bg-gray-100"><ImagePreview page={page} /></div><div className="p-3"><div className="truncate text-sm font-medium">{index + 1}. {page.name}</div><div className="mt-1 text-xs text-gray-500">{page.width} × {page.height} · {(page.bytes / 1024 / 1024).toFixed(2)} MB</div><div className="mt-3 flex gap-1"><button disabled={index === 0 || busy} onClick={() => movePage(index, -1)} className="min-h-9 rounded border px-2 text-xs disabled:opacity-40">上移</button><button disabled={index === draft.pages.length - 1 || busy} onClick={() => movePage(index, 1)} className="min-h-9 rounded border px-2 text-xs disabled:opacity-40">下移</button><button disabled={busy} onClick={() => removePage(page.id)} className="min-h-9 rounded border border-red-200 px-2 text-xs text-red-600">移除</button></div></div></article>)}</div>}</section>
+    <section className="mt-4 grid gap-4 rounded-xl border bg-white p-4 dark:bg-gray-900 sm:grid-cols-2 lg:grid-cols-4" aria-label="PPTX 输出选项"><label className="text-sm">打包模式<select value={draft.options.mode} onChange={(e) => updateOptions({ mode: e.target.value as PptxProjectDraft['options']['mode'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="quick-pack">快速打包（整页图片）</option><option value="semantic-rebuild">语义重建（分阶段）</option></select></label><label className="text-sm">幻灯片比例<select value={draft.options.aspectRatio} onChange={(e) => updateOptions({ aspectRatio: e.target.value as PptxProjectDraft['options']['aspectRatio'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="source">跟随首张图片</option><option value="16:9">16:9</option><option value="4:3">4:3</option></select></label><label className="text-sm">图片适配<select value={draft.options.fit} onChange={(e) => updateOptions({ fit: e.target.value as PptxProjectDraft['options']['fit'] })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-2"><option value="contain">完整显示</option><option value="cover">铺满裁切</option></select></label><label className="text-sm">背景色<input type="color" value={draft.options.backgroundColor} onChange={(e) => updateOptions({ backgroundColor: e.target.value })} className="mt-1 block h-11 w-full rounded border" /></label><label className="text-sm sm:col-span-2 lg:col-span-4">输出文件名<input value={draft.options.fileName} onChange={(e) => updateOptions({ fileName: e.target.value })} className="mt-1 min-h-11 w-full rounded border bg-transparent px-3" /></label></section>
+
+    {draft.options.mode === 'semantic-rebuild' && workflow.specs.length > 0 && <section className="mt-4 rounded-xl border bg-white p-4 dark:bg-gray-900" aria-label="语义结构确认"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">结构确认</h3><p className="mt-1 text-sm text-gray-500">{workflow.specs.length} 页 · {objectCount} 个对象 · {workflow.assets.length} 个独立图片资产</p></div>{!workflow.reviewedAt && <button disabled={busy} onClick={confirmReview} className="min-h-10 rounded bg-emerald-600 px-4 text-sm font-semibold text-white">确认结构并继续</button>}</div><div className="mt-3 grid gap-2 sm:grid-cols-2">{workflow.specs.map((spec, index) => { const summary = summarizePptxSemanticSpec(spec); return <div key={index} className="rounded border p-3 text-sm"><strong>第 {index + 1} 页</strong><div className="mt-1 text-xs text-gray-500">文本 {summary.textCount} · 原生对象 {summary.nativeElementCount} · 图片 {summary.sourceAssetCount} · 低置信度 {summary.lowConfidenceCount}</div>{spec.warnings.length > 0 && <div className="mt-1 text-xs text-amber-600">{spec.warnings.join('；')}</div>}</div> })}</div></section>}
+    {draft.options.mode === 'semantic-rebuild' && workflow.reviewedAt && workflow.assets.length > 0 && <section className="mt-4 rounded-xl border bg-white p-4 dark:bg-gray-900" aria-label="图片资产生成"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">图片资产</h3><p className="mt-1 text-sm text-gray-500">已完成 {readyCount}/{workflow.assets.length}；每项独立保存，失败项可单独重试。</p></div><button disabled={busy || readyCount === workflow.assets.length} onClick={generatePendingAssets} className="min-h-10 rounded bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-50">生成全部未完成资产</button></div><div className="mt-3 space-y-2">{workflow.assets.map((asset) => <div key={asset.assetId} className="flex flex-wrap items-center gap-2 rounded border p-3 text-sm"><div className="min-w-0 flex-1"><strong className="break-all">{asset.assetId}</strong><div className="mt-1 line-clamp-2 text-xs text-gray-500">{asset.prompt}</div>{asset.error && <div className="mt-1 text-xs text-red-600">{asset.error}</div>}</div><span className="rounded bg-gray-100 px-2 py-1 text-xs">{{ pending: '待生成', generating: '生成中', ready: '已完成', failed: '失败', skipped: '已跳过' }[asset.status]}</span>{asset.status !== 'ready' && <><button disabled={busy} onClick={() => run(() => generateAsset(asset))} className="min-h-9 rounded border px-3 text-xs">{asset.status === 'failed' ? '重试' : '生成'}</button><button disabled={busy} onClick={() => setWorkflow((current) => ({ ...current, assets: current.assets.map((item) => item.assetId === asset.assetId ? { ...item, status: 'skipped', error: undefined } : item), updatedAt: Date.now() }))} className="min-h-9 rounded border px-3 text-xs">跳过</button></>}</div>)}</div></section>}
+    <div className="mt-4 flex flex-wrap items-center justify-end gap-2"><span className="mr-auto text-sm text-blue-600">{busy ? progress : ''}</span><button disabled={busy} onClick={() => { setDraft(createEmptyPptxDraft()); clearPptxDraft(); clearPptxWorkflow(); setWorkflow(createPptxWorkflow()); setResult(undefined); setMessage(undefined) }} className="min-h-11 rounded-lg border px-4 text-sm">清空草稿</button>{draft.options.mode === 'quick-pack' ? <button disabled={busy} onClick={quickPack} className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-50">生成 PPTX</button> : workflow.specs.length === 0 ? <button disabled={busy} onClick={analyze} className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-50">开始语义分析</button> : !workflow.reviewedAt ? <button disabled className="min-h-11 rounded-lg bg-gray-300 px-5 text-sm font-semibold text-white">请先确认结构</button> : <button disabled={busy || workflow.assets.some((asset) => asset.status !== 'ready' && asset.status !== 'skipped')} onClick={compile} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">编译并下载 PPTX</button>}</div>
+    {result && <section className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><h3 className="font-semibold">生成完成</h3><p className="mt-2">页数：{draft.pages.length} · 文件大小：{(result.bytes / 1024 / 1024).toFixed(2)} MB · Slide ratio：{result.ratio.toFixed(3)}</p><button className="mt-3 min-h-10 rounded border border-emerald-300 px-3" onClick={downloadReport}>下载报告 JSON</button></section>}
   </main>
 }
