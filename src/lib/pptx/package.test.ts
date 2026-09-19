@@ -76,7 +76,7 @@ describe('PPTX package compiler', () => {
 
   it('rejects empty or oversized page inputs before packaging', () => {
     expect(validatePptxPages([])).toContain('请至少添加一张图片')
-    expect(validatePptxPages([{ ...page('large'), bytes: PPTX_MAX_SOURCE_BYTES + 1 }])).toContain('超过单张')
+    expect(validatePptxPages([{ ...page('large'), bytes: PPTX_MAX_SOURCE_BYTES + 1 }]).some((issue) => issue.includes('超过单张'))).toBe(true)
   })
 
   it('compiles semantic text, native shapes, directed lines, and source crops without a full-page picture shape', async () => {
@@ -85,7 +85,7 @@ describe('PPTX package compiler', () => {
       background: { color: '#FFFFFF' },
       elements: [
         { id: 'mask', type: 'rect', box: { x: 0, y: 0, width: 0.4, height: 0.2 }, fill: '#FFFFFF' },
-        { id: 'title', type: 'text', box: { x: 0.02, y: 0.02, width: 0.4, height: 0.08 }, text: '可编辑标题', style: { fontFamily: 'Microsoft YaHei', fontSizePt: 24, verticalAnchor: 'middle' } },
+        { id: 'title', type: 'text', box: { x: 0.02, y: 0.02, width: 0.4, height: 0.08 }, text: '可编辑标题', style: { fontFamily: 'Microsoft YaHei', fontSizePt: 24, align: 'center', verticalAnchor: 'middle' } },
         { id: 'point', type: 'shape', shape: 'ellipse', box: { x: 0.3, y: 0.3, width: 0.02, height: 0.03 }, fill: '#1F6EC5' },
         { id: 'arrow', type: 'line', box: { x: 0.2, y: 0.2, width: 0.2, height: 0.1 }, line: '#D92737', headEnd: 'triangle', flipV: true },
         { id: 'logo', type: 'image', box: { x: 0.8, y: 0.02, width: 0.1, height: 0.08 }, sourceBox: { x: 0.8, y: 0.02, width: 0.1, height: 0.08 }, classification: 'source_crop' },

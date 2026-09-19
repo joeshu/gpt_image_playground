@@ -191,8 +191,8 @@ export function normalizeElementBox(value: unknown): PptxElementBox | null {
   return {
     x: left,
     y: top,
-    width: right - left,
-    height: bottom - top,
+    width: Math.round((right - left) * 1e12) / 1e12,
+    height: Math.round((bottom - top) * 1e12) / 1e12,
   }
 }
 
