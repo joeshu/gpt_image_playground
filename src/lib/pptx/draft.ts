@@ -27,3 +27,8 @@ export function clearPptxDraft(): void {
   if (typeof window === 'undefined') return
   try { window.localStorage.removeItem(PPTX_DRAFT_STORAGE_KEY) } catch { /* noop */ }
 }
+
+/** Return image IDs retained by the PPTX draft so startup cleanup preserves them. */
+export function getPptxDraftImageIds(): string[] {
+  return loadPptxDraft().pages.map((page) => page.imageId).filter(Boolean)
+}
