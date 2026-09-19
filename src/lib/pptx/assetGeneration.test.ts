@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_PARAMS, type ApiProfile } from '../../types'
+import { type ApiProfile } from '../../types'
 import type { PptxSlideSpec } from './model'
 
 const { callBatchImageSingle, removeKeyedBackgroundFromDataUrl } = vi.hoisted(() => ({

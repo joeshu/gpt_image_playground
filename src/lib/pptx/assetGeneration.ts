@@ -22,12 +22,16 @@ export interface PptxGeneratedAssetsResult {
 
 function transparentAssetPrompt(request: PptxImagegenAssetRequest, allowKeyedBackground = false): string {
   return [
-    `Create exactly one isolated transparent PNG asset named ${request.assetId}.`,
+    allowKeyedBackground
+      ? `Create exactly one isolated presentation asset named ${request.assetId} on a flat key-color background.`
+      : `Create exactly one isolated transparent PNG asset named ${request.assetId}.`,
     'This asset will be inserted into an editable PowerPoint slide.',
     allowKeyedBackground
       ? 'Use exactly one flat key-color background selected by the final background instructions in this prompt. Fill the entire square canvas uniformly with that color for local transparency removal.'
       : 'Use a genuine alpha channel: transparent corners and transparent space around the subject.',
-    'Do not draw any text, Chinese characters, labels, numbers, card frame, page background, or shadow unless the prompt explicitly asks for a visible shadow.',
+    allowKeyedBackground
+      ? 'Do not draw any text, Chinese characters, labels, numbers, card frame, page background decoration, or shadow unless the prompt explicitly asks for a visible shadow.'
+      : 'Do not draw any text, Chinese characters, labels, numbers, card frame, page background, or shadow unless the prompt explicitly asks for a visible shadow.',
     'Preserve the requested flat presentation color roles and simple geometry; do not invent a different palette.',
     request.prompt,
   ].join(' ')
